@@ -214,11 +214,12 @@ red del PC. Como la app es estática (HTML y JavaScript, sin servidor
 propio), vive en **GitHub Pages**, como sus otros proyectos:
 
 ```
-https://joanhispanista-star.github.io/taller-pintura/garaje.html
+https://joanhispanista-star.github.io/taller/garaje.html
 ```
 
-Publicar es `git push` (repo `joanhispanista-star/taller-pintura`, rama
-`master`, carpeta raíz; `.nojekyll` evita que GitHub procese los archivos).
+Publicar es `git push` (repo `joanhispanista-star/taller`, que Joan creó
+con ese nombre el 15-oct; rama `master`, carpeta raíz; `.nojekyll` evita
+que GitHub procese los archivos).
 GitHub Pages solo es gratis con repo público: el código se ve, y no hay
 nada que esconder (sin claves, sin números de teléfono; el enlace de
 WhatsApp no lleva número). Dos cosas que hay que saber:
