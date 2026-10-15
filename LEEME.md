@@ -5,9 +5,13 @@ marca en un carro 3D las piezas que hay que pintar, el asistente recibe la
 orden, cada carro queda registrado por placa, y al final de la semana se sabe
 qué pintor pintó qué pieza para pagarle (90.000 pesos por pieza).
 
-Estado al **15 de octubre de 2026**: el visor y, adelantada la semana del 19,
-el registro: Garaje por placa, estado por pieza y fotos por pieza, todo
-guardado en el teléfono.
+Estado al **15 de octubre de 2026**: el visor; adelantada la semana del 19,
+el registro (Garaje por placa, estado por pieza y fotos por pieza, todo
+guardado en el teléfono); y adelantada la del 2 de noviembre, **el carro
+desde una foto**: la app reconoce en el teléfono el tipo de carrocería y el
+modelo más parecido, toma el color, y dibuja el 3D de esa carrocería a las
+medidas de esa línea, en ese color. Cuatro carrocerías (sedán, hatchback,
+SUV, camioneta de platón) y un catálogo de los carros que ruedan en Colombia.
 
 ## Lo que NO va a hacer esta app, y por qué
 
@@ -35,6 +39,23 @@ ya separadas**, y las fotos reales del carro se adjuntan como evidencia a
 cada pieza. Eso es lo que hace esta app. Las fotos del carro sí entran, pero
 como evidencia por pieza (ver plan), no como fuente del 3D.
 
+**La segunda vuelta, el mismo 15 de octubre.** Joan propuso otra ruta: con
+una foto normal, reconocer qué carro es, "buscar cómo es" y generar el 3D de
+ese modelo exacto. Se investigó a fondo (12 agentes, 860 búsquedas; la nota
+con fuentes está en la carpeta de notas de la sesión). Resultado: no existe
+un catálogo 3D por modelo del que se pueda tirar (los de pago son "solo uso
+editorial", prohibido en una app comercial; los gratis no traen las piezas
+separadas ni licencian la marca; Solera/Audatex construyó el suyo a mano por
+millones), y la IA foto→3D (Tripo, Meshy, Hunyuan3D-Part) entrega un carro
+parecido con las juntas de las puertas pintadas como textura y los reflejos
+de la pintura leídos como abolladuras, según sus propios fabricantes. Ningún
+producto del sector genera el 3D desde la foto. **Lo que sí se construyó**
+es lo que ese camino prometía y se puede cumplir: la foto da el color (con
+certeza), la carrocería y el modelo más parecido (como sugerencia que la
+persona confirma), y el 3D sale de ESA carrocería a las medidas de ESA línea.
+La ficha de arriba del visor lo dice: "carrocería de referencia", no "tu
+carro".
+
 ## Lo que sí hace hoy
 
 - Dibuja un sedán genérico con **17 piezas pintables**, cada una con su
@@ -45,11 +66,31 @@ como evidencia por pieza (ver plan), no como fuente del 3D.
   Derecho, Atrás, Arriba) llevan la cámara al sitio sin tener que girar.
 - Un toque sobre una pieza la marca: se tiñe de naranja, con un brillo leve,
   y aparece en la lista de abajo. Otro toque (o la × de la lista) la quita.
-- **Garaje** (`garaje.html`): la lista de todos los carros, con placa, marca,
-  cuándo se tocó por última vez y cuántas piezas hay pendientes, en
-  proceso y terminadas. Escribir una placa abre ese carro si ya estaba y lo
-  crea si no. Tocar una fila abre el visor con ese carro; la × lo borra con
-  confirmación, fotos incluidas.
+- **Nuevo carro con foto** (en el Garaje): una foto del carro y la app, en
+  el teléfono y sin servidor, saca el color de la pintura (siempre acierta,
+  salvo luz muy rara), y propone el tipo de carrocería y seis carros
+  parecidos del catálogo (CLIP, un modelo de OpenAI que corre en el
+  navegador: acierta la carrocería unas 7 de cada 10 veces y el modelo unas
+  6 de cada 10; desde el frente un sedán y un hatchback son iguales). La
+  persona confirma con un toque, escribe la placa y abre el 3D. La primera
+  vez descarga 89 MB (el reconocedor); después funciona sin internet.
+- **Cuatro carrocerías a la medida**: sedán, hatchback, SUV y camioneta de
+  platón, dibujadas por código con las mismas 17 piezas (en el hatchback la
+  pieza trasera se llama compuerta; en la camioneta, compuerta y costados
+  del platón) y estiradas a las medidas reales de la línea (largo, ancho,
+  alto, distancia entre ejes) que trae el catálogo. El carro sale además del
+  color de la foto. Arriba del 3D, la ficha dice qué carro es y que la
+  carrocería es de referencia.
+- **Catálogo de carros de Colombia** (`js/catalogo-carros.js`): marcas y
+  líneas que se venden o que todavía ruedan (el parque tiene 13 años de
+  edad promedio), con carrocería, medidas, años y qué tan comunes son.
+  Investigado y revisado por agentes con fuentes; se regenera con una
+  herramienta, no se edita a mano.
+- **Garaje** (`garaje.html`): la lista de todos los carros, con la foto o
+  el color, placa, marca y línea, carrocería, cuándo se tocó por última vez
+  y cuántas piezas hay pendientes, en proceso y terminadas. Escribir una
+  placa abre ese carro si ya estaba y lo crea si no. Tocar una fila abre el
+  visor con ese carro; la × lo borra con confirmación, fotos incluidas.
 - Cada pieza marcada tiene **estado**: pendiente (naranja), en proceso
   (amarillo) o terminada (verde). La chapa en 3D y el chip de la lista van
   del mismo color. Se cambia tocando el nombre en el chip: sale un menú con
@@ -93,9 +134,13 @@ npm run celular
 ```
 
 El servidor imprime la dirección `http://192.168.x.x:8310/` para abrirla en
-el teléfono. Windows puede pedir permiso al firewall la primera vez.
+el teléfono (en el PC de Joan, el 15-oct, era `http://192.168.101.16:8310/garaje.html`).
+Windows puede pedir permiso al firewall la primera vez. Desde la sesión de
+Claude, la entrada `taller-pintura-celular` de `.claude/launch.json` arranca
+el servidor abierto a la red. El reconocedor de fotos sí necesita internet
+en el teléfono la primera vez (89 MB desde Hugging Face); lo demás no.
 
-Pruebas (55, en Node, sin navegador; el registro se prueba contra
+Pruebas (80, en Node, sin navegador; el registro se prueba contra
 `fake-indexeddb`, una IndexedDB de mentira que se instala con `npm install`):
 
 ```bash
@@ -106,21 +151,29 @@ npm test
 
 | Archivo | Qué hace |
 |---|---|
-| `index.html` | El visor: barra con el enlace al Garaje, placa y marca; el lienzo 3D; botones de vista; la hoja con los chips, la tira de fotos y los dos botones; el menú de estado, la cámara (`input type=file capture`) y el diálogo de la foto grande. |
-| `garaje.html` | El Garaje: formulario de placa y marca, y la lista de carros. |
+| `index.html` | El visor: barra con el enlace al Garaje, placa y marca; el lienzo 3D con la ficha del carro; botones de vista; la hoja con los chips, la tira de fotos y los dos botones; el menú de estado, la cámara (`input type=file capture`) y el diálogo de la foto grande. |
+| `garaje.html` | El Garaje: el botón "Nuevo carro con foto" y su ficha (foto, color, sugerencias, marca y línea, carrocería, placa), el formulario por placa, y la lista de carros. |
 | `css/estilos.css` | Colores como variables `--*` (incluidos los tres de estado), tema oscuro (luz de taller). Empieza con `[hidden] { display: none !important }` por una trampa conocida. |
 | `js/piezas.js` | El catálogo de piezas. Sin Three.js: lo usan el registro y la nómina. |
-| `js/estado.js` | El texto de la orden para el asistente y la placa normalizada. Su modelo de selección (`crearEstado`, `cambiarPlaca`...) fue el del visor del 15 de octubre; hoy lo reemplaza `garaje.js`, pero sigue probado y `textoParaAsistente` sigue siendo el de la orden. |
-| `js/garaje.js` | El registro: el modelo del carro (placa, marca, piezas con estado y fecha) como funciones puras, y el almacén en IndexedDB (carros y fotos). Sin DOM; probado en Node con `fake-indexeddb`. |
+| `js/carrocerias.js` | Los cuatro tipos de carrocería: medidas típicas, qué nombre toma cada pieza en cada uno (compuerta, costado del platón), y cómo se limpian las medidas del catálogo para dibujar. Sin Three.js. |
+| `js/catalogo-carros.js` | GENERADO. Los carros que ruedan en Colombia: marca, línea, carrocería, medidas en mm, años, presencia y fuente. Se regenera con `herramientas/generar-catalogo.mjs`. |
+| `js/catalogo.js` | Buscar en el catálogo ("onix", "sedan onix", sin tildes), la entrada exacta de un carro y lo que el registro guarda de ella. |
+| `js/estado.js` | El texto de la orden para el asistente (ahora con el nombre de pieza de la carrocería) y la placa normalizada. Su modelo de selección fue el del visor del 15 de octubre; hoy lo reemplaza `garaje.js`, pero sigue probado. |
+| `js/garaje.js` | El registro: el modelo del carro (placa, marca, línea, carrocería, color, medidas, piezas con estado y fecha) como funciones puras, y el almacén en IndexedDB (carros y fotos, incluida la foto del carro entero como pieza `carro`). Sin DOM; probado en Node con `fake-indexeddb`. |
 | `js/fotos.js` | Reducir una foto a 1280 px y sacarle la miniatura con canvas. La cuenta de medidas es pura y se prueba en Node. |
-| `js/hoja.js` | La hoja de abajo del visor: chips con estado y cámara, menú de estado, tira de fotos y foto grande. DOM puro, sin Three.js. |
-| `js/garaje-pantalla.js` | La pantalla Garaje: lista, abrir o crear por placa, borrar. |
-| `js/carro.js` | El sedán, pieza por pieza, construido con perfiles extruidos. Cada pieza es un objeto aparte con su propio material. Sin DOM: también se construye en Node para probarlo. |
+| `js/color-foto.js` | El color de la pintura a partir de la foto (k-medias sobre el centro, descartando vidrios y llantas) y su nombre de taller (plateado, vinotinto...). La parte pura se prueba en Node. |
+| `js/reconocer.js` | El reconocedor en el navegador: CLIP (visión) sobre la foto, comparado con los vectores de texto de `js/etiquetas-clip.json`. Devuelve carrocerías, líneas y marcas ordenadas por parecido. |
+| `js/etiquetas-clip.json` | GENERADO por `herramientas/calcular-etiquetas.mjs`: un vector por carrocería y por línea del catálogo (Int8 en base64). Hay que regenerarlo cuando cambie el catálogo. |
+| `js/hoja.js` | La hoja de abajo del visor: chips con estado y cámara, menú de estado, tira de fotos y foto grande, con los nombres de la carrocería. DOM puro, sin Three.js. |
+| `js/garaje-pantalla.js` | La pantalla Garaje: lista con portada y color, abrir o crear por placa, borrar, y la ficha del carro nuevo con foto (color, reconocedor, catálogo, confirmación). |
+| `js/carro.js` | El carro, pieza por pieza, construido con perfiles extruidos, en cuatro carrocerías y a las medidas de la línea (`disposicion` convierte medidas en bordes y alturas). Cada pieza es un objeto aparte con su propio material. Sin DOM: también se construye en Node para probarlo. |
 | `js/toque.js` | Qué pieza hay bajo el dedo: rayo central más un anillo de ocho para que estribos y espejos se dejen tocar. Sin DOM, probado con la cámara y el carro reales. |
-| `js/visor.js` | Escena, luces, cámara, giro con el dedo, el toque que marca, y el pegamento con el registro: qué carro está abierto (por la URL o el último), teñir por estado, guardar. |
-| `js/vendor/` | Three.js 0.169 copiado de npm (tres archivos). No se edita. Así la app no depende de internet ni de que cambie la versión. |
-| `herramientas/servidor.js` | Servidor estático sin dependencias; los módulos de JavaScript no cargan desde `file://`. |
-| `pruebas/` | `estado.test.js` (la orden), `carro.test.js` (17 piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador) y `fotos.test.js` (medidas). |
+| `js/visor.js` | Escena, luces, cámara, giro con el dedo, el toque que marca, y el pegamento con el registro: qué carro está abierto (por la URL o el último), el 3D con su carrocería, color y medidas (se reconstruye al cambiar de carro), teñir por estado, guardar. |
+| `js/vendor/` | Three.js 0.169 (tres archivos) y, en `transformers/`, Transformers.js 4.3.1 con el motor ONNX Runtime (dos .wasm, 41 MB). Copiados de npm, no se editan. Así la app no depende de internet para dibujar ni de que cambie la versión. |
+| `herramientas/servidor.js` | Servidor estático sin dependencias; los módulos de JavaScript no cargan desde `file://`. Sirve `.wasm` con su tipo para que el motor compile en streaming. |
+| `herramientas/generar-catalogo.mjs` | Del JSON de la investigación al catálogo: una entrada por marca y línea, medidas limpias, fuente conservada. |
+| `herramientas/calcular-etiquetas.mjs` | Calcula en el PC los vectores de texto de CLIP (modelo de texto, 60 MB que el teléfono así no necesita) y escribe `js/etiquetas-clip.json`. |
+| `pruebas/` | `estado.test.js` (la orden), `carro.test.js` (17 piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras) y `catalogo.test.js` (el catálogo y su buscador). `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
 
 Decisiones que conviene conocer:
 
@@ -154,6 +207,25 @@ Decisiones que conviene conocer:
   abierto: es lo que reabre el mismo carro al recargar, lo que guarda el
   carro sin placa, y lo que mantiene el visor funcionando si IndexedDB no
   abre (entonces la pantalla avisa que solo hay borrador).
+- Las carrocerías son **paramétricas, no modelos descargados**: cada borde
+  del sedán original se expresó como distancia a un eje, a la punta o a la
+  cola (`disposicion` en `carro.js`), así que un Logan de 4,35 m y un Hilux
+  de 5,33 m salen del mismo código estirados donde se estira un carro de
+  verdad. Los ids de las 17 piezas no cambian entre carrocerías (el registro
+  y la nómina siguen hablando de `baul` y `costado`); cambia el nombre que
+  ve la persona.
+- El reconocedor corre **en el teléfono, sin servidor ni cuenta**: CLIP
+  (ViT-B/32 cuantizado, 89 MB) con Transformers.js. Se eligió frente a una
+  IA en la nube porque no exige clave de API ni pago por foto, y porque el
+  dato de la foto es una sugerencia, no la verdad. Los vectores de texto se
+  calculan en el PC (`calcular-etiquetas.mjs`) para que el teléfono no
+  tenga que bajar también el modelo de texto. Medido con nueve fotos reales:
+  carrocería 7 de 9 (mezclando lo que ve CLIP con lo que votan las líneas
+  parecidas), línea 6 de 9. Un reconocedor mejor es cuestión de nube y de
+  plata (decisión 8).
+- La foto del carro entero se guarda como una foto más, con la pieza
+  especial `carro`: así vive en el mismo almacén, se reduce igual y se va
+  con el carro al borrarlo.
 
 ## Plan, con fechas
 
@@ -165,7 +237,7 @@ el lunes 19.
 | **Jueves 15-oct** (hecho) | Visor: sedán por piezas, girar, tocar, enviar por WhatsApp. | Mandar una orden de pintura desde el celular. |
 | **Lunes 19 a viernes 23-oct** (hecho el jueves 15) | Registro por placa y marca; pantalla **Garaje** con todos los carros; fotos por pieza (cámara del celular, guardadas en el teléfono); estados por pieza: pendiente, en proceso, terminada. | Ver cualquier carro, abrir su 3D y saber qué se trabajó y qué está en curso. |
 | **Lunes 26 a viernes 30-oct** | Empleados: asignar pintor a cada pieza y marcarla terminada; resumen semanal por pintor con piezas × 90.000. La nube (Supabase, con RLS) para que el dueño y el asistente vean lo mismo desde dos teléfonos. | Pagar la semana con la lista en la mano; el asistente ve la orden en la app, no solo en WhatsApp. |
-| **Lunes 2 a viernes 6-nov** | Otras carrocerías (hatchback, SUV, camioneta/pick-up: cambia el baúl por la compuerta y el largo); instalable en el celular (PWA primero; APK por enlace como Tu Garantía si hace falta). | Usarla con los carros que de verdad llegan al taller, como una app más. |
+| **Lunes 2 a viernes 6-nov** (carrocerías y foto hechas el jueves 15; queda lo instalable) | Otras carrocerías (hatchback, SUV, camioneta/pick-up: cambia el baúl por la compuerta y el largo); instalable en el celular (PWA primero; APK por enlace como Tu Garantía si hace falta). | Usarla con los carros que de verdad llegan al taller, como una app más. |
 
 Lo que NO está en el plan y no se va a prometer: escaneo del carro real
 (arriba está el porqué), presupuestos al cliente, facturación.
@@ -187,6 +259,12 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
    historia (piezas terminadas y fotos de la visita anterior). Si lo que el
    taller quiere es "cada visita es una orden nueva", hace falta una orden
    por visita, no solo un carro por placa, y eso cambia la nómina.
+8. **¿Basta con que la foto sugiera, o hace falta que acierte casi
+   siempre?** Hoy acierta la carrocería 7 de 10 y el modelo 6 de 10, en el
+   teléfono y gratis. Subir a 8 o 9 de 10 exige una IA en la nube (Claude o
+   Gemini con la lista de candidatos), que cuesta centavos por foto pero
+   necesita una cuenta de API pagada con tarjeta y un servidor que guarde la
+   clave: es la semana del 26 (la nube) y una decisión de plata.
 
 ## Trampas conocidas
 
@@ -218,3 +296,22 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
 - `fake-indexeddb` clona los Blobs con el `structuredClone` de Node; con
   Node 22 funciona. Con un Node más viejo las pruebas de fotos podrían
   fallar por eso y no por el código.
+- `node --test` a secas también corre las pruebas que traen los paquetes de
+  `node_modules` (Transformers.js arrastra una con 450 pruebas ajenas): por
+  eso `npm test` es `node --test pruebas/*.test.js`.
+- De Transformers.js hay que copiar `transformers.min.js`, no
+  `transformers.web.min.js`: el "web" es para empaquetadores e importa
+  `onnxruntime-web` por nombre, y el navegador no sabe resolverlo. El bundle
+  completo busca `ort-wasm-simd-threaded.asyncify.*` en la carpeta que diga
+  `env.backends.onnx.wasm.wasmPaths`, y esos archivos tienen que ser de la
+  versión exacta de ONNX Runtime que pide Transformers.js (está en su
+  `package.json`); con otra versión el motor no carga.
+- `imagen.decode()` de un `<img>` se queda esperando para siempre si la
+  pestaña está tapada (el panel de Claude oculto, por ejemplo): por eso las
+  fotos se decodifican con `createImageBitmap`, que no depende de que la
+  página dibuje.
+- Desde el frente, un sedán y un hatchback son el mismo carro para
+  cualquier IA: el baúl está atrás. Si la foto se toma de tres cuartos
+  (frente y lado), la carrocería acierta más.
+- La dirección del PC para el celular sale de `ipconfig` como "Dirección
+  IPv4" del adaptador Wi-Fi (los nombres salen en español y con la ñ rota).

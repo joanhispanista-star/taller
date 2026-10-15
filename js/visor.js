@@ -3,12 +3,15 @@
 // Desde el registro (semana del 19 de octubre) el carro que se ve es uno del
 // Garaje: llega por la URL (?placa=ABC123) o es el último que se abrió. Las
 // piezas marcadas, el estado de cada una y sus fotos se guardan en el
-// teléfono con garaje.js; la hoja de abajo la pinta hoja.js. Aquí queda la
-// escena y el pegamento entre las dos.
+// teléfono con garaje.js; la hoja de abajo la pinta hoja.js. El 3D se
+// construye con la carrocería, el color y las medidas de la línea del carro
+// (carro.js y carrocerias.js): no es el carro exacto, es uno del mismo tipo,
+// tamaño y color, y la ficha de arriba lo dice.
 import * as THREE from 'three';
 import { OrbitControls } from './vendor/OrbitControls.js';
 import { RoomEnvironment } from './vendor/RoomEnvironment.js';
 import { construirCarro, resaltar } from './carro.js';
+import { CARROCERIAS, nombreDePiezaEn, normalizarCarroceria } from './carrocerias.js';
 import { piezaTocada } from './toque.js';
 import { CLAVE_GUARDADO, normalizarPlaca, textoParaAsistente } from './estado.js';
 import {
@@ -18,6 +21,7 @@ import {
   deserializarCarro,
   estadoParaOrden,
   fijarEstado,
+  nombreDelCarro,
   piezasDelCarro,
   quitarTodas,
   serializarCarro,
@@ -57,6 +61,7 @@ const ui = {
   escena: document.getElementById('escena'),
   lienzo: document.getElementById('lienzo'),
   pista: document.getElementById('pista'),
+  ficha: document.getElementById('ficha'),
   error: document.getElementById('error'),
   placa: document.getElementById('placa'),
   marca: document.getElementById('marca'),
@@ -164,10 +169,40 @@ controles.maxPolarAngle = Math.PI / 2 - 0.05; // nunca por debajo del piso
 controles.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
 controles.update();
 
-// `modelo` es el sedán en 3D; `carro` (arriba) es el registro: placa, marca
-// y el estado de cada pieza. Dos cosas distintas con dos nombres.
-const modelo = construirCarro({ colorBase: COLOR_BASE });
-escena.add(modelo.grupo, ...crearPiso());
+escena.add(...crearPiso());
+
+// `modelo` es el carro en 3D; `carro` (arriba) es el registro: placa, marca
+// y el estado de cada pieza. Dos cosas distintas con dos nombres. El modelo
+// se vuelve a construir cuando cambia lo que lo define: carrocería, color o
+// medidas de la línea.
+function opcionesDelModelo() {
+  return {
+    colorBase: carro.color || COLOR_BASE,
+    carroceria: carro.carroceria || 'sedan',
+    medidas: carro.medidas || undefined,
+  };
+}
+function firmaDelModelo() {
+  return JSON.stringify(opcionesDelModelo());
+}
+let modelo = construirCarro(opcionesDelModelo());
+let firmaModelo = firmaDelModelo();
+escena.add(modelo.grupo);
+
+function reconstruirModelo() {
+  const firma = firmaDelModelo();
+  if (firma === firmaModelo) return;
+  escena.remove(modelo.grupo);
+  // Liberar la GPU: cada carro son unas cuarenta geometrías y materiales.
+  modelo.grupo.traverse((objeto) => {
+    if (objeto.geometry) objeto.geometry.dispose();
+    if (objeto.material) objeto.material.dispose();
+  });
+  modelo = construirCarro(opcionesDelModelo());
+  firmaModelo = firma;
+  escena.add(modelo.grupo);
+  pedirCuadro();
+}
 
 function crearPiso() {
   const piso = new THREE.Mesh(
@@ -338,6 +373,21 @@ function pintarHoja() {
   ui.limpiar.disabled = !hayPiezas;
 }
 
+// La ficha de arriba dice qué carro es y que el 3D es una carrocería de
+// referencia (del mismo tipo, tamaño y color), no el carro exacto. Sin
+// datos del catálogo no dice nada: no hay que inventar.
+function pintarFicha() {
+  const nombre = nombreDelCarro(carro);
+  if (!nombre && !carro.carroceria) {
+    ui.ficha.hidden = true;
+    return;
+  }
+  const tipo = CARROCERIAS[normalizarCarroceria(carro.carroceria || 'sedan')].nombre;
+  const largo = carro.medidas && carro.medidas.largo ? (carro.medidas.largo / 1000).toFixed(2).replace('.', ',') + ' m' : '';
+  ui.ficha.textContent = [nombre, tipo, largo].filter(Boolean).join(' · ') + ' · carrocería de referencia';
+  ui.ficha.hidden = false;
+}
+
 ui.limpiar.addEventListener('click', () => {
   quitarTodas(carro);
   aplicarSeleccion();
@@ -382,7 +432,7 @@ async function borrarFoto(idFoto) {
 // directo a WhatsApp por wa.me. Las dos llevan la misma orden. Cuando haya
 // registro en la nube, esto será además un aviso dentro de la app.
 ui.enviar.addEventListener('click', async () => {
-  const texto = textoParaAsistente(estadoParaOrden(carro));
+  const texto = textoParaAsistente(estadoParaOrden(carro), (id) => nombreDePiezaEn(carro.carroceria, id));
   if (navigator.share) {
     try {
       await navigator.share({ text: texto });
@@ -437,8 +487,10 @@ async function abrirCarro(placa, base) {
 function refrescar() {
   ui.placa.value = carro.placa;
   ui.marca.value = carro.marca;
+  reconstruirModelo();
   aplicarSeleccion();
   pintarHoja();
+  pintarFicha();
   // La URL dice qué carro está abierto: recargar o volver atrás trae el
   // mismo, y no el que decía la URL antes de cambiar la placa.
   const buscado = carro.placa ? '?placa=' + carro.placa : '';
@@ -471,6 +523,7 @@ ui.marca.value = carro.marca;
 ui.marca.addEventListener('input', () => {
   carro.marca = ui.marca.value.slice(0, 40);
   persistir();
+  pintarFicha();
 });
 
 // ---------- Botones de vista ----------
@@ -539,6 +592,7 @@ for (const boton of ui.vistas) {
 // otra placa, o la placa del borrador tiene historia guardada, se refresca.
 aplicarSeleccion();
 pintarHoja();
+pintarFicha();
 
 async function arrancar() {
   try {
@@ -567,13 +621,16 @@ window.__visor = {
   get almacen() {
     return almacen;
   },
-  modelo,
+  get modelo() {
+    return modelo;
+  },
   alternar,
   fijar,
   agregarFoto,
   borrarFoto,
   irA,
   piezaBajo,
+  refrescar,
   listo: arrancar(),
   marcadas: () => piezasDelCarro(carro).map((p) => p.id),
 };

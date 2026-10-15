@@ -1,1 +1,3 @@
 node_modules/
+# Fotos de Wikimedia para probar el reconocedor a mano; no van al repo.
+pruebas/fotos-reconocer/

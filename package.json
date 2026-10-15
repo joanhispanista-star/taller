@@ -7,9 +7,10 @@
   "scripts": {
     "dev": "node herramientas/servidor.js 8310",
     "celular": "node herramientas/servidor.js 8310 --red",
-    "test": "node --test"
+    "test": "node --test pruebas/*.test.js"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.3.1",
     "three": "0.169.0"
   },
   "devDependencies": {

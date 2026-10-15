@@ -18,6 +18,10 @@ const EN_RED = process.argv.includes('--red');
 const TIPOS = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  // El motor de reconocimiento (ONNX Runtime) es un .wasm: sin este tipo el
+  // navegador se niega a compilarlo en streaming y tarda el doble.
+  '.wasm': 'application/wasm',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.webmanifest': 'application/manifest+json',

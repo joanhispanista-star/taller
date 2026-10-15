@@ -14,11 +14,21 @@
   </header>
 
   <main class="garaje">
+    <!-- La puerta grande: una foto del carro y la app propone qué carro es,
+         de qué color y qué carrocería; la persona confirma. -->
+    <div class="acciones-garaje">
+      <button type="button" id="nuevo-con-foto" class="primario">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9zm3 5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>
+        Nuevo carro con foto
+      </button>
+    </div>
+    <input id="foto-carro" type="file" accept="image/*" capture="environment" hidden>
+
     <!-- Sin `required`: el aviso del navegador tapa el campo en el celular;
          el código enfoca la placa si falta. -->
     <form id="registro" class="registro" autocomplete="off">
       <label class="campo">
-        <span>Placa</span>
+        <span>O por placa</span>
         <input id="placa" type="text" inputmode="text" autocapitalize="characters" placeholder="ABC123">
       </label>
       <label class="campo">
@@ -30,9 +40,42 @@
     <p class="ayuda">Si la placa ya está en el Garaje se abre ese carro; si no, se crea.</p>
     <p id="aviso" class="aviso" hidden></p>
     <p id="borrador" class="borrador" hidden><span></span> <a href="index.html">Abrirlo</a></p>
-    <p id="vacio" class="vacio" hidden>Todavía no hay carros. Escribe la placa del primero.</p>
+    <p id="vacio" class="vacio" hidden>Todavía no hay carros. Tómale una foto al primero.</p>
     <ul id="carros" class="carros"></ul>
   </main>
+
+  <!-- La ficha del carro nuevo: la foto, lo que la app propone y lo que la
+       persona confirma. Es un diálogo para que en el celular ocupe la
+       pantalla y nada más se mueva debajo. -->
+  <dialog id="ficha-nueva" class="ficha-nueva" aria-label="Carro nuevo">
+    <img id="ficha-foto" alt="">
+    <div class="ficha-cuerpo">
+      <div class="progreso" aria-hidden="true"><b id="ficha-progreso"></b></div>
+      <p id="ficha-estado" class="aviso" hidden></p>
+      <div class="ficha-campos">
+        <label class="campo">
+          <span>Placa</span>
+          <input id="ficha-placa" type="text" inputmode="text" autocapitalize="characters" placeholder="ABC123" autocomplete="off">
+        </label>
+        <label class="campo campo-color">
+          <span>Color (de la foto)</span>
+          <span class="color-elegido"><input id="ficha-color" type="color" value="#cfd4da"><b id="ficha-color-nombre">plateado</b></span>
+        </label>
+      </div>
+      <p class="ayuda" id="ficha-ayuda">La app propone; tú confirmas con un toque.</p>
+      <div id="ficha-sugerencias" class="sugerencias" aria-label="Carros parecidos"></div>
+      <label class="campo">
+        <span>Marca y línea</span>
+        <input id="ficha-linea" type="text" list="lineas-catalogo" placeholder="Chevrolet Onix" autocomplete="off">
+      </label>
+      <datalist id="lineas-catalogo"></datalist>
+      <div id="ficha-carrocerias" class="carrocerias" aria-label="Carrocería"></div>
+      <div class="acciones">
+        <button type="button" data-accion="cancelar">Cancelar</button>
+        <button type="button" data-accion="abrir" class="primario">Abrir en 3D</button>
+      </div>
+    </div>
+  </dialog>
 
   <script type="module" src="js/garaje-pantalla.js"></script>
 </body>

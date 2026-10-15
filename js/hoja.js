@@ -4,8 +4,8 @@
 // Es DOM puro, sin Three.js. El visor le dice qué carro y qué fotos hay
 // (pintar) y ella avisa por las acciones cuando la persona toca algo. Así
 // visor.js se queda con la escena y esto se lee aparte.
-import { ESTADOS, NOMBRE_ESTADO, fechaCorta, piezasDelCarro } from './garaje.js';
-import { nombreDePieza } from './piezas.js';
+import { ESTADOS, NOMBRE_ESTADO, PIEZA_CARRO, fechaCorta, piezasDelCarro } from './garaje.js';
+import { nombreDePiezaEn } from './carrocerias.js';
 
 // Un icono propio y no un emoji: el emoji de cámara cambia de dibujo (y de
 // tamaño) entre Android, iPhone y Windows, y en algunos teléfonos viejos
@@ -15,9 +15,15 @@ const ICONO_CAMARA =
   '<path fill="currentColor" d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9zm3 5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/>' +
   '</svg>';
 
+// El nombre de la pieza en la carrocería que se está viendo; la foto del
+// carro entero también tiene nombre.
+function nombreDe(carroceria, id) {
+  return id === PIEZA_CARRO ? 'El carro' : nombreDePiezaEn(carroceria, id);
+}
+
 // Los nombres del catálogo no caben debajo de una miniatura de 72 px.
-function nombreCorto(id) {
-  return nombreDePieza(id)
+function nombreCorto(carroceria, id) {
+  return nombreDe(carroceria, id)
     .replace('delantero', 'del.')
     .replace('delantera', 'del.')
     .replace('trasero', 'tras.')
@@ -61,11 +67,13 @@ export function crearHoja(acciones) {
   let urlGrande = '';
   let fotoAbierta = null;
   let piezaDelMenu = null;
+  let carroceria = ''; // la del carro que se está pintando, para los nombres
 
   // ---------- Chips ----------
 
   function pintar({ carro, fotos = [], conRegistro = false }) {
-    const piezas = piezasDelCarro(carro);
+    carroceria = carro.carroceria || '';
+    const piezas = piezasDelCarro(carro).map((p) => ({ ...p, nombre: nombreDe(carroceria, p.id) }));
     const porPieza = new Map();
     for (const f of fotos) porPieza.set(f.pieza, (porPieza.get(f.pieza) || 0) + 1);
 
@@ -173,7 +181,7 @@ export function crearHoja(acciones) {
     ui.fotos.hidden = fotos.length === 0;
     ui.fotos.replaceChildren(
       ...fotos.map((foto) => {
-        const b = boton('foto', '', 'Ver la foto de ' + nombreDePieza(foto.pieza));
+        const b = boton('foto', '', 'Ver la foto de ' + nombreDe(carroceria, foto.pieza));
         const imagen = document.createElement('img');
         const url = URL.createObjectURL(foto.miniatura || foto.foto);
         urls.push(url);
@@ -181,7 +189,7 @@ export function crearHoja(acciones) {
         imagen.alt = '';
         imagen.decoding = 'async';
         const pie = document.createElement('span');
-        pie.textContent = nombreCorto(foto.pieza);
+        pie.textContent = nombreCorto(carroceria, foto.pieza);
         b.append(imagen, pie);
         b.addEventListener('click', () => abrirFoto(foto));
         return b;
@@ -195,7 +203,7 @@ export function crearHoja(acciones) {
     if (urlGrande) URL.revokeObjectURL(urlGrande);
     urlGrande = URL.createObjectURL(foto.foto);
     grande.imagen.src = urlGrande;
-    grande.texto.textContent = nombreDePieza(foto.pieza) + ' · ' + fechaCorta(foto.creado);
+    grande.texto.textContent = nombreDe(carroceria, foto.pieza) + ' · ' + fechaCorta(foto.creado);
     ui.dialogo.showModal();
   }
 

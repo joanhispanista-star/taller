@@ -1,0 +1,9 @@
+Transformers.js 4.3.1 (transformers.min.js, el bundle completo con el motor
+dentro) y los archivos del motor ONNX Runtime Web 1.31.0-dev.20260914 que ese
+bundle busca (ort-wasm-simd-threaded.asyncify.mjs/.wasm, 27 MB, y los
+ort-wasm-simd-threaded.mjs/.wasm sin asyncify, 14 MB, por si cambia el
+camino). Copiados de node_modules el 15-oct-2026.
+
+Es la versión exacta de ONNX Runtime que pide el package.json de
+Transformers.js: si se actualiza uno hay que actualizar el otro, o el motor
+no carga. No se editan. Los usa js/reconocer.js.

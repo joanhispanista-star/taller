@@ -2,7 +2,7 @@
 //
 // Es lógica pura, sin DOM ni Three.js, para poder probarla en Node y para
 // que el registro por placa (la siguiente fase) la reutilice tal cual.
-import { PIEZAS, PIEZAS_POR_ID } from './piezas.js';
+import { PIEZAS, PIEZAS_POR_ID, nombreDePieza } from './piezas.js';
 
 export const CLAVE_GUARDADO = 'taller-pintura:visor';
 
@@ -67,7 +67,9 @@ export function piezasSeleccionadas(estado) {
   return PIEZAS.filter((p) => estado.seleccion.has(p.id));
 }
 
-export function textoParaAsistente(estado) {
+// `nombreDe` deja poner el nombre según la carrocería (en un hatchback la
+// pieza 'baul' se llama compuerta); sin él, los nombres del catálogo.
+export function textoParaAsistente(estado, nombreDe = nombreDePieza) {
   const piezas = piezasSeleccionadas(estado);
   const carro = [estado.marca.trim(), estado.placa ? 'placa ' + estado.placa : '']
     .filter(Boolean)
@@ -77,7 +79,7 @@ export function textoParaAsistente(estado) {
     lineas.push('Sin piezas marcadas.');
   } else {
     lineas.push(piezas.length === 1 ? '1 pieza para pintar:' : piezas.length + ' piezas para pintar:');
-    piezas.forEach((p, i) => lineas.push(i + 1 + '. ' + p.nombre));
+    piezas.forEach((p, i) => lineas.push(i + 1 + '. ' + nombreDe(p.id)));
   }
   lineas.push('', 'Enviado desde Taller de Pintura');
   return lineas.join(NL);

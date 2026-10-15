@@ -1,0 +1,36 @@
+// CATÁLOGO PROVISIONAL: lo reemplaza herramientas/generar-catalogo.mjs con
+// el catálogo investigado (cientos de líneas con medidas y fuente). Mientras
+// tanto, las más vendidas en Colombia en 2025, con medidas en milímetros.
+// Datos: solo los campos que lee catalogo.js.
+export const CATALOGO = [
+  { marca: 'Chevrolet', linea: 'Onix', carroceria: 'hatchback', largo: 4163, ancho: 1730, alto: 1470, entreEjes: 2551, anos: '2020-hoy', presencia: 'muy comun' },
+  { marca: 'Chevrolet', linea: 'Onix sedán', carroceria: 'sedan', largo: 4474, ancho: 1730, alto: 1471, entreEjes: 2600, anos: '2020-hoy', presencia: 'comun' },
+  { marca: 'Chevrolet', linea: 'Spark GT', carroceria: 'hatchback', largo: 3640, ancho: 1597, alto: 1522, entreEjes: 2375, anos: '2011-2022', presencia: 'muy comun' },
+  { marca: 'Chevrolet', linea: 'Sail', carroceria: 'sedan', largo: 4300, ancho: 1690, alto: 1503, entreEjes: 2465, anos: '2012-2018', presencia: 'muy comun' },
+  { marca: 'Chevrolet', linea: 'Tracker', carroceria: 'suv', largo: 4270, ancho: 1791, alto: 1627, entreEjes: 2570, anos: '2021-hoy', presencia: 'comun' },
+  { marca: 'Renault', linea: 'Logan', carroceria: 'sedan', largo: 4359, ancho: 1733, alto: 1517, entreEjes: 2634, anos: '2015-hoy', presencia: 'muy comun' },
+  { marca: 'Renault', linea: 'Sandero', carroceria: 'hatchback', largo: 4070, ancho: 1733, alto: 1523, entreEjes: 2590, anos: '2015-hoy', presencia: 'muy comun' },
+  { marca: 'Renault', linea: 'Stepway', carroceria: 'hatchback', largo: 4083, ancho: 1757, alto: 1618, entreEjes: 2590, anos: '2015-hoy', presencia: 'muy comun' },
+  { marca: 'Renault', linea: 'Duster', carroceria: 'suv', largo: 4341, ancho: 1804, alto: 1693, entreEjes: 2673, anos: '2012-hoy', presencia: 'muy comun' },
+  { marca: 'Renault', linea: 'Kwid', carroceria: 'hatchback', largo: 3731, ancho: 1579, alto: 1474, entreEjes: 2422, anos: '2018-hoy', presencia: 'muy comun' },
+  { marca: 'Renault', linea: 'Duster Oroch', carroceria: 'camioneta', largo: 4700, ancho: 1821, alto: 1694, entreEjes: 2829, anos: '2016-hoy', presencia: 'comun' },
+  { marca: 'Kia', linea: 'Picanto', carroceria: 'hatchback', largo: 3595, ancho: 1595, alto: 1485, entreEjes: 2400, anos: '2017-hoy', presencia: 'muy comun' },
+  { marca: 'Kia', linea: 'Rio', carroceria: 'sedan', largo: 4385, ancho: 1725, alto: 1450, entreEjes: 2580, anos: '2017-hoy', presencia: 'muy comun' },
+  { marca: 'Kia', linea: 'K3', carroceria: 'sedan', largo: 4545, ancho: 1750, alto: 1475, entreEjes: 2670, anos: '2024-hoy', presencia: 'muy comun' },
+  { marca: 'Kia', linea: 'Sportage', carroceria: 'suv', largo: 4515, ancho: 1865, alto: 1650, entreEjes: 2755, anos: '2022-hoy', presencia: 'comun' },
+  { marca: 'Mazda', linea: 'Mazda 2', carroceria: 'hatchback', largo: 4065, ancho: 1695, alto: 1495, entreEjes: 2570, anos: '2015-hoy', presencia: 'muy comun' },
+  { marca: 'Mazda', linea: 'Mazda 3', carroceria: 'sedan', largo: 4660, ancho: 1795, alto: 1440, entreEjes: 2725, anos: '2019-hoy', presencia: 'muy comun' },
+  { marca: 'Mazda', linea: 'CX-30', carroceria: 'suv', largo: 4395, ancho: 1795, alto: 1540, entreEjes: 2655, anos: '2020-hoy', presencia: 'muy comun' },
+  { marca: 'Mazda', linea: 'CX-5', carroceria: 'suv', largo: 4575, ancho: 1845, alto: 1680, entreEjes: 2700, anos: '2017-hoy', presencia: 'comun' },
+  { marca: 'Toyota', linea: 'Corolla', carroceria: 'sedan', largo: 4630, ancho: 1780, alto: 1435, entreEjes: 2700, anos: '2020-hoy', presencia: 'comun' },
+  { marca: 'Toyota', linea: 'Corolla Cross', carroceria: 'suv', largo: 4460, ancho: 1825, alto: 1620, entreEjes: 2640, anos: '2021-hoy', presencia: 'muy comun' },
+  { marca: 'Toyota', linea: 'Hilux', carroceria: 'camioneta', largo: 5325, ancho: 1855, alto: 1815, entreEjes: 3085, anos: '2016-hoy', presencia: 'muy comun' },
+  { marca: 'Toyota', linea: 'Prado', carroceria: 'suv', largo: 4840, ancho: 1885, alto: 1845, entreEjes: 2790, anos: '2010-2023', presencia: 'comun' },
+  { marca: 'Nissan', linea: 'Versa', carroceria: 'sedan', largo: 4495, ancho: 1740, alto: 1460, entreEjes: 2620, anos: '2020-hoy', presencia: 'comun' },
+  { marca: 'Nissan', linea: 'Kicks', carroceria: 'suv', largo: 4295, ancho: 1760, alto: 1590, entreEjes: 2620, anos: '2017-hoy', presencia: 'comun' },
+  { marca: 'Nissan', linea: 'Frontier', carroceria: 'camioneta', largo: 5260, ancho: 1850, alto: 1820, entreEjes: 3150, anos: '2016-hoy', presencia: 'comun' },
+  { marca: 'Hyundai', linea: 'Tucson', carroceria: 'suv', largo: 4500, ancho: 1865, alto: 1650, entreEjes: 2680, anos: '2022-hoy', presencia: 'comun' },
+  { marca: 'Hyundai', linea: 'Accent', carroceria: 'sedan', largo: 4440, ancho: 1729, alto: 1460, entreEjes: 2600, anos: '2018-hoy', presencia: 'comun' },
+  { marca: 'Suzuki', linea: 'Swift', carroceria: 'hatchback', largo: 3845, ancho: 1735, alto: 1495, entreEjes: 2450, anos: '2018-hoy', presencia: 'comun' },
+  { marca: 'Volkswagen', linea: 'Gol', carroceria: 'hatchback', largo: 3899, ancho: 1656, alto: 1467, entreEjes: 2467, anos: '2009-2022', presencia: 'comun' },
+];

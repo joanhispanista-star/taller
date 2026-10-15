@@ -16,6 +16,11 @@
 // antes), pero sin placa no entra al registro ni puede tener fotos.
 import { PIEZAS, PIEZAS_POR_ID } from './piezas.js';
 import { crearEstado, normalizarPlaca } from './estado.js';
+import { normalizarCarroceria } from './carrocerias.js';
+
+// Las fotos van por pieza; esta "pieza" especial es la foto del carro
+// entero (la que toma el dueño al registrarlo).
+export const PIEZA_CARRO = 'carro';
 
 export const ESTADOS = ['pendiente', 'en-proceso', 'terminada'];
 export const NOMBRE_ESTADO = {
@@ -35,6 +40,27 @@ function fechaValida(valor) {
 
 function limpiarMarca(valor) {
   return typeof valor === 'string' ? valor.slice(0, 40) : '';
+}
+
+function limpiarColor(valor) {
+  return typeof valor === 'string' && /^#[0-9a-fA-F]{6}$/.test(valor) ? valor.toLowerCase() : '';
+}
+
+// Medidas de la línea (del catálogo), en milímetros. Solo las que vengan
+// como número positivo; si no viene ninguna, null y el visor usa las
+// típicas de la carrocería.
+function limpiarMedidas(valor) {
+  if (!valor || typeof valor !== 'object') return null;
+  const medidas = {};
+  let alguna = false;
+  for (const campo of ['largo', 'ancho', 'alto', 'entreEjes']) {
+    const n = Number(valor[campo]);
+    if (n > 0) {
+      medidas[campo] = n;
+      alguna = true;
+    }
+  }
+  return alguna ? medidas : null;
 }
 
 // Las piezas se guardan como objeto { id: { estado, desde } } y no como
@@ -64,10 +90,21 @@ export function crearCarro(datos = {}, ahora = new Date().toISOString()) {
   return {
     placa: normalizarPlaca(datos.placa),
     marca: limpiarMarca(datos.marca),
+    // Línea (Onix, Logan...), carrocería y color vienen del catálogo y de la
+    // foto; vacíos significan "no se sabe", y el visor dibuja el sedán gris.
+    linea: limpiarMarca(datos.linea),
+    carroceria: typeof datos.carroceria === 'string' && datos.carroceria ? normalizarCarroceria(datos.carroceria) : '',
+    color: limpiarColor(datos.color),
+    medidas: limpiarMedidas(datos.medidas),
     creado,
     actualizado: fechaValida(datos.actualizado) || creado,
     piezas: limpiarPiezas(datos.piezas, datos.seleccion, ahora),
   };
+}
+
+// Lo que se ve en una fila o en una ficha: "Chevrolet Onix" o solo la marca.
+export function nombreDelCarro(carro) {
+  return [carro.marca, carro.linea].map((t) => (t || '').trim()).filter(Boolean).join(' ');
 }
 
 export function tienePieza(carro, id) {
@@ -236,20 +273,27 @@ function crearAlmacen(bd) {
     return limpio;
   }
 
-  // El registro por placa: si existe, se abre el que había (y toma la marca
-  // si no tenía); si no, se crea. Devuelve { carro, nuevo }.
-  async function abrirOCrear(placa, marca = '') {
+  // El registro por placa: si existe, se abre el que había (y toma los datos
+  // que no tenía: marca, línea, carrocería, color, medidas); si no, se crea.
+  // `datos` puede ser solo la marca (texto) o un objeto con esos campos.
+  // Devuelve { carro, nuevo }.
+  async function abrirOCrear(placa, datos = '') {
     const clave = normalizarPlaca(placa);
     if (!clave) throw new Error('Falta la placa');
+    const nuevos = crearCarro(typeof datos === 'string' ? { marca: datos } : datos);
     const existente = await obtener(clave);
     if (existente) {
-      if (!existente.marca && limpiarMarca(marca)) {
-        existente.marca = limpiarMarca(marca);
-        await guardar(existente);
+      let cambio = false;
+      for (const campo of ['marca', 'linea', 'carroceria', 'color', 'medidas']) {
+        if (!existente[campo] && nuevos[campo]) {
+          existente[campo] = nuevos[campo];
+          cambio = true;
+        }
       }
+      if (cambio) await guardar(existente);
       return { carro: existente, nuevo: false };
     }
-    const nuevo = await guardar(crearCarro({ placa: clave, marca }));
+    const nuevo = await guardar(crearCarro({ ...nuevos, placa: clave, piezas: {} }));
     return { carro: nuevo, nuevo: true };
   }
 
@@ -280,7 +324,7 @@ function crearAlmacen(bd) {
   async function guardarFoto({ placa, pieza, foto, miniatura, ancho = 0, alto = 0 }, ahora = new Date().toISOString()) {
     const clave = normalizarPlaca(placa);
     if (!clave) throw new Error('Una foto necesita la placa del carro');
-    if (!PIEZAS_POR_ID.has(pieza)) throw new Error('Pieza fuera del catálogo: ' + pieza);
+    if (!PIEZAS_POR_ID.has(pieza) && pieza !== PIEZA_CARRO) throw new Error('Pieza fuera del catálogo: ' + pieza);
     if (!foto) throw new Error('Falta la foto');
     return pedir(fotos('readwrite').add({ placa: clave, pieza, foto, miniatura: miniatura || foto, ancho, alto, creado: ahora }));
   }
@@ -298,6 +342,12 @@ function crearAlmacen(bd) {
     await pedir(fotos('readwrite').delete(id));
   }
 
+  // La foto del carro entero (la del registro), o null si no la hay.
+  async function portada(placa) {
+    const lista = await listarFotos(placa);
+    return lista.find((f) => f.pieza === PIEZA_CARRO) || null;
+  }
+
   return {
     obtener,
     guardar,
@@ -307,6 +357,7 @@ function crearAlmacen(bd) {
     guardarFoto,
     listarFotos,
     borrarFoto,
+    portada,
     cerrar: () => bd.close(),
   };
 }

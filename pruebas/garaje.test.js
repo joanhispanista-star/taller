@@ -16,6 +16,7 @@ import {
   estadoParaOrden,
   fechaCorta,
   fijarEstado,
+  nombreDelCarro,
   piezasDelCarro,
   quitarTodas,
   resumen,
@@ -69,6 +70,28 @@ test('crearCarro entiende el borrador viejo del visor (seleccion como lista)', (
     'estribo-izq': { estado: 'pendiente', desde: AHORA },
   });
   assert.equal(carro.marca, 'Renault Logan');
+});
+
+test('crearCarro guarda línea, carrocería, color y medidas, y limpia lo que no sirve', () => {
+  const carro = crearCarro({
+    placa: 'abc123',
+    marca: 'Chevrolet',
+    linea: 'Onix',
+    carroceria: 'HATCHBACK',
+    color: '#C8102E',
+    medidas: { largo: 4163, ancho: 1730, alto: 'x', entreEjes: 2551 },
+  });
+  assert.equal(carro.linea, 'Onix');
+  assert.equal(carro.carroceria, 'hatchback');
+  assert.equal(carro.color, '#c8102e');
+  assert.deepEqual(carro.medidas, { largo: 4163, ancho: 1730, entreEjes: 2551 });
+  assert.equal(nombreDelCarro(carro), 'Chevrolet Onix');
+  const vacio = crearCarro({ carroceria: 'nave', color: 'rojo', medidas: 'grande' });
+  assert.equal(vacio.carroceria, 'sedan', 'una carrocería inventada cae al sedán');
+  assert.equal(vacio.color, '');
+  assert.equal(vacio.medidas, null);
+  assert.equal(crearCarro().carroceria, '', 'sin carrocería no se inventa una');
+  assert.equal(nombreDelCarro(crearCarro({ marca: ' Kia ' })), 'Kia');
 });
 
 test('crearCarro con nada da un carro vacío sin placa', () => {
@@ -210,6 +233,30 @@ test('abrirOCrear le pone la marca al carro que no tenía', async () => {
   const { carro } = await almacen.abrirOCrear('ABC123', 'Mazda 3');
   assert.equal(carro.marca, 'Mazda 3');
   assert.equal((await almacen.obtener('abc123')).marca, 'Mazda 3');
+  almacen.cerrar();
+});
+
+test('abrirOCrear con los datos de la foto crea el carro completo y completa el que ya existía', async () => {
+  const almacen = await almacenLimpio();
+  const datos = { marca: 'Renault', linea: 'Duster', carroceria: 'suv', color: '#1f4e9c', medidas: { largo: 4341, ancho: 1804, alto: 1693, entreEjes: 2673 } };
+  const { carro, nuevo } = await almacen.abrirOCrear('xyz789', datos);
+  assert.equal(nuevo, true);
+  assert.equal(carro.linea, 'Duster');
+  assert.equal(carro.carroceria, 'suv');
+  assert.equal(carro.color, '#1f4e9c');
+  assert.equal(carro.medidas.largo, 4341);
+  // Un carro viejo sin línea la toma; la que ya tenía no se pisa.
+  await almacen.guardar(crearCarro({ placa: 'VIE111', marca: 'Kia', linea: 'Picanto' }));
+  const viejo = await almacen.abrirOCrear('VIE111', { marca: 'Hyundai', linea: 'Accent', carroceria: 'sedan', color: '#f2f2f0' });
+  assert.equal(viejo.nuevo, false);
+  assert.equal(viejo.carro.marca, 'Kia');
+  assert.equal(viejo.carro.linea, 'Picanto');
+  assert.equal(viejo.carro.carroceria, 'sedan');
+  assert.equal(viejo.carro.color, '#f2f2f0');
+  // La foto del carro entero se guarda como la pieza especial 'carro'.
+  const id = await almacen.guardarFoto({ placa: 'xyz789', pieza: 'carro', foto: fotoFalsa() });
+  assert.equal((await almacen.portada('XYZ789')).id, id);
+  assert.equal(await almacen.portada('VIE111'), null);
   almacen.cerrar();
 });
 

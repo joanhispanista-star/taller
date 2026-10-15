@@ -112,6 +112,13 @@ test('el texto sin carro ni piezas no inventa datos', () => {
   assert.equal(lineas[1], 'Sin piezas marcadas.');
 });
 
+test('el texto acepta otros nombres de pieza (los de la carrocería)', () => {
+  const estado = crearEstado({ seleccion: ['baul', 'capo'] });
+  const lineas = textoParaAsistente(estado, (id) => (id === 'baul' ? 'Compuerta trasera' : 'Capó')).split(String.fromCharCode(10));
+  assert.equal(lineas[2], '1. Capó');
+  assert.equal(lineas[3], '2. Compuerta trasera');
+});
+
 test('una sola pieza se escribe en singular', () => {
   const estado = crearEstado({ seleccion: ['baul'] });
   assert.match(textoParaAsistente(estado), /1 pieza para pintar:/);
