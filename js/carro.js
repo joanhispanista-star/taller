@@ -50,7 +50,9 @@ export function disposicion(carroceria, medidas) {
   d.anchoNucleo = m.ancho - 0.16; // el bloque oscuro que rellena por dentro
   d.anchoTecho = m.ancho - 0.08;
   d.ruedaX = m.ancho / 2 - 0.12;
-  d.techo = m.alto - 0.055; // cara inferior del techo; el panel mide 5,5 cm
+  // Cara inferior del techo; el panel mide 5,5 cm. En la SUV el alto del
+  // catálogo incluye las barras del techo (6 cm), así que la chapa va más abajo.
+  d.techo = m.alto - 0.055 - (tipo === 'suv' ? 0.06 : 0);
 
   if (tipo === 'sedan') {
     d.piso = 0.3; // la chapa empieza a 30 cm del suelo
@@ -143,6 +145,41 @@ function materialVidrio() {
     transparent: true,
     opacity: 0.55,
   });
+}
+
+function materialPlastico() {
+  return new THREE.MeshStandardMaterial({ color: 0x1c1f23, roughness: 0.85, metalness: 0.05 });
+}
+
+function materialCromo() {
+  return new THREE.MeshStandardMaterial({ color: 0xd8dde3, roughness: 0.2, metalness: 0.9 });
+}
+
+// Los adornos (manijas, molduras, pasarruedas, barras del techo) no se
+// pintan ni se tocan: el dedo los atraviesa y marca la pieza que hay
+// debajo (toque.js los salta). Sin esto, tocar la manija no marcaba la puerta.
+function decorativo(malla) {
+  malla.userData.decorativo = true;
+  return malla;
+}
+
+// El pasarrueda de plástico negro que rodea la llanta en SUV y camioneta:
+// un aro de 6 cm que sigue el arco del guardafango o del costado.
+function perfilPasarrueda(d, eje) {
+  return (f) => {
+    const interno = d.arco + 0.005;
+    const externo = d.arco + 0.065;
+    const y = d.radioRueda;
+    f.moveTo(eje - externo, y - 0.03);
+    f.lineTo(eje - externo, y);
+    f.absarc(eje, y, externo, Math.PI, 0, true);
+    f.lineTo(eje + externo, y - 0.03);
+    f.lineTo(eje + interno, y - 0.03);
+    f.lineTo(eje + interno, y);
+    f.absarc(eje, y, interno, 0, Math.PI, false);
+    f.lineTo(eje - interno, y - 0.03);
+    f.closePath();
+  };
 }
 
 // Dibuja un perfil (eje horizontal = Z del carro, eje vertical = Y) y lo
@@ -252,23 +289,32 @@ function perfilCostado(d) {
 
 // ---- Perfiles de las piezas que cruzan el carro de lado a lado ----
 
+// El capó y el techo van levemente abombados (3 cm en el centro): una
+// chapa plana se ve de cartón; la curva es lo que hace que el reflejo
+// corra por la pintura como en un carro de verdad.
+const COMBA = 0.03;
+
 function perfilCapo(d) {
   return (f) => {
-    f.moveTo(d.capoDel, yCapo(d, d.capoDel));
-    f.lineTo(d.capoTras, yCapo(d, d.capoTras));
-    f.lineTo(d.capoTras, yCapo(d, d.capoTras) - 0.07);
-    f.lineTo(d.capoDel, yCapo(d, d.capoDel) - 0.07);
+    const y0 = yCapo(d, d.capoDel);
+    const y1 = yCapo(d, d.capoTras);
+    const medio = (d.capoDel + d.capoTras) / 2;
+    f.moveTo(d.capoDel, y0);
+    f.quadraticCurveTo(medio, (y0 + y1) / 2 + 2 * COMBA, d.capoTras, y1);
+    f.lineTo(d.capoTras, y1 - 0.07);
+    f.quadraticCurveTo(medio, (y0 + y1) / 2 + 2 * COMBA - 0.07, d.capoDel, y0 - 0.07);
     f.closePath();
   };
 }
 
 function perfilTecho(d) {
   return (f) => {
+    const medio = (d.parabrisasAlto + d.techoTras) / 2;
     // Arranca 5 mm por debajo del vidrio para taparlo sin compartir cara con él.
     f.moveTo(d.parabrisasAlto, d.techo - 0.005);
-    f.lineTo(d.techoTras, d.techo - 0.005);
+    f.quadraticCurveTo(medio, d.techo - 0.005 + 2 * COMBA, d.techoTras, d.techo - 0.005);
     f.lineTo(d.techoTras, d.techo + 0.055);
-    f.lineTo(d.parabrisasAlto, d.techo + 0.055);
+    f.quadraticCurveTo(medio, d.techo + 0.055 + 2 * COMBA, d.parabrisasAlto, d.techo + 0.055);
     f.closePath();
   };
 }
@@ -341,7 +387,8 @@ function perfilVidrio(d) {
   return (f) => {
     f.moveTo(d.capoTras, d.cintura);
     f.lineTo(d.parabrisasAlto, d.techo);
-    f.lineTo(d.techoTras, d.techo);
+    // El borde de arriba sigue la comba del techo para no dejar una rendija.
+    f.quadraticCurveTo((d.parabrisasAlto + d.techoTras) / 2, d.techo + 2 * COMBA, d.techoTras, d.techo);
     if (d.tipo === 'sedan') {
       f.lineTo(d.vidrioTras, d.cintura + 0.02);
       f.lineTo(d.vidrioTras, d.cintura);
@@ -369,20 +416,31 @@ function perfilNucleoDelantero(d) {
 
 // ---- Piezas que no son perfiles ----
 
+// La rueda: llanta negra, rin oscuro y cinco rayos claros con su copa. Se
+// arma con el eje vertical (como nace el cilindro) y al final se acuesta
+// 90° sobre Z para que el eje quede a lo ancho del carro.
 function rueda(d, x, z) {
   const grupo = new THREE.Group();
+  const radioRin = d.radioRueda - 0.11;
   const llanta = new THREE.Mesh(
     new THREE.CylinderGeometry(d.radioRueda, d.radioRueda, 0.22, 28),
     new THREE.MeshStandardMaterial({ color: 0x17181a, roughness: 0.9, metalness: 0 }),
   );
   const rin = new THREE.Mesh(
-    new THREE.CylinderGeometry(d.radioRueda - 0.12, d.radioRueda - 0.12, 0.225, 20),
-    new THREE.MeshStandardMaterial({ color: 0xc3c7cc, roughness: 0.35, metalness: 0.8 }),
+    new THREE.CylinderGeometry(radioRin, radioRin, 0.2, 24),
+    new THREE.MeshStandardMaterial({ color: 0x3a3f45, roughness: 0.5, metalness: 0.6 }),
   );
-  // El cilindro nace vertical; girado 90° sobre Z queda con el eje a lo ancho.
-  llanta.rotation.z = Math.PI / 2;
-  rin.rotation.z = Math.PI / 2;
   grupo.add(llanta, rin);
+  for (let i = 0; i < 5; i++) {
+    const pivote = new THREE.Group();
+    const rayo = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.23, radioRin - 0.02), materialCromo());
+    rayo.position.z = (radioRin - 0.02) / 2;
+    pivote.add(rayo);
+    pivote.rotation.y = (i * 2 * Math.PI) / 5;
+    grupo.add(pivote);
+  }
+  grupo.add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.235, 16), materialCromo()));
+  grupo.rotation.z = Math.PI / 2;
   grupo.position.set(x, d.radioRueda, z);
   grupo.name = 'rueda';
   return grupo;
@@ -534,7 +592,23 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
 
     const xPilar = signo * (d.anchoVidrio / 2 + 0.005);
     grupo.add(pilar(xPilar, d.capoTras, d.cintura, d.parabrisasAlto, d.techo));
-    grupo.add(pilar(xPilar, d.puertaMedia + 0.01, d.cintura, d.puertaMedia + 0.01, d.techo));
+    grupo.add(pilar(xPilar, d.puertaMedia + 0.01, d.cintura, d.puertaMedia + 0.01, d.techo + COMBA));
+
+    // Detalles del costado: la moldura negra en la cintura (donde la chapa
+    // encuentra el vidrio), las manijas cromadas de las dos puertas y, en
+    // SUV y camioneta, los pasarruedas y el faldón negro bajo las puertas.
+    const xFuera = signo * (d.medio + 0.005);
+    grupo.add(decorativo(caja(0.015, 0.03, d.puertaTras - d.puertaDel, materialPlastico(), xFuera, d.cintura + 0.004, (d.puertaDel + d.puertaTras) / 2)));
+    for (const [desde, hasta] of [[d.puertaDel, d.puertaMedia], [d.puertaMedia, d.puertaTras]]) {
+      grupo.add(decorativo(caja(0.025, 0.028, 0.13, materialCromo(), signo * (d.medio + 0.01), d.cintura - 0.15, desde + (hasta - desde) * 0.72)));
+    }
+    if (d.tipo === 'suv' || d.tipo === 'camioneta') {
+      const xDesde = lado === 'der' ? d.medio + 0.035 : -d.medio + 0.015;
+      for (const eje of [d.ejeDel, d.ejeTras]) {
+        grupo.add(decorativo(extruirPerfil(perfilPasarrueda(d, eje), { xDesde, grosor: 0.05, bisel: 0, material: materialPlastico() })));
+      }
+      grupo.add(decorativo(caja(0.02, 0.07, d.puertaTras - d.puertaDel - 0.02, materialPlastico(), xFuera, d.estriboAlto + 0.045, (d.puertaDel + d.puertaTras) / 2)));
+    }
     if (d.tipo === 'sedan') {
       grupo.add(pilar(xPilar, d.techoTras, d.techo, d.vidrioTras, d.cintura + 0.02));
     } else if (d.tipo === 'camioneta') {
@@ -577,6 +651,19 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
   interior.name = 'interior';
   grupo.add(interior);
 
+  // Lo que distingue la silueta de cada carrocería desde lejos: las barras
+  // del techo de la SUV, y el alerón sobre la compuerta en hatchback y SUV.
+  if (d.tipo === 'suv') {
+    const largoBarra = (d.techoTras - d.parabrisasAlto) * 0.72;
+    const zBarra = (d.parabrisasAlto + d.techoTras) / 2 + 0.05;
+    for (const signo of [-1, 1]) {
+      grupo.add(decorativo(caja(0.05, 0.05, largoBarra, materialPlastico(), signo * (d.anchoTecho / 2 - 0.09), d.techo + 0.055 + COMBA + 0.03, zBarra)));
+    }
+  }
+  if (d.tipo === 'suv' || d.tipo === 'hatchback') {
+    grupo.add(decorativo(caja(d.anchoTecho - 0.2, 0.045, 0.2, materialPlastico(), 0, d.techo + 0.04, d.techoTras + 0.04)));
+  }
+
   // Luces, parrilla y placas, acostadas sobre la cara del bómper que las
   // lleva. Las de adelante van sobre caras inclinadas (30° la de los faros,
   // 27° la de la placa); las de atrás sobre caras casi verticales.
@@ -587,6 +674,12 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
   const parrilla = caja(0.72, 0.18, 0.04, materialNegro(), 0, d.piso + 0.22, d.punta - 0.015);
   parrilla.name = 'parrilla';
   grupo.add(parrilla);
+  // La barra cromada sobre la parrilla y los exploradores en el bómper: lo
+  // poco que hace que un frente se vea de carro y no de caja.
+  grupo.add(decorativo(caja(0.8, 0.03, 0.03, materialCromo(), 0, d.piso + 0.325, d.punta - 0.012)));
+  for (const signo of [-1, 1]) {
+    grupo.add(decorativo(caja(0.16, 0.09, 0.03, materialPlastico(), signo * d.ancho * 0.36, d.piso + 0.2, d.punta - 0.005)));
+  }
   grupo.add(placa(0, d.piso + 0.1, d.punta - 0.005, -Math.atan2(0.05, 0.1), numeroPlaca, -1));
   if (d.tipo === 'sedan') {
     grupo.add(luz(-xLuz, d.piso + 0.59, d.cola - 0.195, 0.38, 0.09, 0xe0262e));

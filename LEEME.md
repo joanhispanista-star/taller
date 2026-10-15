@@ -90,10 +90,21 @@ carro".
   revisadas por agentes con la fuente de cada medida; se regenera con una
   herramienta, no se edita a mano.
 - **Garaje** (`garaje.html`): la lista de todos los carros, con la foto o
-  el color, placa, marca y línea, carrocería, cuándo se tocó por última vez
-  y cuántas piezas hay pendientes, en proceso y terminadas. Escribir una
-  placa abre ese carro si ya estaba y lo crea si no. Tocar una fila abre el
-  visor con ese carro; la × lo borra con confirmación, fotos incluidas.
+  el color, placa, marca, línea y versión, carrocería, cuándo se tocó por
+  última vez y cuántas piezas hay pendientes, en proceso, terminadas y con
+  latonería. Escribir una placa abre ese carro si ya estaba y lo crea si
+  no. Tocar una fila abre el visor con ese carro; la × lo borra con
+  confirmación, fotos incluidas.
+- **Datos del carro** (botón en la barra del visor, o tocando la ficha
+  sobre el 3D): marca, línea (del catálogo o la que sea), **versión** en
+  texto libre ("5 puestos, 2023": el catálogo no distingue versiones),
+  carrocería y color. Al guardar, el 3D se reconstruye.
+- **Latonería y pintura**: cada pieza marcada es "solo pintura" o
+  "latonería y pintura" (enderezar antes de pintar). Se cambia en el menú
+  del chip, debajo de los tres estados; el chip lo marca, la orden de
+  WhatsApp lo dice entre paréntesis y la nómina lo pagará aparte.
+- **La placa pintada en el 3D**: las dos placas del carro llevan el número
+  del registro ("JRX 248"), dibujado en un canvas amarillo.
 - Cada pieza marcada tiene **estado**: pendiente (naranja), en proceso
   (amarillo) o terminada (verde). La chapa en 3D y el chip de la lista van
   del mismo color. Se cambia tocando el nombre en el chip: sale un menú con
@@ -167,7 +178,8 @@ npm test
 | `js/color-foto.js` | El color de la pintura a partir de la foto (k-medias sobre el centro, descartando vidrios y llantas) y su nombre de taller (plateado, vinotinto...). La parte pura se prueba en Node. |
 | `js/reconocer.js` | El reconocedor en el navegador: CLIP (visión) sobre la foto, comparado con los vectores de texto de `js/etiquetas-clip.json`. Devuelve carrocerías, líneas y marcas ordenadas por parecido. |
 | `js/etiquetas-clip.json` | GENERADO por `herramientas/calcular-etiquetas.mjs`: un vector por carrocería y por línea del catálogo (Int8 en base64). Hay que regenerarlo cuando cambie el catálogo. |
-| `js/hoja.js` | La hoja de abajo del visor: chips con estado y cámara, menú de estado, tira de fotos y foto grande, con los nombres de la carrocería. DOM puro, sin Three.js. |
+| `js/hoja.js` | La hoja de abajo del visor: chips con estado, trabajo (latonería) y cámara, menú de estado y trabajo, tira de fotos y foto grande, con los nombres de la carrocería. DOM puro, sin Three.js. |
+| `js/ficha-carro.js` | La ficha "Datos del carro" del visor: marca, línea con el catálogo, versión, carrocería y color. DOM puro. |
 | `js/garaje-pantalla.js` | La pantalla Garaje: lista con portada y color, abrir o crear por placa, borrar, y la ficha del carro nuevo con foto (color, reconocedor, catálogo, confirmación). |
 | `js/carro.js` | El carro, pieza por pieza, construido con perfiles extruidos, en cuatro carrocerías y a las medidas de la línea (`disposicion` convierte medidas en bordes y alturas). Cada pieza es un objeto aparte con su propio material. Sin DOM: también se construye en Node para probarlo. |
 | `js/toque.js` | Qué pieza hay bajo el dedo: rayo central más un anillo de ocho para que estribos y espejos se dejen tocar. Sin DOM, probado con la cámara y el carro reales. |

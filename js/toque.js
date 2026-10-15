@@ -35,8 +35,12 @@ export function piezaTocada({ camara, grupo, x, y, ancho, alto, radioPx = 12 }) 
     // Se cruza con TODO el carro, no solo con las piezas pintables: si el
     // vidrio o una llanta están delante, el toque no debe atravesarlos y
     // marcar la puerta que hay detrás.
+    // Los adornos (manijas, molduras, pasarruedas) no cuentan: el dedo los
+    // atraviesa y marca lo que hay debajo. El vidrio y las llantas sí paran
+    // el rayo.
     const cruces = rayo.intersectObject(grupo, true);
-    if (cruces.length === 0) return null;
-    return cruces[0].object.userData.piezaId || null;
+    const primero = cruces.find((c) => !c.object.userData.decorativo);
+    if (!primero) return null;
+    return primero.object.userData.piezaId || null;
   }
 }

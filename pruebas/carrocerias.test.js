@@ -134,6 +134,20 @@ test('el carro acepta el número de la placa y en Node (sin canvas) la deja amar
   }
 });
 
+test('los adornos no se pintan ni se tocan: están marcados como decorativos', () => {
+  const carro = construirCarro({ carroceria: 'suv' });
+  let decorativos = 0;
+  carro.grupo.traverse((o) => {
+    if (o.userData.decorativo) {
+      decorativos += 1;
+      assert.ok(!o.userData.piezaId, 'un adorno no es pieza');
+    }
+  });
+  // Molduras, manijas, pasarruedas, faldones, barras, alerón, barra cromada, exploradores.
+  assert.ok(decorativos >= 14, 'adornos: ' + decorativos);
+  for (const malla of carro.seleccionables) assert.ok(!malla.userData.decorativo, malla.name);
+});
+
 test('la SUV es más alta que el hatchback con el mismo dibujo', () => {
   const suv = disposicion('suv');
   const hatch = disposicion('hatchback');
@@ -161,7 +175,8 @@ test('ninguna pieza queda por debajo del eje de las ruedas ni flotando sobre el 
     for (const malla of carro.seleccionables) {
       const b = caja(malla);
       assert.ok(b.min.y >= suelo, tipo + ' ' + malla.name + ' baja a ' + b.min.y.toFixed(2));
-      assert.ok(b.max.y <= d.techo + 0.08, tipo + ' ' + malla.name + ' sube a ' + b.max.y.toFixed(2));
+      // El techo va abombado 3 cm en el centro, más su grosor y su bisel.
+      assert.ok(b.max.y <= d.techo + 0.13, tipo + ' ' + malla.name + ' sube a ' + b.max.y.toFixed(2));
     }
   }
 });
