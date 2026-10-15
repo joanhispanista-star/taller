@@ -142,21 +142,13 @@ function crearPiso() {
   return [piso, sombra];
 }
 
-function ajustarTamano() {
-  const ancho = ui.escena.clientWidth;
-  const alto = ui.escena.clientHeight;
-  if (!ancho || !alto) return;
-  renderizador.setSize(ancho, alto, false);
-  camara.aspect = ancho / alto;
-  camara.updateProjectionMatrix();
-  pedirCuadro();
-}
-new ResizeObserver(ajustarTamano).observe(ui.escena);
-ajustarTamano();
-
 // Se dibuja solo cuando algo cambió (un giro, un toque, un cambio de
 // tamaño): en un celular, dibujar 60 veces por segundo una escena quieta
 // es batería tirada.
+//
+// Este bloque va ANTES de ajustarTamano(): esa función pide un cuadro al
+// arrancar, y `let` no existe hasta su línea (la primera versión reventaba
+// aquí en cualquier pantalla con tamaño, y solo se vio en una prueba).
 let cuadroPedido = true;
 function pedirCuadro() {
   cuadroPedido = true;
@@ -170,6 +162,18 @@ function bucle() {
   }
 }
 bucle();
+
+function ajustarTamano() {
+  const ancho = ui.escena.clientWidth;
+  const alto = ui.escena.clientHeight;
+  if (!ancho || !alto) return;
+  renderizador.setSize(ancho, alto, false);
+  camara.aspect = ancho / alto;
+  camara.updateProjectionMatrix();
+  pedirCuadro();
+}
+new ResizeObserver(ajustarTamano).observe(ui.escena);
+ajustarTamano();
 
 // ---------- Tocar una pieza ----------
 
