@@ -13,7 +13,7 @@ modelo más parecido, toma el color, y dibuja el 3D de esa carrocería a las
 medidas de esa línea, en ese color. Cuatro carrocerías (sedán, hatchback,
 SUV, camioneta de platón) y un catálogo de los carros que ruedan en Colombia.
 Y adelantada la del 26 (sin la nube): **Empleados** con la nómina de la
-semana (pintor por pieza, 90.000 por pieza pintada), **Historial** de carros
+semana (pintor por pieza, 90.000 por pieza terminada), **Historial** de carros
 entregados con lo cobrado, e **Indicadores** para el dueño, en
 `tablero.html`; con una demostración (5 carros, 3 empleados) que se carga
 y se quita en bloque.
@@ -152,11 +152,11 @@ carro".
 - **Empleados** (`tablero.html?p=empleados`): la nómina de la semana (lunes
   a domingo, con flechas para ver semanas anteriores): por empleado, qué
   piezas terminó esa semana, en qué carro y cuándo, y cuánto se le paga:
-  **90.000 por pieza pintada** que quedó terminada con él asignado. La
-  latonería y las piezas de interior se cuentan y salen "por definir", sin
-  valor (decisión 9). Las terminadas sin pintor asignado van en una lista
-  aparte con el enlace al carro. Agregar, retirar, reincorporar y borrar
-  empleados (pintor, latonero, asistente).
+  **90.000 por pieza** que quedó terminada con él asignado, la misma tarifa
+  para pintura y latonería, por fuera y por dentro (decisión de Joan del
+  15-oct); las de latonería lo dicen al lado del nombre. Las terminadas sin
+  pintor asignado van en una lista aparte con el enlace al carro. Agregar,
+  retirar, reincorporar y borrar empleados (pintor, latonero, asistente).
 - **Historial** (`?p=historial`): los carros entregados, del más reciente al
   más viejo, con fecha, piezas (terminadas, sin hacer, con latonería), lo
   cobrado, lo que pagan sus piezas a los pintores y lo que queda (sin
@@ -315,11 +315,13 @@ Decisiones que conviene conocer:
 - La foto del carro entero se guarda como una foto más, con la pieza
   especial `carro`: así vive en el mismo almacén, se reduce igual y se va
   con el carro al borrarlo.
-- **La plata no se inventa.** `pagoDePieza` paga 90.000 solo a una pieza de
-  pintura, exterior y terminada; la latonería y el interior devuelven 0 y
-  las pantallas los muestran como "por definir", con su conteo. Cuando Joan
-  decida esas tarifas (decisión 9), es un cambio en esa función y nada más.
-  "Queda" (cobro menos pintores) tampoco descuenta materiales, y lo dice.
+- **Una sola tarifa, en un solo sitio.** `pagoDePieza` (`tablero.js`) paga
+  `TARIFA_PIEZA` a toda pieza terminada, sea de pintura o de latonería,
+  exterior o de interior: Joan lo decidió así el 15-oct. Hasta ese momento
+  la latonería y el interior salían "por definir" sin valor, porque la
+  plata no se inventa. Si algún día la tarifa depende de la pieza (decisión
+  3), es un cambio en esa función y nada más. "Queda" (cobro menos
+  pintores) no descuenta materiales, y lo dice.
 - **La semana es de lunes a domingo**, en hora local, y una pieza cuenta en
   la semana en que pasó a terminada (`desde`), no en la que se marcó. Si se
   reabre y se vuelve a terminar, cuenta en la nueva fecha.
@@ -357,8 +359,8 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
    falta cuenta por empleado), o el asistente por todos (una sola cuenta)?
 3. **¿90.000 es por cualquier pieza?** ¿Un espejo paga igual que un techo?
    Si no, hace falta una tarifa por pieza en el catálogo. Hoy la nómina
-   paga 90.000 parejo por cada pieza exterior pintada (`TARIFA_PIEZA` en
-   `garaje.js`).
+   paga 90.000 parejo por cada pieza terminada, latonería e interior
+   incluidos (`TARIFA_PIEZA` en `garaje.js`).
 4. **¿Qué carrocerías llegan más?** Sedán ya está. Si el 70 % son camionetas,
    la camioneta va antes que el hatchback.
 5. **¿El cliente del taller ve algo?** (Una tarjeta "su carro va así" por
@@ -375,13 +377,11 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
    Gemini con la lista de candidatos), que cuesta centavos por foto pero
    necesita una cuenta de API pagada con tarjeta y un servidor que guarde la
    clave: es la semana del 26 (la nube) y una decisión de plata.
-9. **¿Cómo se pagan las piezas de interior y la latonería?** El vano del
-   motor, los marcos y bases de puertas y el vano del baúl ya se marcan; la
-   latonería ya se distingue de la pintura. Falta saber si el vano paga los
-   mismos 90.000 que un capó, y cuánto paga la latonería (y a quién: ¿al
-   latonero, aparte del pintor?). Mientras tanto la nómina los cuenta y los
-   muestra "por definir", sin valor: la semana no se puede cerrar con un
-   número inventado.
+9. **¿Cómo se pagan las piezas de interior y la latonería?** DECIDIDO el
+   15-oct: pagan los mismos 90.000 que cualquier pieza, al pintor que la
+   tiene asignada. Queda una pregunta chica: si la latonería la hace el
+   latonero y la pintura el pintor, la pieza tiene UN pintor asignado hoy;
+   si hay que pagarle a los dos, hace falta un segundo campo.
 10. **¿Qué va en "cobro al cliente"?** Hoy es un solo número por carro, el
     total que pagó. Si el taller cobra por adelantado y el resto al
     entregar, o cobra materiales aparte, hace falta más de un campo, y los

@@ -57,13 +57,18 @@ test('pesos escribe los miles con punto y el signo adelante', () => {
   assert.equal(pesos(-45000), '-$ 45.000');
 });
 
-test('una pieza paga la tarifa solo si quedó terminada, es de pintura y es exterior', () => {
+test('toda pieza terminada paga la misma tarifa: pintura o latonería, exterior o interior', () => {
   assert.equal(pagoDePieza({ estado: 'terminada', trabajo: 'pintura' }, 'capo'), TARIFA_PIEZA);
   assert.equal(pagoDePieza({ estado: 'en-proceso', trabajo: 'pintura' }, 'capo'), 0);
-  // La latonería y el interior no tienen tarifa todavía: no se inventa.
-  assert.equal(pagoDePieza({ estado: 'terminada', trabajo: 'latoneria' }, 'capo'), 0);
-  assert.equal(pagoDePieza({ estado: 'terminada', trabajo: 'pintura' }, 'capo-int'), 0);
-  assert.equal(pagoDePieza({ estado: 'terminada', trabajo: 'pintura' }, 'vano-motor'), 0);
+  assert.equal(pagoDePieza({ estado: 'pendiente', trabajo: 'latoneria' }, 'capo'), 0);
+  // Decisión de Joan (15-oct-2026): la latonería y el interior pagan igual.
+  assert.equal(pagoDePieza({ estado: 'terminada', trabajo: 'latoneria' }, 'capo'), TARIFA_PIEZA);
+  assert.equal(pagoDePieza({ estado: 'terminada', trabajo: 'pintura' }, 'capo-int'), TARIFA_PIEZA);
+  assert.equal(pagoDePieza({ estado: 'terminada', trabajo: 'pintura' }, 'vano-motor'), TARIFA_PIEZA);
+  assert.equal(pagoDePieza({ estado: 'terminada', trabajo: 'pintura' }, 'base-puertas-izq'), TARIFA_PIEZA);
+  // Una pieza que no existe en el catálogo no paga, venga de donde venga.
+  assert.equal(pagoDePieza({ estado: 'terminada', trabajo: 'pintura' }, 'aleta-magica'), 0);
+  assert.equal(pagoDePieza(undefined, 'capo'), 0);
 });
 
 test('asignarPintor pone y quita el pintor, marca la pieza si hacía falta, y entregarCarro guarda cobro y fecha', () => {
@@ -93,7 +98,7 @@ test('asignarPintor pone y quita el pintor, marca la pieza si hacía falta, y en
   assert.equal(sucio.demo, false);
 });
 
-test('la nómina semanal paga 90.000 por pieza terminada a su pintor y separa lo que queda por definir', () => {
+test('la nómina semanal paga 90.000 por pieza terminada a su pintor, en la semana en que se terminó', () => {
   const a = crearCarro({ placa: 'aaa111' }, dia(10));
   asignarPintor(a, 'capo', 'carlos');
   fijarEstado(a, 'capo', 'terminada', dia(2)); // martes: cuenta
@@ -105,23 +110,26 @@ test('la nómina semanal paga 90.000 por pieza terminada a su pintor y separa lo
   fijarEstado(a, 'bomper-del', 'en-proceso', dia(1)); // sin terminar: no paga
   asignarPintor(a, 'puerta-del-izq', 'yeison');
   a.piezas['puerta-del-izq'].trabajo = 'latoneria';
-  fijarEstado(a, 'puerta-del-izq', 'terminada', dia(0)); // latonería: por definir
+  fijarEstado(a, 'puerta-del-izq', 'terminada', dia(0)); // latonería: paga igual
   asignarPintor(a, 'capo-int', 'yeison');
-  fijarEstado(a, 'capo-int', 'terminada', dia(0)); // interior: por definir
+  fijarEstado(a, 'capo-int', 'terminada', dia(0)); // interior: paga igual
   fijarEstado(a, 'espejo-der', 'terminada', dia(0)); // terminada sin pintor
 
   const nomina = nominaSemanal([a], [CARLOS, YEISON], semanaDe(HOY));
   assert.equal(nomina.filas.length, 2);
+  // Empatados a dos piezas: el orden es por nombre.
   assert.equal(nomina.filas[0].empleado.id, 'carlos');
   assert.equal(nomina.filas[0].piezas.length, 2);
   assert.equal(nomina.filas[0].total, 2 * TARIFA_PIEZA);
   assert.equal(nomina.filas[1].empleado.id, 'yeison');
-  assert.equal(nomina.filas[1].total, 0);
-  assert.equal(nomina.filas[1].porDefinir, 2);
-  assert.equal(nomina.total, 180000);
+  assert.equal(nomina.filas[1].piezas.length, 2);
+  assert.equal(nomina.filas[1].total, 2 * TARIFA_PIEZA);
+  assert.equal(nomina.total, 360000);
+  // La del espejo la pintó alguien y nadie la cobra: se lista aparte, con su valor.
   assert.equal(nomina.sinPintor.length, 1);
   assert.equal(nomina.sinPintor[0].id, 'espejo-der');
-  assert.equal(nomina.porDefinir, 2);
+  assert.equal(nomina.sinPintor[0].pago, TARIFA_PIEZA);
+  assert.equal(nomina.porDefinir, undefined);
 
   const pasada = nominaSemanal([a], [CARLOS, YEISON], semanaDe(HOY, -1));
   assert.equal(pasada.total, TARIFA_PIEZA);
@@ -151,8 +159,8 @@ test('el historial lista los entregados del más reciente al más viejo, con cob
   assert.equal(fa.pendientes, 1);
   assert.equal(fa.latoneria, 1);
   assert.equal(fa.cobro, 500000);
-  assert.equal(fa.pagado, TARIFA_PIEZA); // el techo es latonería: por definir
-  assert.equal(fa.margen, 500000 - TARIFA_PIEZA);
+  assert.equal(fa.pagado, 2 * TARIFA_PIEZA); // el techo con latonería paga igual; el baúl sin hacer no paga
+  assert.equal(fa.margen, 500000 - 2 * TARIFA_PIEZA);
 });
 
 test('los indicadores juntan carros, piezas, cobrado, pagado y una serie por semana', () => {
@@ -171,9 +179,9 @@ test('los indicadores juntan carros, piezas, cobrado, pagado y una serie por sem
   assert.deepEqual(ind.carros, { entrados: 2, entregados: 1, enTaller: 1, total: 2 });
   assert.deepEqual(ind.piezas, { pendientes: 1, enProceso: 1, terminadas: 3, latoneria: 1, interior: 1 });
   assert.equal(ind.cobrado, 500000);
-  assert.equal(ind.pagado, 2 * TARIFA_PIEZA);
-  assert.equal(ind.margen, 500000 - 2 * TARIFA_PIEZA);
-  assert.equal(ind.porDefinir, 1);
+  assert.equal(ind.pagado, 3 * TARIFA_PIEZA); // las tres terminadas, la de latonería incluida
+  assert.equal(ind.margen, 500000 - 3 * TARIFA_PIEZA);
+  assert.equal(ind.porDefinir, undefined);
   assert.equal(ind.enTaller[0].placa, 'BBB222');
   assert.equal(ind.serie.length, 4);
   const [, , pasada, actual] = ind.serie;

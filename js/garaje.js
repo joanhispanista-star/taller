@@ -44,9 +44,9 @@ export const NOMBRE_BD = 'taller-pintura';
 // los carros ni las fotos que ya estaban.
 export const VERSION_BD = 2;
 
-// Lo que se paga por pieza pintada (decisión de Joan del 15-oct-2026). La
-// latonería y las piezas de interior no tienen tarifa todavía (decisión 9
-// del LEEME): se cuentan aparte y no se inventa un número.
+// Lo que se paga por pieza terminada, la misma para pintura y latonería,
+// exterior e interior (decisión de Joan del 15-oct-2026, dos veces: la
+// tarifa y que fuera pareja).
 export const TARIFA_PIEZA = 90000;
 
 export const ROLES = ['pintor', 'latonero', 'asistente'];

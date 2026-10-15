@@ -3,7 +3,7 @@
 // cobró) e Indicadores (todo junto, para el dueño). Los números los calcula
 // tablero.js (puro y probado); aquí solo se lee el almacén y se pinta. Sin
 // Three.js: esta pantalla tiene que abrir al instante.
-import { NOMBRE_ROL, abrirAlmacen, fechaCorta, nombreCompletoDelCarro, resumen } from './garaje.js';
+import { NOMBRE_ROL, TARIFA_PIEZA, abrirAlmacen, fechaCorta, nombreCompletoDelCarro, resumen } from './garaje.js';
 import { CARROCERIAS, nombreDePiezaEn, normalizarCarroceria } from './carrocerias.js';
 import { nombreDeColor } from './color-foto.js';
 import { etiquetaDeSemana, historial, indicadores, nominaSemanal, pesos, semanaDe } from './tablero.js';
@@ -125,7 +125,7 @@ function pintarEmpleados() {
   const nomina = nominaSemanal(carros, empleados, semana);
   ui.nominaTotal.textContent = pesos(nomina.total);
   const terminadas = nomina.filas.reduce((s, f) => s + f.piezas.length, 0) + nomina.sinPintor.length;
-  ui.nominaPiezas.textContent = String(terminadas) + (nomina.porDefinir ? ' · ' + nomina.porDefinir + ' por definir' : '');
+  ui.nominaPiezas.textContent = String(terminadas) + (nomina.sinPintor.length ? ' · ' + nomina.sinPintor.length + ' sin pintor' : '');
   ui.nominaVacia.hidden = empleados.length > 0;
   ui.nomina.replaceChildren(...nomina.filas.map(filaEmpleado));
 
@@ -153,7 +153,6 @@ function filaEmpleado(fila) {
   const total = elemento('span', 'empleado-total', pesos(fila.total));
   const cuantas = fila.piezas.length;
   const nota = elemento('small', '', cuantas === 0 ? 'sin piezas' : cuantas === 1 ? '1 pieza' : cuantas + ' piezas');
-  if (fila.porDefinir) nota.textContent += ' · ' + fila.porDefinir + ' por definir';
   total.append(nota);
   cabecera.append(nombre, rol, total);
 
@@ -165,11 +164,12 @@ function filaEmpleado(fila) {
     const item = elemento('li');
     const placa = elemento('a', '', d.placa);
     placa.href = enlaceAlVisor(d.placa);
-    const pieza = elemento('span', 'pieza-nombre', nombreDePiezaEn(d.carro.carroceria, d.id));
+    // El nombre de la pieza y, si llevó latonería, se dice: paga igual, pero
+    // es más trabajo y el dueño quiere verlo.
+    const pieza = elemento('span', 'pieza-nombre', nombreDePiezaEn(d.carro.carroceria, d.id) + (d.pieza.trabajo === 'latoneria' ? ' · latonería' : ''));
     const fecha = elemento('time', '', fechaCorta(d.pieza.desde));
     fecha.dateTime = d.pieza.desde;
-    const pago = elemento('span', 'pago' + (d.pago ? '' : ' por-definir'));
-    pago.textContent = d.pago ? pesos(d.pago) : d.pieza.trabajo === 'latoneria' ? 'latonería · por definir' : 'interior · por definir';
+    const pago = elemento('span', 'pago', pesos(d.pago));
     item.append(placa, pieza, fecha, pago);
     lista.append(item);
   }
@@ -315,12 +315,7 @@ function pintarIndicadores() {
     partes.push('Todo lo registrado.');
   }
   partes.push(ind.piezas.enProceso + ' en proceso y ' + ind.piezas.pendientes + ' pendientes en el taller.');
-  if (ind.porDefinir) {
-    partes.push(
-      ind.porDefinir + (ind.porDefinir === 1 ? ' pieza terminada' : ' piezas terminadas') + ' de latonería o interior sin tarifa todavía: no están en "pagado".',
-    );
-  }
-  partes.push('"Queda" no descuenta materiales.');
+  partes.push('"Pagado a pintores" es cada pieza terminada a ' + pesos(TARIFA_PIEZA) + ', latonería e interior incluidos. "Queda" no descuenta materiales.');
   ui.indNota.textContent = partes.join(' ');
 
   pintarSerie(ui.seriePiezas, ind.serie, (s) => s.terminadas, (n) => String(n));

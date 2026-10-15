@@ -796,7 +796,6 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 .piezas-pagadas .pieza-nombre { flex: 1; min-width: 0; }
 .piezas-pagadas time { font-size: 12px; color: var(--texto-suave); }
 .piezas-pagadas .pago { font-weight: 600; white-space: nowrap; }
-.piezas-pagadas .pago.por-definir { font-weight: 400; font-size: 12px; color: var(--texto-suave); }
 
 .empleado-acciones { display: flex; gap: 8px; padding: 0 12px 10px; }
 

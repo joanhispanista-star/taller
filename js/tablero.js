@@ -3,10 +3,10 @@
 // son funciones puras sobre los carros y los empleados del registro: sin
 // DOM, probadas en Node. La pantalla (tablero-pantalla.js) solo las pinta.
 //
-// Reglas de plata (LEEME, decisiones 3 y 9): una pieza pintada paga
-// TARIFA_PIEZA al pintor que la tiene asignada, cuando queda terminada. La
-// latonería y las piezas de interior no tienen tarifa todavía: se cuentan
-// y se muestran como "por definir", nunca con un número inventado.
+// Regla de plata (LEEME, decisión 3; la 9 la cerró Joan el 15-oct-2026):
+// toda pieza que queda terminada paga TARIFA_PIEZA al pintor que la tiene
+// asignada, sea de pintura o de latonería, exterior o de interior. Una sola
+// tarifa, pareja.
 import { PIEZAS_POR_ID, esInterior } from './piezas.js';
 import { TARIFA_PIEZA } from './garaje.js';
 
@@ -56,20 +56,19 @@ export function pesos(n) {
 
 // ---------- Nómina ----------
 
-// Una pieza terminada paga tarifa solo si es de pintura (las de interior y
-// la latonería quedan "por definir"). Devuelve lo que paga esa pieza.
+// Lo que paga una pieza: la tarifa si quedó terminada, nada si no. El id
+// se recibe por si algún día la tarifa depende de la pieza (decisión 3).
 export function pagoDePieza(pieza, id) {
-  if (!pieza || pieza.estado !== 'terminada') return 0;
-  if (pieza.trabajo === 'latoneria' || esInterior(id)) return 0;
+  if (!pieza || pieza.estado !== 'terminada' || !PIEZAS_POR_ID.has(id)) return 0;
   return TARIFA_PIEZA;
 }
 
 // La nómina de una semana: por empleado, qué piezas terminó (las que
-// tienen su id como pintor y pasaron a terminada dentro de la semana), lo
-// que se le paga, y cuántas quedan por tarifar. Las piezas terminadas sin
-// pintor asignado se listan aparte: alguien las pintó y nadie va a cobrar.
+// tienen su id como pintor y pasaron a terminada dentro de la semana) y lo
+// que se le paga. Las piezas terminadas sin pintor asignado se listan
+// aparte: alguien las pintó y nadie va a cobrar.
 export function nominaSemanal(carros, empleados, semana) {
-  const porEmpleado = new Map(empleados.map((e) => [e.id, { empleado: e, piezas: [], total: 0, porDefinir: 0 }]));
+  const porEmpleado = new Map(empleados.map((e) => [e.id, { empleado: e, piezas: [], total: 0 }]));
   const sinPintor = [];
   for (const carro of carros) {
     for (const [id, pieza] of Object.entries(carro.piezas)) {
@@ -83,7 +82,6 @@ export function nominaSemanal(carros, empleados, semana) {
       }
       fila.piezas.push(detalle);
       fila.total += pago;
-      if (pago === 0) fila.porDefinir += 1;
     }
   }
   const filas = [...porEmpleado.values()]
@@ -94,7 +92,6 @@ export function nominaSemanal(carros, empleados, semana) {
     filas,
     sinPintor,
     total: filas.reduce((s, f) => s + f.total, 0),
-    porDefinir: filas.reduce((s, f) => s + f.porDefinir, 0) + sinPintor.filter((d) => d.pago === 0).length,
   };
 }
 
@@ -139,16 +136,13 @@ export function indicadores(carros, { desde = null, hasta = null, ahora = new Da
   const enTaller = carros.filter((c) => !c.entregado);
   const piezas = { pendientes: 0, enProceso: 0, terminadas: 0, latoneria: 0, interior: 0 };
   let pagado = 0;
-  let porDefinir = 0;
   for (const c of carros) {
     for (const [id, p] of Object.entries(c.piezas)) {
       if (p.estado === 'pendiente') piezas.pendientes += 1;
       else if (p.estado === 'en-proceso') piezas.enProceso += 1;
       else if (enRango(p.desde, rango)) {
         piezas.terminadas += 1;
-        const pago = pagoDePieza(p, id);
-        pagado += pago;
-        if (pago === 0) porDefinir += 1;
+        pagado += pagoDePieza(p, id);
       }
       if (p.trabajo === 'latoneria') piezas.latoneria += 1;
       if (esInterior(id)) piezas.interior += 1;
@@ -179,7 +173,6 @@ export function indicadores(carros, { desde = null, hasta = null, ahora = new Da
     cobrado,
     pagado,
     margen: cobrado - pagado,
-    porDefinir,
     serie,
     enTaller: enTaller.sort((a, b) => (a.actualizado < b.actualizado ? 1 : -1)),
   };
