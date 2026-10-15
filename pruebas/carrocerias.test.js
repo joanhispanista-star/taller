@@ -122,6 +122,18 @@ test('la camioneta lleva la cabina delante del eje trasero y el platón detrás'
   assert.ok(d.piso > 0.4 && d.radioRueda > 0.35);
 });
 
+test('el carro acepta el número de la placa y en Node (sin canvas) la deja amarilla lisa', () => {
+  for (const tipo of TIPOS) {
+    const carro = construirCarro({ carroceria: tipo, placa: 'JRX 248' });
+    const placas = [];
+    carro.grupo.traverse((o) => {
+      if (o.name === 'placa') placas.push(o);
+    });
+    assert.equal(placas.length, 2, tipo + ': una placa adelante y otra atrás');
+    for (const p of placas) assert.ok(!Array.isArray(p.material), 'sin canvas no hay textura');
+  }
+});
+
 test('la SUV es más alta que el hatchback con el mismo dibujo', () => {
   const suv = disposicion('suv');
   const hatch = disposicion('hatchback');

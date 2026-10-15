@@ -13,7 +13,7 @@ import { RoomEnvironment } from './vendor/RoomEnvironment.js';
 import { construirCarro, resaltar } from './carro.js';
 import { CARROCERIAS, nombreDePiezaEn, normalizarCarroceria } from './carrocerias.js';
 import { piezaTocada } from './toque.js';
-import { CLAVE_GUARDADO, normalizarPlaca, textoParaAsistente } from './estado.js';
+import { CLAVE_GUARDADO, formatearPlaca, normalizarPlaca, textoParaAsistente } from './estado.js';
 import {
   abrirAlmacen,
   alternarPieza,
@@ -21,12 +21,16 @@ import {
   deserializarCarro,
   estadoParaOrden,
   fijarEstado,
+  fijarTrabajo,
+  nombreCompletoDelCarro,
+  nombreDePiezaEnOrden,
   nombreDelCarro,
   piezasDelCarro,
   quitarTodas,
   serializarCarro,
 } from './garaje.js';
 import { crearHoja } from './hoja.js';
+import { crearFichaCarro } from './ficha-carro.js';
 import { reducirFoto } from './fotos.js';
 
 const COLOR_BASE = 0xcfd4da;
@@ -64,7 +68,7 @@ const ui = {
   ficha: document.getElementById('ficha'),
   error: document.getElementById('error'),
   placa: document.getElementById('placa'),
-  marca: document.getElementById('marca'),
+  datos: document.getElementById('datos'),
   limpiar: document.getElementById('limpiar'),
   enviar: document.getElementById('enviar'),
   vistas: document.querySelectorAll('[data-vista]'),
@@ -190,6 +194,7 @@ function opcionesDelModelo() {
     colorBase: carro.color || COLOR_BASE,
     carroceria: carro.carroceria || 'sedan',
     medidas: carro.medidas || undefined,
+    placa: formatearPlaca(carro.placa),
   };
 }
 function firmaDelModelo() {
@@ -374,6 +379,14 @@ function fijar(id, estado) {
   pintarHoja();
 }
 
+function fijarTrabajoDe(id, trabajo) {
+  if (!modelo.porId.has(id) || !fijarTrabajo(carro, id, trabajo)) return;
+  tenir(id); // por si la pieza no estaba marcada y acaba de entrar
+  pedirCuadro();
+  persistir();
+  pintarHoja();
+}
+
 function aplicarSeleccion() {
   for (const malla of modelo.seleccionables) tenir(malla.userData.piezaId);
   pedirCuadro();
@@ -384,9 +397,23 @@ function aplicarSeleccion() {
 const hoja = crearHoja({
   alAlternar: alternar,
   alFijarEstado: fijar,
+  alFijarTrabajo: fijarTrabajoDe,
   alAgregarFoto: agregarFoto,
   alBorrarFoto: borrarFoto,
 });
+
+// La ficha de datos (marca, línea, versión, carrocería, color): al guardar,
+// el carro se vuelve a limpiar con crearCarro (placa y piezas no cambian),
+// se guarda y el 3D se reconstruye si cambió lo que lo define.
+const fichaCarro = crearFichaCarro({
+  alGuardar(datos) {
+    carro = crearCarro({ ...carro, ...datos });
+    persistir();
+    refrescar();
+  },
+});
+ui.datos.addEventListener('click', () => fichaCarro.abrir(carro));
+ui.ficha.addEventListener('click', () => fichaCarro.abrir(carro));
 
 function pintarHoja() {
   hoja.pintar({ carro, fotos, conRegistro: Boolean(carro.placa && almacen) });
@@ -399,7 +426,8 @@ function pintarHoja() {
 // referencia (del mismo tipo, tamaño y color), no el carro exacto. Sin
 // datos del catálogo no dice nada: no hay que inventar.
 function pintarFicha() {
-  const nombre = nombreDelCarro(carro);
+  const nombre = nombreCompletoDelCarro(carro);
+  ui.datos.textContent = nombreDelCarro(carro) || 'Datos del carro';
   if (!nombre && !carro.carroceria) {
     ui.ficha.hidden = true;
     return;
@@ -454,7 +482,7 @@ async function borrarFoto(idFoto) {
 // directo a WhatsApp por wa.me. Las dos llevan la misma orden. Cuando haya
 // registro en la nube, esto será además un aviso dentro de la app.
 ui.enviar.addEventListener('click', async () => {
-  const texto = textoParaAsistente(estadoParaOrden(carro), (id) => nombreDePiezaEn(carro.carroceria, id));
+  const texto = textoParaAsistente(estadoParaOrden(carro), (id) => nombreDePiezaEnOrden(carro, id, nombreDePiezaEn(carro.carroceria, id)));
   if (navigator.share) {
     try {
       await navigator.share({ text: texto });
@@ -508,7 +536,6 @@ async function abrirCarro(placa, base) {
 
 function refrescar() {
   ui.placa.value = carro.placa;
-  ui.marca.value = carro.marca;
   reconstruirModelo();
   aplicarSeleccion();
   pintarHoja();
@@ -540,12 +567,6 @@ ui.placa.addEventListener('change', async () => {
     await abrirCarro(nueva, carro.placa === '' ? carro : crearCarro());
   }
   refrescar();
-});
-ui.marca.value = carro.marca;
-ui.marca.addEventListener('input', () => {
-  carro.marca = ui.marca.value.slice(0, 40);
-  persistir();
-  pintarFicha();
 });
 
 // ---------- Botones de vista ----------
@@ -648,6 +669,8 @@ window.__visor = {
   },
   alternar,
   fijar,
+  fijarTrabajo: fijarTrabajoDe,
+  abrirDatos: () => fichaCarro.abrir(carro),
   agregarFoto,
   borrarFoto,
   irA,

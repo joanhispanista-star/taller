@@ -29,6 +29,15 @@ export const NOMBRE_ESTADO = {
   terminada: 'Terminada',
 };
 
+// Qué trabajo lleva la pieza: solo pintura, o latonería (enderezar el
+// golpe) y después pintura. La nómina de la semana del 26 lo necesita:
+// la latonería se paga aparte de los 90.000 de la pintura.
+export const TRABAJOS = ['pintura', 'latoneria'];
+export const NOMBRE_TRABAJO = {
+  pintura: 'Solo pintura',
+  latoneria: 'Latonería y pintura',
+};
+
 export const NOMBRE_BD = 'taller-pintura';
 export const VERSION_BD = 1;
 
@@ -73,11 +82,12 @@ function limpiarPiezas(piezas, seleccion, ahora) {
     for (const [id, datos] of Object.entries(piezas)) {
       if (!PIEZAS_POR_ID.has(id)) continue;
       const estado = datos && ESTADOS.includes(datos.estado) ? datos.estado : ESTADOS[0];
-      limpias[id] = { estado, desde: (datos && fechaValida(datos.desde)) || ahora };
+      const trabajo = datos && TRABAJOS.includes(datos.trabajo) ? datos.trabajo : TRABAJOS[0];
+      limpias[id] = { estado, desde: (datos && fechaValida(datos.desde)) || ahora, trabajo };
     }
   } else if (Array.isArray(seleccion)) {
     for (const id of seleccion) {
-      if (PIEZAS_POR_ID.has(id)) limpias[id] = { estado: ESTADOS[0], desde: ahora };
+      if (PIEZAS_POR_ID.has(id)) limpias[id] = { estado: ESTADOS[0], desde: ahora, trabajo: TRABAJOS[0] };
     }
   }
   return limpias;
@@ -93,6 +103,10 @@ export function crearCarro(datos = {}, ahora = new Date().toISOString()) {
     // Línea (Onix, Logan...), carrocería y color vienen del catálogo y de la
     // foto; vacíos significan "no se sabe", y el visor dibuja el sedán gris.
     linea: limpiarMarca(datos.linea),
+    // La versión es texto libre del dueño ("5 puestos", "LT 2023"): el
+    // catálogo no distingue versiones y es lo que diferencia dos carros de
+    // la misma línea.
+    version: limpiarMarca(datos.version),
     carroceria: typeof datos.carroceria === 'string' && datos.carroceria ? normalizarCarroceria(datos.carroceria) : '',
     color: limpiarColor(datos.color),
     medidas: limpiarMedidas(datos.medidas),
@@ -107,6 +121,11 @@ export function nombreDelCarro(carro) {
   return [carro.marca, carro.linea].map((t) => (t || '').trim()).filter(Boolean).join(' ');
 }
 
+// Con la versión, si la hay: "Chevrolet Captiva (nueva) · 5 puestos".
+export function nombreCompletoDelCarro(carro) {
+  return [nombreDelCarro(carro), (carro.version || '').trim()].filter(Boolean).join(' · ');
+}
+
 export function tienePieza(carro, id) {
   return Object.hasOwn(carro.piezas, id);
 }
@@ -118,7 +137,7 @@ export function alternarPieza(carro, id, ahora = new Date().toISOString()) {
     delete carro.piezas[id];
     return false;
   }
-  carro.piezas[id] = { estado: ESTADOS[0], desde: ahora };
+  carro.piezas[id] = { estado: ESTADOS[0], desde: ahora, trabajo: TRABAJOS[0] };
   return true;
 }
 
@@ -130,7 +149,18 @@ export function fijarEstado(carro, id, estado, ahora = new Date().toISOString())
   if (!PIEZAS_POR_ID.has(id) || !ESTADOS.includes(estado)) return false;
   const actual = carro.piezas[id];
   if (actual && actual.estado === estado) return false;
-  carro.piezas[id] = { estado, desde: ahora };
+  carro.piezas[id] = { trabajo: TRABAJOS[0], ...actual, estado, desde: ahora };
+  return true;
+}
+
+// Cambia el trabajo de una pieza (solo pintura, o latonería y pintura); si
+// no estaba marcada, la marca pendiente con ese trabajo. No mueve `desde`:
+// decir que una pieza necesita latonería no es avanzar en ella.
+export function fijarTrabajo(carro, id, trabajo, ahora = new Date().toISOString()) {
+  if (!PIEZAS_POR_ID.has(id) || !TRABAJOS.includes(trabajo)) return false;
+  const actual = carro.piezas[id];
+  if (actual && actual.trabajo === trabajo) return false;
+  carro.piezas[id] = actual ? { ...actual, trabajo } : { estado: ESTADOS[0], desde: ahora, trabajo };
   return true;
 }
 
@@ -150,14 +180,22 @@ export function piezasDelCarro(carro) {
 }
 
 export function resumen(carro) {
-  const cuenta = { total: 0, pendientes: 0, enProceso: 0, terminadas: 0 };
-  for (const { estado } of Object.values(carro.piezas)) {
+  const cuenta = { total: 0, pendientes: 0, enProceso: 0, terminadas: 0, latoneria: 0 };
+  for (const { estado, trabajo } of Object.values(carro.piezas)) {
     cuenta.total += 1;
     if (estado === 'pendiente') cuenta.pendientes += 1;
     else if (estado === 'en-proceso') cuenta.enProceso += 1;
     else cuenta.terminadas += 1;
+    if (trabajo === 'latoneria') cuenta.latoneria += 1;
   }
   return cuenta;
+}
+
+// El nombre de la pieza como va en la orden al asistente: con "(latonería y
+// pintura)" cuando hay que enderezar antes de pintar.
+export function nombreDePiezaEnOrden(carro, id, nombreBase) {
+  const pieza = carro.piezas[id];
+  return pieza && pieza.trabajo === 'latoneria' ? nombreBase + ' (latonería y pintura)' : nombreBase;
 }
 
 // La orden para el asistente sale del mismo texto de siempre
@@ -284,7 +322,7 @@ function crearAlmacen(bd) {
     const existente = await obtener(clave);
     if (existente) {
       let cambio = false;
-      for (const campo of ['marca', 'linea', 'carroceria', 'color', 'medidas']) {
+      for (const campo of ['marca', 'linea', 'version', 'carroceria', 'color', 'medidas']) {
         if (!existente[campo] && nuevos[campo]) {
           existente[campo] = nuevos[campo];
           cambio = true;

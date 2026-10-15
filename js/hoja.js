@@ -4,7 +4,7 @@
 // Es DOM puro, sin Three.js. El visor le dice qué carro y qué fotos hay
 // (pintar) y ella avisa por las acciones cuando la persona toca algo. Así
 // visor.js se queda con la escena y esto se lee aparte.
-import { ESTADOS, NOMBRE_ESTADO, PIEZA_CARRO, fechaCorta, piezasDelCarro } from './garaje.js';
+import { ESTADOS, NOMBRE_ESTADO, NOMBRE_TRABAJO, PIEZA_CARRO, TRABAJOS, fechaCorta, piezasDelCarro } from './garaje.js';
 import { nombreDePiezaEn } from './carrocerias.js';
 
 // Un icono propio y no un emoji: el emoji de cámara cambia de dibujo (y de
@@ -98,7 +98,17 @@ export function crearHoja(acciones) {
     item.className = 'chip estado-' + pieza.estado;
     item.dataset.pieza = pieza.id;
 
-    const estado = boton('chip-estado', pieza.nombre, pieza.nombre + ': ' + NOMBRE_ESTADO[pieza.estado] + '. Toca para cambiar el estado');
+    const estado = boton(
+      'chip-estado',
+      pieza.nombre,
+      pieza.nombre + ': ' + NOMBRE_ESTADO[pieza.estado] + ', ' + NOMBRE_TRABAJO[pieza.trabajo || 'pintura'] + '. Toca para cambiar',
+    );
+    if (pieza.trabajo === 'latoneria') {
+      const etiqueta = document.createElement('small');
+      etiqueta.className = 'chip-trabajo';
+      etiqueta.textContent = 'latonería';
+      estado.append(etiqueta);
+    }
     estado.addEventListener('click', () => {
       if (!ui.menu.hidden && piezaDelMenu === pieza.id) cerrarMenu();
       else abrirMenu(pieza, estado);
@@ -129,6 +139,8 @@ export function crearHoja(acciones) {
 
   function abrirMenu(pieza, ancla) {
     piezaDelMenu = pieza.id;
+    const separador = document.createElement('hr');
+    separador.className = 'menu-separador';
     ui.menu.replaceChildren(
       ...ESTADOS.map((estado) => {
         const opcion = boton('estado-' + estado, NOMBRE_ESTADO[estado], NOMBRE_ESTADO[estado]);
@@ -137,6 +149,19 @@ export function crearHoja(acciones) {
         opcion.addEventListener('click', () => {
           cerrarMenu();
           acciones.alFijarEstado(pieza.id, estado);
+        });
+        return opcion;
+      }),
+      separador,
+      // Debajo de los estados, el trabajo: solo pintura, o latonería y
+      // pintura. Es otra pregunta (qué hay que hacerle) y por eso va aparte.
+      ...TRABAJOS.map((trabajo) => {
+        const opcion = boton('trabajo-' + trabajo, NOMBRE_TRABAJO[trabajo], NOMBRE_TRABAJO[trabajo]);
+        opcion.setAttribute('role', 'menuitemradio');
+        opcion.setAttribute('aria-checked', String(trabajo === (pieza.trabajo || 'pintura')));
+        opcion.addEventListener('click', () => {
+          cerrarMenu();
+          acciones.alFijarTrabajo(pieza.id, trabajo);
         });
         return opcion;
       }),

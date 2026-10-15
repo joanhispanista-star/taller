@@ -60,6 +60,13 @@ export function normalizarPlaca(texto) {
   return texto.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
 }
 
+// Como se lee en la placa de verdad: "JRX 248", con el espacio después de
+// las tres letras. Es lo que va pintado en la placa del carro en 3D.
+export function formatearPlaca(texto) {
+  const placa = normalizarPlaca(texto);
+  return placa.length > 3 ? placa.slice(0, 3) + ' ' + placa.slice(3) : placa;
+}
+
 // En el orden del catálogo, no en el orden en que se tocaron: así la lista
 // que recibe el pintor siempre se lee igual (capó, techo, baúl, bómperes,
 // lado izquierdo, lado derecho).

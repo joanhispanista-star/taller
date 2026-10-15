@@ -7,7 +7,7 @@
 // motor de 28 MB y su modelo de 89 MB) se carga solo cuando alguien toca
 // "Nuevo carro con foto": el Garaje tiene que abrir al instante.
 import { CLAVE_GUARDADO, normalizarPlaca } from './estado.js';
-import { PIEZA_CARRO, abrirAlmacen, deserializarCarro, fechaCorta, nombreDelCarro, resumen } from './garaje.js';
+import { PIEZA_CARRO, abrirAlmacen, deserializarCarro, fechaCorta, nombreCompletoDelCarro, resumen } from './garaje.js';
 import { CARROCERIAS, normalizarCarroceria } from './carrocerias.js';
 import { buscarLinea, catalogoOrdenado, datosDeEntrada, mejorDeFamilia, nombreDeLinea } from './catalogo.js';
 import { colorDeFoto, nombreDeColor } from './color-foto.js';
@@ -34,6 +34,7 @@ const ui = {
     ayuda: document.getElementById('ficha-ayuda'),
     sugerencias: document.getElementById('ficha-sugerencias'),
     linea: document.getElementById('ficha-linea'),
+    version: document.getElementById('ficha-version'),
     lineas: document.getElementById('lineas-catalogo'),
     carrocerias: document.getElementById('ficha-carrocerias'),
     cancelar: document.querySelector('#ficha-nueva [data-accion="cancelar"]'),
@@ -115,7 +116,7 @@ function fila(carro) {
 
   const descripcion = document.createElement('span');
   descripcion.className = 'carro-marca';
-  const partes = [nombreDelCarro(carro) || 'Sin marca'];
+  const partes = [nombreCompletoDelCarro(carro) || 'Sin marca'];
   if (carro.carroceria) partes.push(CARROCERIAS[normalizarCarroceria(carro.carroceria)].nombre);
   if (carro.color) partes.push(nombreDeColor(carro.color));
   descripcion.textContent = partes.join(' · ');
@@ -131,6 +132,12 @@ function fila(carro) {
       cuenta('en-proceso', r.enProceso, 'en proceso', 'en proceso'),
       cuenta('terminada', r.terminadas, 'terminada', 'terminadas'),
     );
+    if (r.latoneria > 0) {
+      const l = document.createElement('span');
+      l.className = 'cuenta cuenta-latoneria';
+      l.textContent = r.latoneria + ' con latonería';
+      cuentas.append(l);
+    }
   }
 
   enlace.append(portada, placa, fecha, descripcion, cuentas);
@@ -288,6 +295,7 @@ async function abrirFicha(archivo) {
   ui.ficha.foto.src = urlFicha;
   ui.ficha.placa.value = '';
   ui.ficha.linea.value = '';
+  ui.ficha.version.value = '';
   ui.ficha.color.value = '#cfd4da';
   ui.ficha.colorNombre.textContent = 'plateado';
   ui.ficha.abrir.disabled = false;
@@ -364,7 +372,14 @@ ui.ficha.abrir.addEventListener('click', async () => {
   }
   ui.ficha.abrir.disabled = true;
   try {
-    const datos = { marca: ficha.marca, linea: ficha.linea, carroceria: ficha.carroceria, color: ficha.color, medidas: ficha.medidas };
+    const datos = {
+      marca: ficha.marca,
+      linea: ficha.linea,
+      version: ui.ficha.version.value.trim(),
+      carroceria: ficha.carroceria,
+      color: ficha.color,
+      medidas: ficha.medidas,
+    };
     const { carro } = await almacen.abrirOCrear(placa, datos);
     // La foto del carro se guarda como portada (reducida, como las demás) si
     // el carro no tenía una.

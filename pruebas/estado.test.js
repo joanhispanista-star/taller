@@ -6,6 +6,7 @@ import {
   cambiarPlaca,
   crearEstado,
   deserializar,
+  formatearPlaca,
   limpiarSeleccion,
   normalizarPlaca,
   piezasSeleccionadas,
@@ -76,6 +77,13 @@ test('cambiar a otra placa es otro carro: se limpian marcas y marca', () => {
 test('cambiar de placa sin nada marcado no reporta limpieza', () => {
   const estado = crearEstado({ placa: 'ABC123' });
   assert.equal(cambiarPlaca(estado, 'XYZ789'), false);
+});
+
+test('formatearPlaca la escribe como en la placa de verdad', () => {
+  assert.equal(formatearPlaca('jrx248'), 'JRX 248');
+  assert.equal(formatearPlaca('ABC12D'), 'ABC 12D');
+  assert.equal(formatearPlaca('AB'), 'AB');
+  assert.equal(formatearPlaca(''), '');
 });
 
 test('normalizarPlaca limpia lo que escribe la persona', () => {

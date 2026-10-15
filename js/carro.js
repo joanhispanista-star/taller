@@ -413,8 +413,45 @@ function luz(x, y, z, ancho, alto, color, inclinacion = 0) {
   return malla;
 }
 
-function placa(x, y, z, inclinacion = 0) {
-  const malla = caja(0.34, 0.13, 0.02, new THREE.MeshStandardMaterial({ color: 0xf2e9b4, roughness: 0.6 }), x, y, z);
+// La placa colombiana: fondo amarillo y el número en negro, pintados en un
+// canvas que se pega como textura. Sin número (o en Node, donde no hay
+// canvas) queda la placa amarilla lisa de siempre.
+function materialPlaca(texto) {
+  const liso = { color: 0xf2c230, roughness: 0.6 };
+  if (!texto || typeof document === 'undefined') return new THREE.MeshStandardMaterial(liso);
+  const lienzo = document.createElement('canvas');
+  lienzo.width = 340;
+  lienzo.height = 130;
+  const ctx = lienzo.getContext('2d');
+  ctx.fillStyle = '#f2c230';
+  ctx.fillRect(0, 0, 340, 130);
+  ctx.strokeStyle = '#111';
+  ctx.lineWidth = 8;
+  ctx.strokeRect(6, 6, 328, 118);
+  ctx.fillStyle = '#111';
+  ctx.font = 'bold 88px "Arial Narrow", Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(texto, 170, 70);
+  const textura = new THREE.CanvasTexture(lienzo);
+  textura.colorSpace = THREE.SRGBColorSpace;
+  // Solo la cara que mira hacia afuera lleva el número; las otras cinco
+  // caras de la caja van amarillas lisas.
+  return { frente: new THREE.MeshStandardMaterial({ map: textura, roughness: 0.6 }), lados: new THREE.MeshStandardMaterial(liso) };
+}
+
+// `mirandoA` es +1 cuando la cara con el número mira hacia +Z (la placa de
+// atrás) y -1 cuando mira hacia -Z (la de adelante).
+function placa(x, y, z, inclinacion = 0, texto = '', mirandoA = -1) {
+  const material = materialPlaca(texto);
+  let materiales = material;
+  if (material.frente) {
+    // Orden de caras de BoxGeometry: +X, -X, +Y, -Y, +Z, -Z.
+    const l = material.lados;
+    materiales = mirandoA > 0 ? [l, l, l, l, material.frente, l] : [l, l, l, l, l, material.frente];
+  }
+  const malla = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.13, 0.02), materiales);
+  malla.position.set(x, y, z);
   malla.rotation.x = inclinacion;
   malla.name = 'placa';
   return malla;
@@ -440,7 +477,7 @@ export function resaltar(malla, acento) {
 
 // Construye el carro. Sin argumentos es el sedán original; con `carroceria`
 // y `medidas` (del catálogo) sale el tipo y el tamaño de la línea del cliente.
-export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', medidas } = {}) {
+export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', medidas, placa: numeroPlaca = '' } = {}) {
   const d = disposicion(carroceria, medidas);
   const grupo = new THREE.Group();
   grupo.name = 'carro';
@@ -550,20 +587,20 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
   const parrilla = caja(0.72, 0.18, 0.04, materialNegro(), 0, d.piso + 0.22, d.punta - 0.015);
   parrilla.name = 'parrilla';
   grupo.add(parrilla);
-  grupo.add(placa(0, d.piso + 0.1, d.punta - 0.005, -Math.atan2(0.05, 0.1)));
+  grupo.add(placa(0, d.piso + 0.1, d.punta - 0.005, -Math.atan2(0.05, 0.1), numeroPlaca, -1));
   if (d.tipo === 'sedan') {
     grupo.add(luz(-xLuz, d.piso + 0.59, d.cola - 0.195, 0.38, 0.09, 0xe0262e));
     grupo.add(luz(xLuz, d.piso + 0.59, d.cola - 0.195, 0.38, 0.09, 0xe0262e));
-    grupo.add(placa(0, d.piso + 0.3, d.cola + 0.007));
+    grupo.add(placa(0, d.piso + 0.3, d.cola + 0.007, 0, numeroPlaca, 1));
   } else if (d.tipo === 'camioneta') {
     // Las luces van en las esquinas del platón y la placa en la compuerta.
     grupo.add(luz(-(d.medio - 0.2), d.cintura - 0.3, d.compuertaZ + 0.03, 0.14, 0.3, 0xe0262e));
     grupo.add(luz(d.medio - 0.2, d.cintura - 0.3, d.compuertaZ + 0.03, 0.14, 0.3, 0xe0262e));
-    grupo.add(placa(0, d.piso + 0.5, d.compuertaZ + 0.025));
+    grupo.add(placa(0, d.piso + 0.5, d.compuertaZ + 0.025, 0, numeroPlaca, 1));
   } else {
     grupo.add(luz(-xLuz, d.piso + 0.62, d.compuertaZ + 0.03, 0.34, 0.1, 0xe0262e));
     grupo.add(luz(xLuz, d.piso + 0.62, d.compuertaZ + 0.03, 0.34, 0.1, 0xe0262e));
-    grupo.add(placa(0, d.piso + 0.82, d.compuertaZ + 0.03));
+    grupo.add(placa(0, d.piso + 0.82, d.compuertaZ + 0.03, 0, numeroPlaca, 1));
   }
 
   return { grupo, seleccionables, porId, disposicion: d };

@@ -64,6 +64,41 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 
 .subtitulo { color: var(--texto-suave); padding-bottom: 6px; }
 
+/* El botón de la barra que abre la ficha de datos: parece un campo más. */
+.boton-datos {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--panel-2);
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 14px;
+  align-self: flex-end;
+}
+
+.titulo-dialogo { margin: 0; font-size: 16px; }
+
+.menu-separador {
+  border: 0;
+  border-top: 1px solid var(--borde);
+  margin: 4px 8px;
+}
+
+.menu-estado .trabajo-pintura::before, .menu-estado .trabajo-latoneria::before { display: none; }
+
+.chip-trabajo {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--texto-suave);
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  padding: 1px 5px;
+}
+
 .campo {
   display: flex;
   flex-direction: column;
@@ -96,18 +131,20 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
   touch-action: none; /* el dedo gira el carro, no la página */
 }
 
-/* Qué carro es, arriba a la izquierda del 3D; la pista baja un renglón. */
+/* Qué carro es, arriba a la izquierda del 3D; tocarla abre los datos. La
+   pista baja un renglón. */
 .ficha {
   position: absolute;
   top: 10px;
   left: 10px;
   max-width: calc(100% - 20px);
   background: rgba(0, 0, 0, 0.55);
+  border: 0;
   padding: 6px 10px;
   border-radius: 10px;
   font-size: 12px;
+  text-align: left;
   color: var(--texto);
-  pointer-events: none;
 }
 
 .pista {
@@ -493,6 +530,8 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 }
 
 .cuenta.vacia { opacity: 0.45; }
+
+.cuenta-latoneria::before { display: none; }
 
 .carros .borrar {
   width: 40px;

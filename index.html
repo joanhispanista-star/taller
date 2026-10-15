@@ -24,17 +24,17 @@
            el código al salir del campo. -->
       <input id="placa" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" placeholder="ABC123">
     </label>
-    <label class="campo">
-      <span>Marca</span>
-      <input id="marca" type="text" autocomplete="off" maxlength="40" placeholder="Chevrolet Onix">
-    </label>
+    <!-- La marca, la línea, la versión, la carrocería y el color se editan
+         en la ficha de datos (abajo); en la barra solo cabe el botón. -->
+    <button type="button" id="datos" class="boton-datos" aria-label="Datos del carro">Datos del carro</button>
   </header>
 
   <main id="escena">
     <canvas id="lienzo" aria-label="Carro en 3D. Arrastra para girarlo y toca una pieza para marcarla."></canvas>
     <div id="pista" class="pista">Arrastra para girar · toca una pieza para marcarla</div>
-    <!-- Qué carro es y que el 3D es una carrocería de referencia, no el exacto. -->
-    <div id="ficha" class="ficha" hidden></div>
+    <!-- Qué carro es y que el 3D es una carrocería de referencia, no el
+         exacto. Tocarla abre la ficha de datos. -->
+    <button type="button" id="ficha" class="ficha" hidden></button>
     <nav class="vistas" aria-label="Vistas del carro">
       <button type="button" data-vista="frente">Frente</button>
       <button type="button" data-vista="izquierdo">Izquierdo</button>
@@ -63,6 +63,38 @@
        de abrirla. `capture` abre la cámara directa en el celular; en el
        computador abre el selector de archivos, que para probar sirve igual. -->
   <input id="camara" type="file" accept="image/*" capture="environment" hidden>
+
+  <!-- Los datos del carro: lo que la persona corrige cuando la foto propuso
+       mal, o lo que le pone a un carro que entró solo por placa. -->
+  <dialog id="datos-carro" class="ficha-nueva" aria-label="Datos del carro">
+    <div class="ficha-cuerpo">
+      <h2 class="titulo-dialogo">Datos del carro</h2>
+      <div class="ficha-campos">
+        <label class="campo">
+          <span>Marca</span>
+          <input id="datos-marca" type="text" maxlength="40" autocomplete="off" placeholder="Chevrolet">
+        </label>
+        <label class="campo campo-color">
+          <span>Color</span>
+          <span class="color-elegido"><input id="datos-color" type="color" value="#cfd4da"><b id="datos-color-nombre">plateado</b></span>
+        </label>
+      </div>
+      <label class="campo">
+        <span>Línea (del catálogo, o la que sea)</span>
+        <input id="datos-linea" type="text" list="lineas-catalogo" maxlength="40" autocomplete="off" placeholder="Captiva (nueva)">
+      </label>
+      <datalist id="lineas-catalogo"></datalist>
+      <label class="campo">
+        <span>Versión (puestos, año, lo que la distinga)</span>
+        <input id="datos-version" type="text" maxlength="40" autocomplete="off" placeholder="5 puestos, 2023">
+      </label>
+      <div id="datos-carrocerias" class="carrocerias" aria-label="Carrocería"></div>
+      <div class="acciones">
+        <button type="button" data-accion="cancelar">Cancelar</button>
+        <button type="button" data-accion="guardar" class="primario">Guardar</button>
+      </div>
+    </div>
+  </dialog>
 
   <dialog id="foto-grande" class="foto-grande" aria-label="Foto de la pieza">
     <img alt="">

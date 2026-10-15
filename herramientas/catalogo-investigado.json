@@ -426,7 +426,7 @@
   },
   {
    "marca": "Chevrolet",
-   "linea": "Captiva (nueva, 7 puestos)",
+   "linea": "Captiva (nueva)",
    "carroceria": "suv",
    "anos": "2022-hoy",
    "presencia": "comun",
@@ -435,7 +435,7 @@
    "alto_mm": 1760,
    "entre_ejes_mm": 2750,
    "fuente": "https://www.c3carecarcenter.com/blog/chevrolet-captiva-dimensiones/",
-   "notas": "SUV china (SAIC-GM-Wuling, base Baojun 530), 5 o 7 puestos. Largo/ancho/alto confirmados también por Autocosmos Chile; la distancia entre ejes (2.750) solo la da el blog colombiano citado.",
+   "notas": "SUV china (SAIC-GM-Wuling, base Baojun 530), viene de 5 y de 7 puestos: la versión va en los datos del carro. Largo/ancho/alto confirmados también por Autocosmos Chile; la distancia entre ejes (2.750) solo la da el blog colombiano citado.",
    "grupo": "chevrolet-renault"
   },
   {
@@ -16076,6 +16076,20 @@
    "fuente": "https://en.wikipedia.org/wiki/Daihatsu_Delta",
    "grupo": "premium-y-otras",
    "agregada_por_revisor": true
+  },
+  {
+   "marca": "Chevrolet",
+   "linea": "Captiva (1ª generación)",
+   "carroceria": "suv",
+   "anos": "2007-2018",
+   "presencia": "comun",
+   "largo_mm": 4635,
+   "ancho_mm": 1850,
+   "alto_mm": 1720,
+   "entre_ejes_mm": 2705,
+   "fuente": "https://en.wikipedia.org/wiki/Chevrolet_Captiva",
+   "notas": "C100 (Daewoo Winstorm), 5 o 7 puestos; muy vista en Colombia entre 2008 y 2018. Agregada a mano el 15-oct-2026: la investigación solo trajo la Captiva Sport.",
+   "grupo": "chevrolet-renault"
   }
  ]
 }
