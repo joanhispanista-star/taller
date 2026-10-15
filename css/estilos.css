@@ -405,7 +405,7 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 
 /* ---------- Garaje ---------- */
 
-.pagina-garaje { grid-template-rows: auto 1fr; }
+.pagina-garaje { grid-template-rows: auto auto 1fr; } /* barra, pestañas, contenido */
 
 .garaje {
   overflow-y: auto;
@@ -657,3 +657,288 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 
 .ficha-nueva .campo input { width: 100%; }
 .ficha-nueva #ficha-placa { text-transform: uppercase; letter-spacing: 1px; }
+
+/* ---------- Pestañas (Garaje y Tablero) ---------- */
+
+.pestanas {
+  display: flex;
+  background: var(--panel);
+  border-bottom: 1px solid var(--borde);
+}
+
+.pestanas a {
+  flex: 1;
+  text-align: center;
+  padding: 10px 4px 9px;
+  font-size: 13px;
+  color: var(--texto-suave);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+
+.pestanas a[aria-current="page"] {
+  color: var(--texto);
+  border-bottom-color: var(--acento);
+  font-weight: 600;
+}
+
+/* ---------- Tablero: Empleados, Historial, Indicadores ---------- */
+
+.pestana { display: flex; flex-direction: column; gap: 10px; }
+
+.tablero h2 {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--texto-suave);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.tarjetas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tarjetas.tres { grid-template-columns: repeat(3, 1fr); }
+
+.tarjeta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.tarjeta small { font-size: 11px; color: var(--texto-suave); }
+.tarjeta b { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tarjetas.tres .tarjeta { padding: 8px 10px; }
+.tarjetas.tres .tarjeta b { font-size: 15px; }
+.tarjeta.destacada { border-color: var(--acento); }
+.tarjeta.destacada b { color: var(--acento); }
+
+/* La semana de la nómina: flechas a los lados, el rango en medio. */
+.semana { display: flex; align-items: center; gap: 8px; }
+
+.semana > button {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--borde);
+  background: var(--panel-2);
+  color: var(--texto);
+  font-size: 20px;
+}
+
+.semana > button:disabled { opacity: 0.35; cursor: default; }
+
+.semana-titulo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.semana-titulo b { font-size: 15px; }
+
+.enlace { background: none; border: 0; padding: 0; color: var(--acento); font-size: 12px; }
+
+.nomina { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+
+.empleado details {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+}
+
+.empleado summary {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.empleado summary::-webkit-details-marker { display: none; }
+
+.empleado-nombre { font-size: 16px; font-weight: 600; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.empleado-rol { font-size: 12px; color: var(--texto-suave); }
+
+.empleado-total {
+  grid-row: 1 / span 2;
+  align-self: center;
+  text-align: right;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--acento);
+}
+
+.empleado-total small { display: block; font-size: 11px; font-weight: 400; color: var(--texto-suave); }
+.empleado.retirado summary { opacity: 0.6; }
+
+.piezas-pagadas {
+  list-style: none;
+  margin: 0;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--borde);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.piezas-pagadas li { display: flex; gap: 8px; align-items: baseline; }
+.piezas-pagadas li.vacia { color: var(--texto-suave); }
+.piezas-pagadas a { color: var(--texto); text-decoration: none; font-weight: 600; letter-spacing: 0.5px; }
+.piezas-pagadas .pieza-nombre { flex: 1; min-width: 0; }
+.piezas-pagadas time { font-size: 12px; color: var(--texto-suave); }
+.piezas-pagadas .pago { font-weight: 600; white-space: nowrap; }
+.piezas-pagadas .pago.por-definir { font-weight: 400; font-size: 12px; color: var(--texto-suave); }
+
+.empleado-acciones { display: flex; gap: 8px; padding: 0 12px 10px; }
+
+.empleado-acciones button {
+  background: none;
+  border: 1px solid var(--borde);
+  color: var(--texto-suave);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.sin-pintor ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.sin-pintor a { color: var(--acento); font-weight: 600; text-decoration: none; letter-spacing: 0.5px; }
+
+.insignia-demo {
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+  border: 1px dashed var(--borde);
+  border-radius: 999px;
+  padding: 1px 6px;
+  vertical-align: middle;
+}
+
+.campo-rol select {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  border-radius: 8px;
+  padding: 7px 8px;
+  font-size: 14px;
+}
+
+/* La plata de un carro entregado: cobrado, pintores, queda. */
+.plata {
+  grid-column: 2 / -1;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--texto-suave);
+}
+
+.plata b { color: var(--texto); }
+.plata .queda { color: var(--estado-terminada); }
+.plata .falta { color: var(--estado-pendiente); }
+
+.rangos { display: flex; gap: 6px; }
+
+.rangos button {
+  flex: 1;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid var(--borde);
+  background: var(--panel-2);
+  color: var(--texto-suave);
+  font-size: 13px;
+}
+
+.rangos button[aria-pressed="true"] { border-color: var(--acento); color: var(--texto); background: var(--panel); }
+
+/* Las barras por semana, sin librería: ocho columnas, alto en %. */
+.serie {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 6px;
+  height: 130px;
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 8px 10px 6px;
+}
+
+.columna {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  min-width: 0;
+  height: 100%;
+}
+
+.columna .barra {
+  width: 100%;
+  max-width: 28px;
+  background: var(--acento);
+  border-radius: 4px 4px 0 0;
+  opacity: 0.9;
+}
+
+.columna.vacia .barra { background: var(--borde); }
+.columna b { font-size: 10px; white-space: nowrap; }
+.columna small { font-size: 10px; color: var(--texto-suave); white-space: nowrap; }
+
+.demo {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px dashed var(--borde);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.demo button {
+  align-self: flex-start;
+  background: none;
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+/* ---------- Pintor por pieza y entrega del carro ---------- */
+
+/* La etiqueta del pintor en el chip, al lado de la de latonería. */
+.chip-pintor { border-style: dashed; text-transform: none; letter-spacing: 0; }
+
+.menu-estado .menu-pintor::before { display: none; }
+.menu-estado .sin-empleados { color: var(--acento); }
+
+.entrega .campo { flex: 1; }
+.entrega .campo input { width: 100%; }
+
+.boton-entregar {
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--estado-terminada);
+  background: var(--panel-2);
+  color: var(--texto);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.boton-entregar.entregado { border-color: var(--borde); color: var(--texto-suave); }

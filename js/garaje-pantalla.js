@@ -12,8 +12,13 @@ import { CARROCERIAS, normalizarCarroceria } from './carrocerias.js';
 import { buscarLinea, catalogoOrdenado, datosDeEntrada, mejorDeFamilia, nombreDeLinea } from './catalogo.js';
 import { colorDeFoto, nombreDeColor } from './color-foto.js';
 import { reducirFoto } from './fotos.js';
+import { cargarDemo, estadoDemo } from './demo.js';
+import { pesos } from './tablero.js';
 
 const ui = {
+  demo: document.getElementById('demo'),
+  demoTexto: document.getElementById('demo-texto'),
+  demoBoton: document.getElementById('demo-boton'),
   formulario: document.getElementById('registro'),
   placa: document.getElementById('placa'),
   marca: document.getElementById('marca'),
@@ -110,9 +115,16 @@ function fila(carro) {
 
   const placa = document.createElement('strong');
   placa.textContent = carro.placa;
+  if (carro.demo) {
+    const insignia = document.createElement('small');
+    insignia.className = 'insignia-demo';
+    insignia.textContent = 'demo';
+    placa.append(' ', insignia);
+  }
   const fecha = document.createElement('time');
-  fecha.dateTime = carro.actualizado;
-  fecha.textContent = fechaCorta(carro.actualizado);
+  // Un carro entregado muestra su fecha de entrega, no la del último toque.
+  fecha.dateTime = carro.entregado || carro.actualizado;
+  fecha.textContent = carro.entregado ? 'entregado ' + fechaCorta(carro.entregado) : fechaCorta(carro.actualizado);
 
   const descripcion = document.createElement('span');
   descripcion.className = 'carro-marca';
@@ -139,6 +151,12 @@ function fila(carro) {
       cuentas.append(l);
     }
   }
+  if (carro.entregado) {
+    const cobro = document.createElement('span');
+    cobro.className = 'cuenta cuenta-latoneria';
+    cobro.textContent = carro.cobro ? 'cobrado ' + pesos(carro.cobro) : 'entregado sin cobro anotado';
+    cuentas.append(cobro);
+  }
 
   enlace.append(portada, placa, fecha, descripcion, cuentas);
 
@@ -162,7 +180,43 @@ async function pintar() {
   const carros = await almacen.listar();
   ui.vacio.hidden = carros.length > 0;
   ui.lista.replaceChildren(...carros.map(fila));
+  await pintarDemo();
 }
+
+// ---------- Demostración ----------
+
+async function pintarDemo() {
+  const estado = await estadoDemo(almacen);
+  if (estado.carros + estado.empleados > 0) {
+    ui.demoTexto.textContent = 'Los carros marcados «demo» son de demostración (' + estado.carros + '), con sus empleados (' + estado.empleados + '). Lo real no se toca al quitarlos.';
+    ui.demoBoton.textContent = 'Quitar la demostración';
+    ui.demoBoton.dataset.accion = 'quitar';
+    ui.demo.hidden = false;
+  } else {
+    ui.demoTexto.textContent = 'Para ver la app con algo adentro puedes cargar 5 carros de demostración (marcas y colores distintos, con piezas arregladas y en reparación) y 3 empleados.';
+    ui.demoBoton.textContent = 'Cargar demostración';
+    ui.demoBoton.dataset.accion = 'cargar';
+    ui.demo.hidden = false;
+  }
+}
+
+ui.demoBoton.addEventListener('click', async () => {
+  if (!almacen) return;
+  ui.demoBoton.disabled = true;
+  try {
+    if (ui.demoBoton.dataset.accion === 'quitar') {
+      if (!confirm('¿Quitar los carros y empleados de demostración? Lo real se queda.')) return;
+      await almacen.quitarDemo();
+    } else {
+      await cargarDemo(almacen);
+    }
+    await pintar();
+  } catch (e) {
+    avisar('No se pudo: ' + e.message);
+  } finally {
+    ui.demoBoton.disabled = false;
+  }
+});
 
 async function borrarCarro(placa) {
   if (!confirm('¿Borrar el carro ' + placa + ' con sus piezas y sus fotos? No se puede deshacer.')) return;

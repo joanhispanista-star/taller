@@ -12,6 +12,11 @@ desde una foto**: la app reconoce en el teléfono el tipo de carrocería y el
 modelo más parecido, toma el color, y dibuja el 3D de esa carrocería a las
 medidas de esa línea, en ese color. Cuatro carrocerías (sedán, hatchback,
 SUV, camioneta de platón) y un catálogo de los carros que ruedan en Colombia.
+Y adelantada la del 26 (sin la nube): **Empleados** con la nómina de la
+semana (pintor por pieza, 90.000 por pieza pintada), **Historial** de carros
+entregados con lo cobrado, e **Indicadores** para el dueño, en
+`tablero.html`; con una demostración (5 carros, 3 empleados) que se carga
+y se quita en bloque.
 
 ## Lo que NO va a hacer esta app, y por qué
 
@@ -111,7 +116,9 @@ carro".
   del chip, debajo de los tres estados; el chip lo marca, la orden de
   WhatsApp lo dice entre paréntesis y la nómina lo pagará aparte.
 - **La placa pintada en el 3D**: las dos placas del carro llevan el número
-  del registro ("JRX 248"), dibujado en un canvas amarillo.
+  del registro ("JRX 248"), dibujado en un canvas amarillo claro con luz
+  propia (en la sombra del bomper se veía apagada), a 33 × 15 cm como la
+  placa real y al doble de resolución.
 - **Puertas, capó y compuerta que se abren con el dedo**: arrastrar una de
   esas piezas con UN dedo la abre siguiendo el dedo y arrastrarla de vuelta
   la cierra; al soltar queda abierta o cerrada, lo que esté más cerca. Un
@@ -122,15 +129,48 @@ carro".
   panel por ventana), el espejo con la puerta delantera, y el vidrio
   trasero, la placa y el alerón con la compuerta. El baúl del sedán abre
   por su borde delantero y la compuerta del platón cae hacia atrás.
-- **Piezas de interior** (27 en total ahora): con algo abierto aparecen el
+- **Piezas de interior** (29 en total ahora): con algo abierto aparecen el
   **vano del motor** (la bandeja y las paredes bajo el capó, con el motor en
-  negro), el **marco de puertas** de cada lado (el umbral y los pilares por
-  dentro), el **vano del baúl** (el piso del baúl, de la compuerta o del
-  platón) y la **cara interior** de cada pieza que se abre: capó por
-  dentro, baúl o compuerta por dentro y cada puerta por dentro, que son
-  piezas aparte de la exterior (se cotizan y se pintan aparte). Las de
-  interior se pintan del mismo color pero más claro y mate, y hay una luz
-  de relleno baja, para que no se pierdan en la sombra.
+  negro), el **marco de puertas** de cada lado (los pilares por dentro), la
+  **base de puertas** de cada lado (la losa del umbral por donde se entra,
+  entre el estribo y el marco: con las puertas abiertas es lo primero que se
+  ve y en una pintura general se pinta; antes ahí se veía el piso), el
+  **vano del baúl** (el piso del baúl, de la compuerta o del platón) y la
+  **cara interior** de cada pieza que se abre: capó por dentro, baúl o
+  compuerta por dentro y cada puerta por dentro, que son piezas aparte de la
+  exterior (se cotizan y se pintan aparte). Las de interior se pintan del
+  mismo color pero más claro y mate, y hay una luz de relleno baja, para que
+  no se pierdan en la sombra.
+- **Pintor por pieza**: en el menú del chip, debajo del estado y del
+  trabajo, están los empleados activos; el elegido sale en el chip con su
+  primer nombre. Sin empleados, el menú lo dice y lleva a la pestaña donde
+  se agregan.
+- **Entrega y cobro** (en "Datos del carro"): lo que se le cobró al cliente
+  y el botón "Marcar entregado" (o "Reabrir"). Un carro entregado lo dice
+  en la ficha sobre el 3D y en el Garaje ("entregado 13 oct · cobrado
+  $ 1.250.000"), y pasa al Historial.
+- **Empleados** (`tablero.html?p=empleados`): la nómina de la semana (lunes
+  a domingo, con flechas para ver semanas anteriores): por empleado, qué
+  piezas terminó esa semana, en qué carro y cuándo, y cuánto se le paga:
+  **90.000 por pieza pintada** que quedó terminada con él asignado. La
+  latonería y las piezas de interior se cuentan y salen "por definir", sin
+  valor (decisión 9). Las terminadas sin pintor asignado van en una lista
+  aparte con el enlace al carro. Agregar, retirar, reincorporar y borrar
+  empleados (pintor, latonero, asistente).
+- **Historial** (`?p=historial`): los carros entregados, del más reciente al
+  más viejo, con fecha, piezas (terminadas, sin hacer, con latonería), lo
+  cobrado, lo que pagan sus piezas a los pintores y lo que queda (sin
+  descontar materiales, y lo dice).
+- **Indicadores** (`?p=indicadores`): para el dueño, todo junto: carros en el
+  taller y entregados, piezas terminadas, cobrado, pagado a pintores y lo
+  que queda, en esta semana, este mes o todo; dos gráficas de barras de las
+  últimas ocho semanas (piezas terminadas y cobrado) hechas a mano; y la
+  lista de los carros que están en el taller con su avance.
+- **Demostración**: en el Garaje y en el tablero, "Cargar demostración" mete
+  5 carros de marcas y colores distintos (Onix rojo, Logan blanco, CX-30
+  gris, Hilux negra, Picanto azul) con piezas arregladas, en reparación y
+  entregadas, y 3 empleados, con fechas de las últimas dos semanas. Todo va
+  marcado «demo» y "Quitar la demostración" se lleva solo eso.
 - Cada pieza marcada tiene **estado**: pendiente (naranja), en proceso
   (amarillo) o terminada (verde). La chapa en 3D y el chip de la lista van
   del mismo color. Se cambia tocando el nombre en el chip: sale un menú con
@@ -192,21 +232,25 @@ npm test
 | Archivo | Qué hace |
 |---|---|
 | `index.html` | El visor: barra con el enlace al Garaje, placa y marca; el lienzo 3D con la ficha del carro; botones de vista; la hoja con los chips, la tira de fotos y los dos botones; el menú de estado, la cámara (`input type=file capture`) y el diálogo de la foto grande. |
-| `garaje.html` | El Garaje: el botón "Nuevo carro con foto" y su ficha (foto, color, sugerencias, marca y línea, carrocería, placa), el formulario por placa, y la lista de carros. |
+| `garaje.html` | El Garaje: las pestañas de la app, el botón "Nuevo carro con foto" y su ficha (foto, color, sugerencias, marca y línea, carrocería, placa), el formulario por placa, la lista de carros y el bloque de la demostración. |
+| `tablero.html` | Las otras tres pestañas: Empleados (la nómina de la semana y la lista de empleados), Historial (entregados y cobrado) e Indicadores (todo junto, con dos gráficas). `?p=` dice cuál se abre. |
+| `js/tablero.js` | Los números: la semana del taller (lunes a domingo), `pagoDePieza`, `nominaSemanal`, `historial`, `indicadores` (con serie por semana) y `pesos`. Funciones puras, sin DOM, probadas en Node. |
+| `js/tablero-pantalla.js` | La pantalla del tablero: pinta las tres pestañas con lo que calcula `tablero.js`, agrega y retira empleados, y carga o quita la demostración. |
+| `js/demo.js` | Los 5 carros y 3 empleados de demostración (fechas relativas a hoy, todo con `demo: true`), `cargarDemo` (no pisa un carro real) y `estadoDemo`. |
 | `css/estilos.css` | Colores como variables `--*` (incluidos los tres de estado), tema oscuro (luz de taller). Empieza con `[hidden] { display: none !important }` por una trampa conocida. |
 | `js/piezas.js` | El catálogo de piezas. Sin Three.js: lo usan el registro y la nómina. |
 | `js/carrocerias.js` | Los cuatro tipos de carrocería: medidas típicas, qué nombre toma cada pieza en cada uno (compuerta, costado del platón), y cómo se limpian las medidas del catálogo para dibujar. Sin Three.js. |
 | `js/catalogo-carros.js` | GENERADO. Los carros que ruedan en Colombia: marca, línea, carrocería, medidas en mm, años, presencia y fuente. Se regenera con `herramientas/generar-catalogo.mjs`. |
 | `js/catalogo.js` | Buscar en el catálogo ("onix", "sedan onix", sin tildes), la entrada exacta de un carro y lo que el registro guarda de ella. |
 | `js/estado.js` | El texto de la orden para el asistente (ahora con el nombre de pieza de la carrocería) y la placa normalizada. Su modelo de selección fue el del visor del 15 de octubre; hoy lo reemplaza `garaje.js`, pero sigue probado. |
-| `js/garaje.js` | El registro: el modelo del carro (placa, marca, línea, carrocería, color, medidas, piezas con estado y fecha) como funciones puras, y el almacén en IndexedDB (carros y fotos, incluida la foto del carro entero como pieza `carro`). Sin DOM; probado en Node con `fake-indexeddb`. |
+| `js/garaje.js` | El registro: el modelo del carro (placa, marca, línea, carrocería, color, medidas, cobro, fecha de entrega, piezas con estado, trabajo, pintor y fecha) y del empleado como funciones puras, la tarifa (`TARIFA_PIEZA`), y el almacén en IndexedDB versión 2 (carros, fotos y empleados; `quitarDemo`). Sin DOM; probado en Node con `fake-indexeddb`. |
 | `js/fotos.js` | Reducir una foto a 1280 px y sacarle la miniatura con canvas. La cuenta de medidas es pura y se prueba en Node. |
 | `js/color-foto.js` | El color de la pintura a partir de la foto (k-medias sobre el centro, descartando vidrios y llantas) y su nombre de taller (plateado, vinotinto...). La parte pura se prueba en Node. |
 | `js/reconocer.js` | El reconocedor en el navegador: CLIP (visión) sobre la foto, comparado con los vectores de texto de `js/etiquetas-clip.json`. Devuelve carrocerías, líneas y marcas ordenadas por parecido. |
 | `js/etiquetas-clip.json` | GENERADO por `herramientas/calcular-etiquetas.mjs`: un vector por carrocería y por línea del catálogo (Int8 en base64). Hay que regenerarlo cuando cambie el catálogo. |
-| `js/hoja.js` | La hoja de abajo del visor: chips con estado, trabajo (latonería) y cámara, menú de estado y trabajo, tira de fotos y foto grande, con los nombres de la carrocería. DOM puro, sin Three.js. |
-| `js/ficha-carro.js` | La ficha "Datos del carro" del visor: marca, línea con el catálogo, versión, carrocería y color. DOM puro. |
-| `js/garaje-pantalla.js` | La pantalla Garaje: lista con portada y color, abrir o crear por placa, borrar, y la ficha del carro nuevo con foto (color, reconocedor, catálogo, confirmación). |
+| `js/hoja.js` | La hoja de abajo del visor: chips con estado, trabajo (latonería), pintor y cámara; menú de estado, trabajo y pintor; tira de fotos y foto grande, con los nombres de la carrocería. DOM puro, sin Three.js. |
+| `js/ficha-carro.js` | La ficha "Datos del carro" del visor: marca, línea con el catálogo, versión, carrocería, color, cobro al cliente y entrega. DOM puro. |
+| `js/garaje-pantalla.js` | La pantalla Garaje: lista con portada y color (con "entregado" y lo cobrado, y la insignia «demo»), abrir o crear por placa, borrar, la ficha del carro nuevo con foto (color, reconocedor, catálogo, confirmación) y la demostración. |
 | `js/carro.js` | El carro, pieza por pieza, construido con perfiles extruidos, en cuatro carrocerías y a las medidas de la línea (`disposicion` convierte medidas en bordes y alturas). Cada pieza es un objeto aparte con su propio material; las articuladas (puertas, capó, pieza trasera) cuelgan de un pivote en su bisagra (`articular`) y las de interior comparten material con sus paredes (`acompanar`). Sin DOM: también se construye en Node para probarlo. |
 | `js/toque.js` | Qué pieza hay bajo el dedo: rayo central más un anillo de ocho para que estribos y espejos se dejen tocar. Sin DOM, probado con la cámara y el carro reales. |
 | `js/visor.js` | Escena, luces, cámara, giro con el dedo, el toque que marca, y el pegamento con el registro: qué carro está abierto (por la URL o el último), el 3D con su carrocería, color y medidas (se reconstruye al cambiar de carro), teñir por estado, guardar. |
@@ -214,7 +258,7 @@ npm test
 | `herramientas/servidor.js` | Servidor estático sin dependencias; los módulos de JavaScript no cargan desde `file://`. Sirve `.wasm` con su tipo para que el motor compile en streaming. |
 | `herramientas/generar-catalogo.mjs` | Del JSON de la investigación al catálogo: una entrada por marca y línea, medidas limpias, fuente conservada. |
 | `herramientas/calcular-etiquetas.mjs` | Calcula en el PC los vectores de texto de CLIP (modelo de texto, 60 MB que el teléfono así no necesita) y escribe `js/etiquetas-clip.json`. |
-| `pruebas/` | `estado.test.js` (la orden), `carro.test.js` (17 piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras) y `catalogo.test.js` (el catálogo y su buscador). `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
+| `pruebas/` | `estado.test.js` (la orden, las 29 piezas), `carro.test.js` (piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio, la base de puertas, la placa), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `tablero.test.js` (semanas, pesos, pago por pieza, pintor y entrega, nómina, historial, indicadores, la demostración, los empleados en el almacén y la subida de versión de la base sin perder carros), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras) y `catalogo.test.js` (el catálogo y su buscador). 104 pruebas. `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
 
 Decisiones que conviene conocer:
 
@@ -271,6 +315,24 @@ Decisiones que conviene conocer:
 - La foto del carro entero se guarda como una foto más, con la pieza
   especial `carro`: así vive en el mismo almacén, se reduce igual y se va
   con el carro al borrarlo.
+- **La plata no se inventa.** `pagoDePieza` paga 90.000 solo a una pieza de
+  pintura, exterior y terminada; la latonería y el interior devuelven 0 y
+  las pantallas los muestran como "por definir", con su conteo. Cuando Joan
+  decida esas tarifas (decisión 9), es un cambio en esa función y nada más.
+  "Queda" (cobro menos pintores) tampoco descuenta materiales, y lo dice.
+- **La semana es de lunes a domingo**, en hora local, y una pieza cuenta en
+  la semana en que pasó a terminada (`desde`), no en la que se marcó. Si se
+  reabre y se vuelve a terminar, cuenta en la nueva fecha.
+- Los empleados tienen **id estable** (`emp-` + fecha, o `demo-*`): las
+  piezas guardan el id, no el nombre, así corregir un nombre no descuadra
+  la nómina. Borrar un empleado deja sus piezas "sin pintor asignado", y
+  la pestaña Empleados las lista para que alguien las reasigne.
+- La base de datos subió a la **versión 2** (almacén `empleados`). Los
+  teléfonos con la versión 1 suben solos sin perder carros ni fotos; las
+  piezas viejas sin `pintor` salen con `pintor: ''`.
+- Lo de demostración lleva `demo: true` en el carro y en el empleado, y las
+  placas son DEM001 a DEM005; `cargarDemo` no pisa un carro real con esa
+  placa y `quitarDemo` solo borra lo marcado.
 
 ## Plan, con fechas
 
@@ -281,7 +343,7 @@ el lunes 19.
 |---|---|---|
 | **Jueves 15-oct** (hecho) | Visor: sedán por piezas, girar, tocar, enviar por WhatsApp. | Mandar una orden de pintura desde el celular. |
 | **Lunes 19 a viernes 23-oct** (hecho el jueves 15) | Registro por placa y marca; pantalla **Garaje** con todos los carros; fotos por pieza (cámara del celular, guardadas en el teléfono); estados por pieza: pendiente, en proceso, terminada. | Ver cualquier carro, abrir su 3D y saber qué se trabajó y qué está en curso. |
-| **Lunes 26 a viernes 30-oct** | Empleados: asignar pintor a cada pieza y marcarla terminada; resumen semanal por pintor con piezas × 90.000. La nube (Supabase, con RLS) para que el dueño y el asistente vean lo mismo desde dos teléfonos. | Pagar la semana con la lista en la mano; el asistente ve la orden en la app, no solo en WhatsApp. |
+| **Lunes 26 a viernes 30-oct** (empleados, nómina, historial e indicadores hechos el jueves 15; queda la nube) | Empleados: asignar pintor a cada pieza y marcarla terminada; resumen semanal por pintor con piezas × 90.000. La nube (Supabase, con RLS) para que el dueño y el asistente vean lo mismo desde dos teléfonos. | Pagar la semana con la lista en la mano; el asistente ve la orden en la app, no solo en WhatsApp. |
 | **Lunes 2 a viernes 6-nov** (carrocerías y foto hechas el jueves 15; queda lo instalable) | Otras carrocerías (hatchback, SUV, camioneta/pick-up: cambia el baúl por la compuerta y el largo); instalable en el celular (PWA primero; APK por enlace como Tu Garantía si hace falta). | Usarla con los carros que de verdad llegan al taller, como una app más. |
 
 Lo que NO está en el plan y no se va a prometer: escaneo del carro real
@@ -294,7 +356,9 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
 2. **¿Quién marca la pieza terminada?** ¿Cada pintor desde su celular (hace
    falta cuenta por empleado), o el asistente por todos (una sola cuenta)?
 3. **¿90.000 es por cualquier pieza?** ¿Un espejo paga igual que un techo?
-   Si no, hace falta una tarifa por pieza en el catálogo.
+   Si no, hace falta una tarifa por pieza en el catálogo. Hoy la nómina
+   paga 90.000 parejo por cada pieza exterior pintada (`TARIFA_PIEZA` en
+   `garaje.js`).
 4. **¿Qué carrocerías llegan más?** Sedán ya está. Si el 70 % son camionetas,
    la camioneta va antes que el hatchback.
 5. **¿El cliente del taller ve algo?** (Una tarjeta "su carro va así" por
@@ -312,10 +376,16 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
    necesita una cuenta de API pagada con tarjeta y un servidor que guarde la
    clave: es la semana del 26 (la nube) y una decisión de plata.
 9. **¿Cómo se pagan las piezas de interior y la latonería?** El vano del
-   motor, los marcos de puertas y el vano del baúl ya se marcan; la
+   motor, los marcos y bases de puertas y el vano del baúl ya se marcan; la
    latonería ya se distingue de la pintura. Falta saber si el vano paga los
-   mismos 90.000 que un capó, y cuánto paga la latonería: la nómina de la
-   semana del 26 no se puede cerrar sin eso.
+   mismos 90.000 que un capó, y cuánto paga la latonería (y a quién: ¿al
+   latonero, aparte del pintor?). Mientras tanto la nómina los cuenta y los
+   muestra "por definir", sin valor: la semana no se puede cerrar con un
+   número inventado.
+10. **¿Qué va en "cobro al cliente"?** Hoy es un solo número por carro, el
+    total que pagó. Si el taller cobra por adelantado y el resto al
+    entregar, o cobra materiales aparte, hace falta más de un campo, y los
+    indicadores de "queda" cambian.
 
 ## Trampas conocidas
 
@@ -386,3 +456,14 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
   donde iba; un arrastre de prueba cayó en otra parte por eso.
 - La dirección del PC para el celular sale de `ipconfig` como "Dirección
   IPv4" del adaptador Wi-Fi (los nombres salen en español y con la ñ rota).
+- Una malla puede llevar una **lista** de materiales (la placa con número:
+  uno por cara). Al cambiar de carro, el visor libera geometrías y
+  materiales, y `material.dispose()` sobre la lista reventaba el visor
+  entero al abrir otro carro con el borrador de uno que tenía placa. Se
+  liberan uno por uno, textura incluida.
+- `Three.Color` guarda los colores en lineal: el verde de `#ffd83d` lee
+  0,69, no 0,85. Una prueba que compare canales contra el hex se equivoca;
+  comparar `getHexString()`.
+- La demostración se ofrece siempre que no esté cargada, no solo con el
+  Garaje vacío: Joan ya tiene su Captiva y aun así quiere ver los carros
+  demo al lado.

@@ -13,6 +13,15 @@
     <span class="subtitulo">Garaje</span>
   </header>
 
+  <!-- Las secciones de la app. El Garaje es esta página; las otras tres
+       viven en tablero.html y se abren en la pestaña pedida. -->
+  <nav class="pestanas" aria-label="Secciones">
+    <a href="garaje.html" aria-current="page">Garaje</a>
+    <a href="tablero.html?p=empleados">Empleados</a>
+    <a href="tablero.html?p=historial">Historial</a>
+    <a href="tablero.html?p=indicadores">Indicadores</a>
+  </nav>
+
   <main class="garaje">
     <!-- La puerta grande: una foto del carro y la app propone qué carro es,
          de qué color y qué carrocería; la persona confirma. -->
@@ -42,6 +51,14 @@
     <p id="borrador" class="borrador" hidden><span></span> <a href="index.html">Abrirlo</a></p>
     <p id="vacio" class="vacio" hidden>Todavía no hay carros. Tómale una foto al primero.</p>
     <ul id="carros" class="carros"></ul>
+
+    <!-- La demostración: carros de varias marcas y colores, con piezas
+         arregladas y en reparación, para ver la app con algo adentro. Se
+         dice que es demostración y se quita en bloque. -->
+    <div id="demo" class="demo" hidden>
+      <p class="ayuda" id="demo-texto"></p>
+      <button type="button" id="demo-boton"></button>
+    </div>
   </main>
 
   <!-- La ficha del carro nuevo: la foto, lo que la app propone y lo que la

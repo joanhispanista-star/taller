@@ -511,27 +511,35 @@ function luz(x, y, z, ancho, alto, color, inclinacion = 0) {
 // canvas que se pega como textura. Sin número (o en Node, donde no hay
 // canvas) queda la placa amarilla lisa de siempre.
 function materialPlaca(texto) {
-  const liso = { color: 0xf2c230, roughness: 0.6 };
+  // Amarillo más claro que antes y con algo de luz propia (emissive): la
+  // placa queda en la sombra del bomper y se veía apagada. Joan pidió que
+  // se viera más clara (15-oct-2026).
+  const AMARILLO = '#ffd83d';
+  const liso = { color: 0xffd83d, roughness: 0.5, emissive: 0xffd83d, emissiveIntensity: 0.35 };
   if (!texto || typeof document === 'undefined') return new THREE.MeshStandardMaterial(liso);
+  // El doble de resolución que antes: de cerca las letras se veían borrosas.
   const lienzo = document.createElement('canvas');
-  lienzo.width = 340;
-  lienzo.height = 130;
+  lienzo.width = 680;
+  lienzo.height = 300;
   const ctx = lienzo.getContext('2d');
-  ctx.fillStyle = '#f2c230';
-  ctx.fillRect(0, 0, 340, 130);
+  ctx.fillStyle = AMARILLO;
+  ctx.fillRect(0, 0, 680, 300);
   ctx.strokeStyle = '#111';
-  ctx.lineWidth = 8;
-  ctx.strokeRect(6, 6, 328, 118);
+  ctx.lineWidth = 14;
+  ctx.strokeRect(12, 12, 656, 276);
   ctx.fillStyle = '#111';
-  ctx.font = 'bold 88px "Arial Narrow", Arial, sans-serif';
+  ctx.font = 'bold 200px "Arial Narrow", Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(texto, 170, 70);
+  ctx.fillText(texto, 340, 158);
   const textura = new THREE.CanvasTexture(lienzo);
   textura.colorSpace = THREE.SRGBColorSpace;
   // Solo la cara que mira hacia afuera lleva el número; las otras cinco
-  // caras de la caja van amarillas lisas.
-  return { frente: new THREE.MeshStandardMaterial({ map: textura, roughness: 0.6 }), lados: new THREE.MeshStandardMaterial(liso) };
+  // caras de la caja van amarillas lisas. La cara con número también
+  // emite su propia textura: así el negro sigue negro y el amarillo no
+  // se apaga en la sombra.
+  const frente = new THREE.MeshStandardMaterial({ map: textura, roughness: 0.5, emissive: 0xffffff, emissiveMap: textura, emissiveIntensity: 0.35 });
+  return { frente, lados: new THREE.MeshStandardMaterial(liso) };
 }
 
 // `mirandoA` es +1 cuando la cara con el número mira hacia +Z (la placa de
@@ -544,7 +552,9 @@ function placa(x, y, z, inclinacion = 0, texto = '', mirandoA = -1) {
     const l = material.lados;
     materiales = mirandoA > 0 ? [l, l, l, l, material.frente, l] : [l, l, l, l, l, material.frente];
   }
-  const malla = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.13, 0.02), materiales);
+  // 33 × 15 cm: la placa colombiana real mide 33 × 16; un poco más alta
+  // que antes para que el número se lea desde más lejos.
+  const malla = new THREE.Mesh(new THREE.BoxGeometry(0.33, 0.15, 0.02), materiales);
   malla.position.set(x, y, z);
   malla.rotation.x = inclinacion;
   malla.name = 'placa';
@@ -830,6 +840,16 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
     registrar(
       'marco-' + lado,
       caja(0.02, d.cintura - d.estriboAlto - 0.02, d.puertaTras - d.puertaDel - 0.02, materialPintura(base), signo * (d.medio - 0.13), (d.cintura + d.estriboAlto) / 2, (d.puertaDel + d.puertaTras) / 2),
+    );
+
+    // La base de las puertas: la losa horizontal del umbral, desde el marco
+    // hasta casi el borde del estribo, 6 mm por encima de él (como la
+    // chapa del umbral real). Con las puertas cerradas queda dentro del
+    // panel; abiertas, es la franja clara donde uno pisa al entrar. Antes
+    // ahí se veía el piso a través del hueco entre el marco y el estribo.
+    registrar(
+      'base-puertas-' + lado,
+      caja(0.115, 0.03, d.puertaTras - d.puertaDel - 0.02, materialPintura(base), signo * (d.medio - 0.0675), d.estriboAlto - 0.009, (d.puertaDel + d.puertaTras) / 2),
     );
 
     // La cara interior de cada puerta: una lámina pegada por dentro del

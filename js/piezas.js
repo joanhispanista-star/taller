@@ -35,6 +35,12 @@ export const PIEZAS = [
   // baúl es el piso del baúl (o de la compuerta, o del platón).
   { id: 'marco-izq', nombre: 'Marco de puertas izquierdo', lado: 'izq' },
   { id: 'marco-der', nombre: 'Marco de puertas derecho', lado: 'der' },
+  // La base de las puertas: el umbral por donde se entra, entre el estribo
+  // y el marco. Con las puertas abiertas es lo primero que se ve, y en una
+  // pintura general se pinta; por eso es pieza aparte (pedido de Joan,
+  // 15-oct-2026).
+  { id: 'base-puertas-izq', nombre: 'Base de puertas izquierda', lado: 'izq' },
+  { id: 'base-puertas-der', nombre: 'Base de puertas derecha', lado: 'der' },
   { id: 'vano-motor', nombre: 'Vano del motor', lado: null },
   { id: 'vano-baul', nombre: 'Vano del baúl', lado: null },
   // La cara interior de lo que se abre es otra pieza: el capó por fuera y
@@ -50,7 +56,7 @@ export const PIEZAS = [
 // Las piezas que solo se ven con algo abierto: se pintan de un tono más
 // claro y mate para distinguirlas de la chapa de afuera.
 export function esInterior(id) {
-  return id.endsWith('-int') || id.startsWith('vano-') || id.startsWith('marco-');
+  return id.endsWith('-int') || id.startsWith('vano-') || id.startsWith('marco-') || id.startsWith('base-');
 }
 
 export const PIEZAS_POR_ID = new Map(PIEZAS.map((p) => [p.id, p]));

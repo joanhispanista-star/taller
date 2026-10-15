@@ -5,6 +5,12 @@
 import { CARROCERIAS, normalizarCarroceria } from './carrocerias.js';
 import { buscarLinea, catalogoOrdenado, datosDeEntrada, nombreDeLinea } from './catalogo.js';
 import { nombreDeColor } from './color-foto.js';
+import { fechaCorta } from './garaje.js';
+
+// Pesos con punto de miles mientras se escribe: 1250000 → 1.250.000.
+function conPuntos(digitos) {
+  return digitos.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
 
 export function crearFichaCarro({ alGuardar }) {
   const ui = {
@@ -16,10 +22,24 @@ export function crearFichaCarro({ alGuardar }) {
     carrocerias: document.getElementById('datos-carrocerias'),
     color: document.getElementById('datos-color'),
     colorNombre: document.getElementById('datos-color-nombre'),
+    cobro: document.getElementById('datos-cobro'),
+    entregar: document.getElementById('datos-entregar'),
+    entregaNota: document.getElementById('datos-entrega-nota'),
     guardar: document.querySelector('#datos-carro [data-accion="guardar"]'),
     cancelar: document.querySelector('#datos-carro [data-accion="cancelar"]'),
   };
   let borrador = null;
+
+  // La entrega: un botón que marca (con la fecha de hoy) o reabre. Lo que
+  // se guarda es la fecha; sin fecha, el carro sigue en el taller.
+  function pintarEntrega() {
+    const entregado = Boolean(borrador.entregado);
+    ui.entregar.textContent = entregado ? 'Reabrir (volver al taller)' : 'Marcar entregado';
+    ui.entregar.classList.toggle('entregado', entregado);
+    ui.entregaNota.textContent = entregado
+      ? 'Entregado ' + fechaCorta(borrador.entregado) + '. Está en el Historial con lo cobrado.'
+      : 'Al marcarlo entregado pasa al Historial con lo que se cobró.';
+  }
 
   ui.lineas.replaceChildren(
     ...catalogoOrdenado().map((e) => {
@@ -73,15 +93,28 @@ export function crearFichaCarro({ alGuardar }) {
       carroceria: carro.carroceria || 'sedan',
       color: carro.color || '#cfd4da',
       medidas: carro.medidas || null,
+      cobro: carro.cobro || 0,
+      entregado: carro.entregado || '',
     };
     ui.marca.value = borrador.marca;
     ui.linea.value = borrador.linea;
     ui.version.value = borrador.version;
     ui.color.value = borrador.color;
     ui.colorNombre.textContent = nombreDeColor(borrador.color);
+    ui.cobro.value = borrador.cobro ? conPuntos(String(borrador.cobro)) : '';
     pintarCarrocerias();
+    pintarEntrega();
     ui.dialogo.showModal();
   }
+
+  ui.cobro.addEventListener('input', () => {
+    const digitos = ui.cobro.value.replace(/\D/g, '').slice(0, 12);
+    ui.cobro.value = conPuntos(digitos);
+  });
+  ui.entregar.addEventListener('click', () => {
+    borrador.entregado = borrador.entregado ? '' : new Date().toISOString();
+    pintarEntrega();
+  });
 
   ui.linea.addEventListener('change', tomarLinea);
   ui.color.addEventListener('input', () => {
@@ -95,6 +128,7 @@ export function crearFichaCarro({ alGuardar }) {
     borrador.marca = ui.marca.value.trim();
     borrador.linea = ui.linea.value.trim();
     borrador.version = ui.version.value.trim();
+    borrador.cobro = Number(ui.cobro.value.replace(/\D/g, '')) || 0;
     const datos = { ...borrador };
     ui.dialogo.close();
     alGuardar(datos);

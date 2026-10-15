@@ -39,7 +39,18 @@ export const NOMBRE_TRABAJO = {
 };
 
 export const NOMBRE_BD = 'taller-pintura';
-export const VERSION_BD = 1;
+// Versión 2 (15-oct-2026): se suma el almacén de empleados. Subir la versión
+// dispara `onupgradeneeded` en los teléfonos que ya tenían la 1, sin tocar
+// los carros ni las fotos que ya estaban.
+export const VERSION_BD = 2;
+
+// Lo que se paga por pieza pintada (decisión de Joan del 15-oct-2026). La
+// latonería y las piezas de interior no tienen tarifa todavía (decisión 9
+// del LEEME): se cuentan aparte y no se inventa un número.
+export const TARIFA_PIEZA = 90000;
+
+export const ROLES = ['pintor', 'latonero', 'asistente'];
+export const NOMBRE_ROL = { pintor: 'Pintor', latonero: 'Latonero', asistente: 'Asistente' };
 
 // ---------- Modelo ----------
 
@@ -83,14 +94,22 @@ function limpiarPiezas(piezas, seleccion, ahora) {
       if (!PIEZAS_POR_ID.has(id)) continue;
       const estado = datos && ESTADOS.includes(datos.estado) ? datos.estado : ESTADOS[0];
       const trabajo = datos && TRABAJOS.includes(datos.trabajo) ? datos.trabajo : TRABAJOS[0];
-      limpias[id] = { estado, desde: (datos && fechaValida(datos.desde)) || ahora, trabajo };
+      // `pintor` es el id del empleado que la pintó (o la va a pintar); vacío
+      // mientras no se asigne. La nómina solo cuenta piezas con pintor.
+      const pintor = datos && typeof datos.pintor === 'string' ? datos.pintor.slice(0, 40) : '';
+      limpias[id] = { estado, desde: (datos && fechaValida(datos.desde)) || ahora, trabajo, pintor };
     }
   } else if (Array.isArray(seleccion)) {
     for (const id of seleccion) {
-      if (PIEZAS_POR_ID.has(id)) limpias[id] = { estado: ESTADOS[0], desde: ahora, trabajo: TRABAJOS[0] };
+      if (PIEZAS_POR_ID.has(id)) limpias[id] = { estado: ESTADOS[0], desde: ahora, trabajo: TRABAJOS[0], pintor: '' };
     }
   }
   return limpias;
+}
+
+function limpiarPesos(valor) {
+  const n = Number(valor);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
 }
 
 // Un carro limpio a partir de lo que sea (un registro guardado, un borrador
@@ -110,10 +129,50 @@ export function crearCarro(datos = {}, ahora = new Date().toISOString()) {
     carroceria: typeof datos.carroceria === 'string' && datos.carroceria ? normalizarCarroceria(datos.carroceria) : '',
     color: limpiarColor(datos.color),
     medidas: limpiarMedidas(datos.medidas),
+    // Lo que se le cobró al cliente por este carro (pesos), y cuándo se le
+    // entregó: con eso el historial y los indicadores tienen con qué contar.
+    cobro: limpiarPesos(datos.cobro),
+    entregado: fechaValida(datos.entregado) || '',
+    // Un carro de demostración se ve igual pero se puede quitar en bloque.
+    demo: datos.demo === true,
     creado,
     actualizado: fechaValida(datos.actualizado) || creado,
     piezas: limpiarPiezas(datos.piezas, datos.seleccion, ahora),
   };
+}
+
+// Un empleado limpio: id estable (para que las piezas lo citen aunque se
+// corrija el nombre), nombre, rol y si sigue activo.
+export function crearEmpleado(datos = {}, ahora = new Date().toISOString()) {
+  const nombre = typeof datos.nombre === 'string' ? datos.nombre.trim().slice(0, 40) : '';
+  const id = typeof datos.id === 'string' && datos.id ? datos.id.slice(0, 40) : 'emp-' + ahora.replace(/[^0-9]/g, '').slice(0, 17);
+  return {
+    id,
+    nombre,
+    rol: ROLES.includes(datos.rol) ? datos.rol : 'pintor',
+    activo: datos.activo !== false,
+    demo: datos.demo === true,
+    creado: fechaValida(datos.creado) || ahora,
+  };
+}
+
+// Asigna (o quita, con '') el pintor de una pieza; si no estaba marcada, la
+// marca pendiente. Devuelve true si cambió.
+export function asignarPintor(carro, id, pintor, ahora = new Date().toISOString()) {
+  if (!PIEZAS_POR_ID.has(id) || typeof pintor !== 'string') return false;
+  const actual = carro.piezas[id];
+  if (actual && actual.pintor === pintor) return false;
+  carro.piezas[id] = actual ? { ...actual, pintor } : { estado: ESTADOS[0], desde: ahora, trabajo: TRABAJOS[0], pintor };
+  return true;
+}
+
+// Marca el carro como entregado al cliente (o lo reabre con null) y guarda
+// lo cobrado. No toca las piezas: lo que quedó pendiente queda pendiente, y
+// el historial lo dice.
+export function entregarCarro(carro, { cobro, fecha = new Date().toISOString() } = {}) {
+  if (cobro !== undefined) carro.cobro = limpiarPesos(cobro);
+  carro.entregado = fecha === null ? '' : fechaValida(fecha) || new Date().toISOString();
+  return carro;
 }
 
 // Lo que se ve en una fila o en una ficha: "Chevrolet Onix" o solo la marca.
@@ -137,19 +196,18 @@ export function alternarPieza(carro, id, ahora = new Date().toISOString()) {
     delete carro.piezas[id];
     return false;
   }
-  carro.piezas[id] = { estado: ESTADOS[0], desde: ahora, trabajo: TRABAJOS[0] };
+  carro.piezas[id] = { estado: ESTADOS[0], desde: ahora, trabajo: TRABAJOS[0], pintor: '' };
   return true;
 }
 
 // Cambia el estado de una pieza; si no estaba marcada, la marca con ese
-// estado. `desde` es la fecha del último cambio: la nómina de la semana
-// del 26 necesita saber cuándo se terminó cada pieza. Devuelve true si
-// algo cambió.
+// estado. `desde` es la fecha del último cambio: la nómina necesita saber
+// cuándo se terminó cada pieza. Devuelve true si algo cambió.
 export function fijarEstado(carro, id, estado, ahora = new Date().toISOString()) {
   if (!PIEZAS_POR_ID.has(id) || !ESTADOS.includes(estado)) return false;
   const actual = carro.piezas[id];
   if (actual && actual.estado === estado) return false;
-  carro.piezas[id] = { trabajo: TRABAJOS[0], ...actual, estado, desde: ahora };
+  carro.piezas[id] = { trabajo: TRABAJOS[0], pintor: '', ...actual, estado, desde: ahora };
   return true;
 }
 
@@ -160,7 +218,7 @@ export function fijarTrabajo(carro, id, trabajo, ahora = new Date().toISOString(
   if (!PIEZAS_POR_ID.has(id) || !TRABAJOS.includes(trabajo)) return false;
   const actual = carro.piezas[id];
   if (actual && actual.trabajo === trabajo) return false;
-  carro.piezas[id] = actual ? { ...actual, trabajo } : { estado: ESTADOS[0], desde: ahora, trabajo };
+  carro.piezas[id] = actual ? { ...actual, trabajo } : { estado: ESTADOS[0], desde: ahora, trabajo, pintor: '' };
   return true;
 }
 
@@ -281,6 +339,9 @@ export function abrirAlmacen({ indexedDB: fabrica = globalThis.indexedDB, nombre
         const fotos = bd.createObjectStore('fotos', { keyPath: 'id', autoIncrement: true });
         fotos.createIndex('placa', 'placa');
       }
+      if (!bd.objectStoreNames.contains('empleados')) {
+        bd.createObjectStore('empleados', { keyPath: 'id' });
+      }
     };
     peticion.onsuccess = () => resolver(crearAlmacen(peticion.result));
     peticion.onerror = () => rechazar(peticion.error || new Error('No se pudo abrir el registro'));
@@ -295,6 +356,7 @@ function crearAlmacen(bd) {
 
   const carros = (modo = 'readonly') => bd.transaction('carros', modo).objectStore('carros');
   const fotos = (modo = 'readonly') => bd.transaction('fotos', modo).objectStore('fotos');
+  const empleados = (modo = 'readonly') => bd.transaction('empleados', modo).objectStore('empleados');
 
   async function obtener(placa) {
     const clave = normalizarPlaca(placa);
@@ -388,6 +450,34 @@ function crearAlmacen(bd) {
     return lista.find((f) => f.pieza === PIEZA_CARRO) || null;
   }
 
+  // ---- Empleados ----
+
+  async function listarEmpleados() {
+    const todos = await pedir(empleados().getAll());
+    return todos.map((e) => crearEmpleado(e)).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  }
+
+  async function guardarEmpleado(empleado) {
+    const limpio = crearEmpleado(empleado);
+    if (!limpio.nombre) throw new Error('El empleado necesita un nombre');
+    await pedir(empleados('readwrite').put(limpio));
+    return limpio;
+  }
+
+  async function borrarEmpleado(id) {
+    await pedir(empleados('readwrite').delete(id));
+  }
+
+  // Quita de un tajo todo lo que entró como demostración: carros (con sus
+  // fotos) y empleados. Lo real no se toca.
+  async function quitarDemo() {
+    const carrosDemo = (await listar()).filter((c) => c.demo);
+    for (const c of carrosDemo) await borrar(c.placa);
+    const empleadosDemo = (await listarEmpleados()).filter((e) => e.demo);
+    for (const e of empleadosDemo) await borrarEmpleado(e.id);
+    return { carros: carrosDemo.length, empleados: empleadosDemo.length };
+  }
+
   return {
     obtener,
     guardar,
@@ -398,6 +488,10 @@ function crearAlmacen(bd) {
     listarFotos,
     borrarFoto,
     portada,
+    listarEmpleados,
+    guardarEmpleado,
+    borrarEmpleado,
+    quitarDemo,
     cerrar: () => bd.close(),
   };
 }

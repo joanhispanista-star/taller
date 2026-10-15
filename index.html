@@ -89,6 +89,19 @@
         <input id="datos-version" type="text" maxlength="40" autocomplete="off" placeholder="5 puestos, 2023">
       </label>
       <div id="datos-carrocerias" class="carrocerias" aria-label="Carrocería"></div>
+      <!-- La plata y la entrega: lo que se le cobró al cliente y cuándo
+           salió del taller. Con eso viven el Historial y los indicadores. -->
+      <div class="ficha-campos entrega">
+        <label class="campo">
+          <span>Cobro al cliente ($)</span>
+          <input id="datos-cobro" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+        </label>
+        <div class="campo">
+          <span>Entrega</span>
+          <button type="button" id="datos-entregar" class="boton-entregar">Marcar entregado</button>
+        </div>
+      </div>
+      <p class="ayuda" id="datos-entrega-nota"></p>
       <div class="acciones">
         <button type="button" data-accion="cancelar">Cancelar</button>
         <button type="button" data-accion="guardar" class="primario">Guardar</button>

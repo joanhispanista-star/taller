@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1e24">
+  <title>Taller de Pintura · Tablero</title>
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body class="pagina-garaje">
+  <header class="barra">
+    <a class="marca-app" href="garaje.html">‹ Garaje</a>
+    <span class="subtitulo" id="subtitulo">Tablero</span>
+  </header>
+
+  <!-- Las mismas pestañas que en el Garaje: la primera es un enlace a la
+       otra página; las otras tres cambian de sección aquí mismo, sin
+       recargar (los datos ya están leídos). -->
+  <nav class="pestanas" aria-label="Secciones">
+    <a href="garaje.html">Garaje</a>
+    <a href="tablero.html?p=empleados" data-pestana="empleados">Empleados</a>
+    <a href="tablero.html?p=historial" data-pestana="historial">Historial</a>
+    <a href="tablero.html?p=indicadores" data-pestana="indicadores">Indicadores</a>
+  </nav>
+
+  <main class="garaje tablero">
+    <p id="aviso" class="aviso" hidden></p>
+
+    <!-- ===== Empleados: la nómina de la semana ===== -->
+    <section id="empleados" class="pestana" hidden aria-label="Empleados">
+      <div class="semana">
+        <button type="button" id="semana-antes" aria-label="Semana anterior">‹</button>
+        <div class="semana-titulo">
+          <b id="semana-etiqueta"></b>
+          <button type="button" id="semana-hoy" class="enlace" hidden>Volver a esta semana</button>
+        </div>
+        <button type="button" id="semana-despues" aria-label="Semana siguiente">›</button>
+      </div>
+
+      <div class="tarjetas">
+        <div class="tarjeta destacada"><small>Por pagar</small><b id="nomina-total">$ 0</b></div>
+        <div class="tarjeta"><small>Piezas terminadas</small><b id="nomina-piezas">0</b></div>
+      </div>
+      <p class="ayuda">Cada pieza pintada que queda terminada paga <b>$ 90.000</b> al pintor que la tiene asignada (se asigna desde el chip de la pieza, en el 3D). La latonería y las piezas de interior se cuentan, pero su tarifa está por definir: aquí salen sin valor, no con uno inventado.</p>
+
+      <ul id="nomina" class="nomina"></ul>
+      <p id="nomina-vacia" class="vacio" hidden>Todavía no hay empleados. Agrega el primero abajo.</p>
+
+      <div id="sin-pintor" class="sin-pintor" hidden>
+        <h2>Terminadas sin pintor asignado</h2>
+        <p class="ayuda">Alguien las pintó y nadie las va a cobrar. Ábrelas en el 3D y asígnales el pintor desde el chip.</p>
+        <ul></ul>
+      </div>
+
+      <form id="nuevo-empleado" class="registro" autocomplete="off">
+        <label class="campo">
+          <span>Nuevo empleado</span>
+          <input id="empleado-nombre" type="text" maxlength="40" placeholder="Nombre">
+        </label>
+        <label class="campo campo-rol">
+          <span>Rol</span>
+          <select id="empleado-rol">
+            <option value="pintor">Pintor</option>
+            <option value="latonero">Latonero</option>
+            <option value="asistente">Asistente</option>
+          </select>
+        </label>
+        <button type="submit" class="primario">Agregar</button>
+      </form>
+    </section>
+
+    <!-- ===== Historial: los carros entregados y lo que se cobró ===== -->
+    <section id="historial" class="pestana" hidden aria-label="Historial">
+      <div class="tarjetas">
+        <div class="tarjeta"><small>Carros entregados</small><b id="hist-carros">0</b></div>
+        <div class="tarjeta destacada"><small>Cobrado en total</small><b id="hist-cobrado">$ 0</b></div>
+      </div>
+      <p class="ayuda">Un carro entra aquí cuando se marca entregado (botón <b>Entregar</b> en "Datos del carro", en el 3D), con lo que se le cobró al cliente. "Pintores" es lo que pagan sus piezas terminadas a $ 90.000; "queda" es la diferencia, sin contar materiales.</p>
+      <p id="hist-vacio" class="vacio" hidden>Todavía no hay carros entregados.</p>
+      <ul id="hist-lista" class="carros"></ul>
+    </section>
+
+    <!-- ===== Indicadores: todo junto, para el dueño ===== -->
+    <section id="indicadores" class="pestana" hidden aria-label="Indicadores">
+      <div class="rangos" role="group" aria-label="Período">
+        <button type="button" data-rango="semana">Esta semana</button>
+        <button type="button" data-rango="mes">Este mes</button>
+        <button type="button" data-rango="todo" aria-pressed="true">Todo</button>
+      </div>
+
+      <div class="tarjetas tres">
+        <div class="tarjeta"><small>En el taller</small><b id="ind-en-taller">0</b></div>
+        <div class="tarjeta"><small>Entregados</small><b id="ind-entregados">0</b></div>
+        <div class="tarjeta"><small>Piezas terminadas</small><b id="ind-terminadas">0</b></div>
+        <div class="tarjeta destacada"><small>Cobrado</small><b id="ind-cobrado">$ 0</b></div>
+        <div class="tarjeta"><small>Pagado a pintores</small><b id="ind-pagado">$ 0</b></div>
+        <div class="tarjeta"><small>Queda</small><b id="ind-margen">$ 0</b></div>
+      </div>
+      <p id="ind-nota" class="ayuda"></p>
+
+      <h2>Piezas terminadas por semana</h2>
+      <div id="serie-piezas" class="serie" role="img" aria-label="Piezas terminadas por semana"></div>
+      <h2>Cobrado por semana</h2>
+      <div id="serie-cobrado" class="serie" role="img" aria-label="Cobrado por semana"></div>
+
+      <h2>En el taller ahora</h2>
+      <p id="ind-taller-vacio" class="vacio" hidden>No hay carros en el taller.</p>
+      <ul id="ind-taller" class="carros"></ul>
+    </section>
+
+    <!-- La demostración: para ver las pestañas con algo adentro. Se dice
+         que es demostración y se quita en bloque. -->
+    <div id="demo" class="demo" hidden>
+      <p class="ayuda" id="demo-texto"></p>
+      <button type="button" id="demo-boton"></button>
+    </div>
+  </main>
+
+  <script type="module" src="js/tablero-pantalla.js"></script>
+</body>
+</html>

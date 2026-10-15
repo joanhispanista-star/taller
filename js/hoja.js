@@ -71,11 +71,19 @@ export function crearHoja(acciones) {
   let fotoAbierta = null;
   let piezaDelMenu = null;
   let carroceria = ''; // la del carro que se está pintando, para los nombres
+  let empleados = []; // los del taller, para asignar pintor desde el menú
+
+  function nombreDePintor(id) {
+    const e = empleados.find((x) => x.id === id);
+    // Solo el primer nombre: el chip ya lleva el nombre de la pieza.
+    return e ? e.nombre.split(/\s+/)[0] : '';
+  }
 
   // ---------- Chips ----------
 
-  function pintar({ carro, fotos = [], conRegistro = false }) {
+  function pintar({ carro, fotos = [], conRegistro = false, empleados: lista = [] }) {
     carroceria = carro.carroceria || '';
+    empleados = lista;
     const piezas = piezasDelCarro(carro).map((p) => ({ ...p, nombre: nombreDe(carroceria, p.id) }));
     const porPieza = new Map();
     for (const f of fotos) porPieza.set(f.pieza, (porPieza.get(f.pieza) || 0) + 1);
@@ -110,6 +118,14 @@ export function crearHoja(acciones) {
       const etiqueta = document.createElement('small');
       etiqueta.className = 'chip-trabajo';
       etiqueta.textContent = 'latonería';
+      estado.append(etiqueta);
+    }
+    // Quién la pinta: así la nómina de la semana sale sola.
+    const pintor = pieza.pintor ? nombreDePintor(pieza.pintor) : '';
+    if (pintor) {
+      const etiqueta = document.createElement('small');
+      etiqueta.className = 'chip-trabajo chip-pintor';
+      etiqueta.textContent = pintor;
       estado.append(etiqueta);
     }
     estado.addEventListener('click', () => {
@@ -168,6 +184,10 @@ export function crearHoja(acciones) {
         });
         return opcion;
       }),
+      separador.cloneNode(),
+      // Y al final, quién la pinta: los empleados activos (más el asignado,
+      // aunque esté retirado, para que no desaparezca de la vista).
+      ...opcionesDePintor(pieza),
     );
     ui.menu.hidden = false;
     // Encima del chip; si arriba no cabe, debajo. Y nunca por fuera de la
@@ -178,6 +198,37 @@ export function crearHoja(acciones) {
     const arriba = r.top - m.height - 6;
     ui.menu.style.left = x + 'px';
     ui.menu.style.top = (arriba >= 8 ? arriba : r.bottom + 6) + 'px';
+  }
+
+  function opcionesDePintor(pieza) {
+    const visibles = empleados.filter((e) => e.activo || e.id === pieza.pintor);
+    if (visibles.length === 0) {
+      // Sin empleados no hay a quién asignar: el menú lo dice y lleva a la
+      // pestaña donde se agregan, en vez de esconder la opción.
+      const ir = boton('menu-pintor sin-empleados', 'Pintor: agrega empleados', 'Agregar empleados');
+      ir.addEventListener('click', () => {
+        location.href = 'tablero.html?p=empleados';
+      });
+      return [ir];
+    }
+    const opciones = visibles.map((e) => {
+      const opcion = boton('menu-pintor', e.nombre, 'Pintor: ' + e.nombre);
+      opcion.setAttribute('role', 'menuitemradio');
+      opcion.setAttribute('aria-checked', String(e.id === pieza.pintor));
+      opcion.addEventListener('click', () => {
+        cerrarMenu();
+        acciones.alAsignarPintor(pieza.id, e.id);
+      });
+      return opcion;
+    });
+    const ninguno = boton('menu-pintor', 'Sin pintor', 'Sin pintor asignado');
+    ninguno.setAttribute('role', 'menuitemradio');
+    ninguno.setAttribute('aria-checked', String(!pieza.pintor));
+    ninguno.addEventListener('click', () => {
+      cerrarMenu();
+      acciones.alAsignarPintor(pieza.id, '');
+    });
+    return [...opciones, ninguno];
   }
 
   function cerrarMenu() {

@@ -105,3 +105,43 @@ test('cada pieza tiene su propio material, y resaltar solo cambia esa pieza', ()
   assert.equal(capo.material.color.getHex(), antes, 'al quitar la marca vuelve el color');
   assert.equal(capo.material.emissive.getHex(), 0);
 });
+
+test('la base de las puertas es una losa clara a la altura del estribo, dentro del vano, en los dos lados', () => {
+  const carro = construirCarro();
+  const d = carro.disposicion;
+  for (const lado of ['izq', 'der']) {
+    const base = carro.porId.get('base-puertas-' + lado);
+    assert.ok(base, 'falta la base ' + lado);
+    base.updateWorldMatrix(true, true);
+    const c = caja(base);
+    // Arriba del estribo por 6 mm (la chapa del umbral), y no más.
+    assert.ok(Math.abs(c.max.y - (d.estriboAlto + 0.006)) < 0.002, 'alto ' + c.max.y.toFixed(3) + ' vs estribo ' + d.estriboAlto.toFixed(3));
+    // Entre el marco (medio - 0.13) y el borde del estribo (medio).
+    const afuera = Math.max(Math.abs(c.min.x), Math.abs(c.max.x));
+    const adentro = Math.min(Math.abs(c.min.x), Math.abs(c.max.x));
+    assert.ok(afuera <= d.medio + 0.001 && adentro >= d.medio - 0.13, 'ancho ' + adentro.toFixed(3) + '..' + afuera.toFixed(3));
+    // A lo largo de las dos puertas.
+    assert.ok(Math.abs(c.min.z - d.puertaDel) < 0.02 && Math.abs(c.max.z - d.puertaTras) < 0.02);
+    // Es pieza de interior: más clara que la chapa.
+    const chapa = carro.porId.get('puerta-del-' + lado).material.color;
+    assert.ok(base.material.color.r >= chapa.r && base.material.color.g >= chapa.g, 'la base no es más clara');
+  }
+});
+
+test('la placa mide como la colombiana y es más clara que la chapa amarilla de antes', () => {
+  const carro = construirCarro({ placa: 'JRX 248' });
+  const placas = [];
+  carro.grupo.traverse((o) => {
+    if (o.name === 'placa') placas.push(o);
+  });
+  assert.equal(placas.length, 2);
+  for (const p of placas) {
+    const medida = p.geometry.parameters;
+    assert.ok(Math.abs(medida.width - 0.33) < 0.001 && Math.abs(medida.height - 0.15) < 0.001);
+    const material = Array.isArray(p.material) ? p.material[0] : p.material;
+    // Amarillo claro con luz propia: en Node no hay canvas, así que es el
+    // liso; en el navegador la cara del número lleva la textura.
+    assert.equal(material.color.getHexString(), 'ffd83d');
+    assert.ok(material.emissiveIntensity > 0, 'sin luz propia');
+  }
+});

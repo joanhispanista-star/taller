@@ -254,9 +254,9 @@ test('la SUV es más alta que el hatchback con el mismo dibujo', () => {
   assert.ok(suv.piso > hatch.piso && suv.cintura > hatch.cintura && suv.techo > hatch.techo && suv.radioRueda > hatch.radioRueda);
 });
 
-test('piezasDe devuelve las 27 piezas en el orden del catálogo con los nombres de la carrocería', () => {
+test('piezasDe devuelve las 29 piezas en el orden del catálogo con los nombres de la carrocería', () => {
   const lista = piezasDe('camioneta');
-  assert.equal(lista.length, 27);
+  assert.equal(lista.length, 29);
   assert.equal(lista.find((p) => p.id === 'vano-baul').nombre, 'Piso del platón');
   assert.equal(piezasDe('suv').find((p) => p.id === 'vano-baul').nombre, 'Vano de la compuerta');
   assert.deepEqual(

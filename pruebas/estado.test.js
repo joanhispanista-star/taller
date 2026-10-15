@@ -14,9 +14,9 @@ import {
   textoParaAsistente,
 } from '../js/estado.js';
 
-test('el catálogo tiene 27 piezas con id único y lados válidos', () => {
-  assert.equal(PIEZAS.length, 27);
-  assert.equal(new Set(PIEZAS.map((p) => p.id)).size, 27);
+test('el catálogo tiene 29 piezas con id único y lados válidos', () => {
+  assert.equal(PIEZAS.length, 29);
+  assert.equal(new Set(PIEZAS.map((p) => p.id)).size, 29);
   for (const p of PIEZAS) {
     assert.ok([null, 'izq', 'der'].includes(p.lado), p.id);
     assert.ok(p.nombre.length > 2, p.id);

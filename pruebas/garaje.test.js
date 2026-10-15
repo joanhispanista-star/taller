@@ -59,9 +59,9 @@ test('crearCarro normaliza la placa, recorta la marca y descarta piezas inventad
   assert.equal(carro.placa, 'ABC123');
   assert.equal(carro.marca.length, 40);
   assert.deepEqual(Object.keys(carro.piezas).sort(), ['capo', 'techo']);
-  assert.deepEqual(carro.piezas.capo, { estado: 'terminada', desde: AHORA, trabajo: 'pintura' });
+  assert.deepEqual(carro.piezas.capo, { estado: 'terminada', desde: AHORA, trabajo: 'pintura', pintor: '' });
   // Un estado inventado cae a pendiente y una fecha ausente toma la de ahora.
-  assert.deepEqual(carro.piezas.techo, { estado: 'pendiente', desde: DESPUES, trabajo: 'pintura' });
+  assert.deepEqual(carro.piezas.techo, { estado: 'pendiente', desde: DESPUES, trabajo: 'pintura', pintor: '' });
   assert.equal(carro.creado, DESPUES);
   assert.equal(carro.actualizado, DESPUES);
 });
@@ -69,24 +69,24 @@ test('crearCarro normaliza la placa, recorta la marca y descarta piezas inventad
 test('crearCarro entiende el borrador viejo del visor (seleccion como lista)', () => {
   const carro = crearCarro({ placa: 'XYZ789', marca: 'Renault Logan', seleccion: ['capo', 'estribo-izq', 'nada'] }, AHORA);
   assert.deepEqual(carro.piezas, {
-    capo: { estado: 'pendiente', desde: AHORA, trabajo: 'pintura' },
-    'estribo-izq': { estado: 'pendiente', desde: AHORA, trabajo: 'pintura' },
+    capo: { estado: 'pendiente', desde: AHORA, trabajo: 'pintura', pintor: '' },
+    'estribo-izq': { estado: 'pendiente', desde: AHORA, trabajo: 'pintura', pintor: '' },
   });
   assert.equal(carro.marca, 'Renault Logan');
 });
 
 test('cada pieza lleva su trabajo: solo pintura o latonería y pintura', () => {
-  const carro = crearCarro({ piezas: { capo: { estado: 'pendiente', trabajo: 'latoneria' }, techo: { estado: 'pendiente', trabajo: 'soldadura' } } }, AHORA);
+  const carro = crearCarro({ piezas: { capo: { estado: 'pendiente', trabajo: 'latoneria', pintor: '' }, techo: { estado: 'pendiente', trabajo: 'soldadura' } } }, AHORA);
   assert.equal(carro.piezas.capo.trabajo, 'latoneria');
   assert.equal(carro.piezas.techo.trabajo, 'pintura', 'un trabajo inventado cae a pintura');
   // Cambiar el trabajo no mueve la fecha ni el estado.
   fijarEstado(carro, 'capo', 'en-proceso', DESPUES);
   assert.equal(fijarTrabajo(carro, 'capo', 'pintura'), true);
-  assert.deepEqual(carro.piezas.capo, { estado: 'en-proceso', desde: DESPUES, trabajo: 'pintura' });
+  assert.deepEqual(carro.piezas.capo, { estado: 'en-proceso', desde: DESPUES, trabajo: 'pintura', pintor: '' });
   assert.equal(fijarTrabajo(carro, 'capo', 'pintura'), false, 'el mismo trabajo no es un cambio');
   // Sobre una pieza sin marcar, la marca pendiente con ese trabajo.
   assert.equal(fijarTrabajo(carro, 'baul', 'latoneria', AHORA), true);
-  assert.deepEqual(carro.piezas.baul, { estado: 'pendiente', desde: AHORA, trabajo: 'latoneria' });
+  assert.deepEqual(carro.piezas.baul, { estado: 'pendiente', desde: AHORA, trabajo: 'latoneria', pintor: '' });
   assert.equal(fijarTrabajo(carro, 'baul', 'soldadura'), false);
   assert.equal(fijarTrabajo(carro, 'aleron', 'latoneria'), false);
   // El estado conserva el trabajo, y el resumen cuenta la latonería.
@@ -140,7 +140,7 @@ test('crearCarro con nada da un carro vacío sin placa', () => {
 test('alternarPieza marca como pendiente, quita, e ignora piezas inventadas', () => {
   const carro = crearCarro();
   assert.equal(alternarPieza(carro, 'capo', AHORA), true);
-  assert.deepEqual(carro.piezas.capo, { estado: 'pendiente', desde: AHORA, trabajo: 'pintura' });
+  assert.deepEqual(carro.piezas.capo, { estado: 'pendiente', desde: AHORA, trabajo: 'pintura', pintor: '' });
   assert.equal(tienePieza(carro, 'capo'), true);
   assert.equal(alternarPieza(carro, 'capo'), false);
   assert.equal(tienePieza(carro, 'capo'), false);
@@ -151,7 +151,7 @@ test('alternarPieza marca como pendiente, quita, e ignora piezas inventadas', ()
 test('fijarEstado cambia estado y fecha; marca la pieza si no estaba; rechaza lo inventado', () => {
   const carro = crearCarro({ piezas: { capo: { estado: 'pendiente', desde: AHORA } } }, AHORA);
   assert.equal(fijarEstado(carro, 'capo', 'en-proceso', DESPUES), true);
-  assert.deepEqual(carro.piezas.capo, { estado: 'en-proceso', desde: DESPUES, trabajo: 'pintura' });
+  assert.deepEqual(carro.piezas.capo, { estado: 'en-proceso', desde: DESPUES, trabajo: 'pintura', pintor: '' });
   // El mismo estado otra vez no cuenta como cambio (y no mueve la fecha).
   assert.equal(fijarEstado(carro, 'capo', 'en-proceso', '2026-10-16T00:00:00.000Z'), false);
   assert.equal(carro.piezas.capo.desde, DESPUES);
@@ -322,9 +322,9 @@ test('guardar conserva el estado de cada pieza y listar ordena por actualizació
     ['NUE222', 'VIE111'],
   );
   assert.deepEqual(lista[0].piezas, {
-    capo: { estado: 'en-proceso', desde: AHORA, trabajo: 'pintura' },
-    techo: { estado: 'terminada', desde: AHORA, trabajo: 'pintura' },
-    baul: { estado: 'pendiente', desde: AHORA, trabajo: 'pintura' },
+    capo: { estado: 'en-proceso', desde: AHORA, trabajo: 'pintura', pintor: '' },
+    techo: { estado: 'terminada', desde: AHORA, trabajo: 'pintura', pintor: '' },
+    baul: { estado: 'pendiente', desde: AHORA, trabajo: 'pintura', pintor: '' },
   });
   assert.equal(lista[0].actualizado, DESPUES);
   // guardar también deja la fecha en el objeto que se le pasó.

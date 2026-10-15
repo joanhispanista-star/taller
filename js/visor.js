@@ -17,9 +17,11 @@ import { CLAVE_GUARDADO, formatearPlaca, normalizarPlaca, textoParaAsistente } f
 import {
   abrirAlmacen,
   alternarPieza,
+  asignarPintor,
   crearCarro,
   deserializarCarro,
   estadoParaOrden,
+  fechaCorta,
   fijarEstado,
   fijarTrabajo,
   nombreCompletoDelCarro,
@@ -84,6 +86,7 @@ const ui = {
 let carro = cargarBorrador();
 let fotos = [];
 let almacen = null; // null hasta que abra; si no abre, se sigue con el borrador
+let empleados = []; // los del taller, para asignar pintor a cada pieza
 
 function cargarBorrador() {
   try {
@@ -217,9 +220,15 @@ function reconstruirModelo() {
   if (firma === firmaModelo) return;
   escena.remove(modelo.grupo);
   // Liberar la GPU: cada carro son unas cuarenta geometrías y materiales.
+  // La placa con número lleva un material por cara (una lista): dispose
+  // sobre la lista reventaba al cambiar de carro con la placa puesta.
   modelo.grupo.traverse((objeto) => {
     if (objeto.geometry) objeto.geometry.dispose();
-    if (objeto.material) objeto.material.dispose();
+    const materiales = Array.isArray(objeto.material) ? objeto.material : objeto.material ? [objeto.material] : [];
+    for (const material of materiales) {
+      if (material.map) material.map.dispose();
+      material.dispose();
+    }
   });
   modelo = construirCarro(opcionesDelModelo());
   firmaModelo = firma;
@@ -517,6 +526,14 @@ function fijarTrabajoDe(id, trabajo) {
   pintarHoja();
 }
 
+function asignarPintorDe(id, pintor) {
+  if (!modelo.porId.has(id) || !asignarPintor(carro, id, pintor)) return;
+  tenir(id);
+  pedirCuadro();
+  persistir();
+  pintarHoja();
+}
+
 function aplicarSeleccion() {
   for (const malla of modelo.seleccionables) tenir(malla.userData.piezaId);
   pedirCuadro();
@@ -528,6 +545,7 @@ const hoja = crearHoja({
   alAlternar: alternar,
   alFijarEstado: fijar,
   alFijarTrabajo: fijarTrabajoDe,
+  alAsignarPintor: asignarPintorDe,
   alAgregarFoto: agregarFoto,
   alBorrarFoto: borrarFoto,
 });
@@ -546,7 +564,7 @@ ui.datos.addEventListener('click', () => fichaCarro.abrir(carro));
 ui.ficha.addEventListener('click', () => fichaCarro.abrir(carro));
 
 function pintarHoja() {
-  hoja.pintar({ carro, fotos, conRegistro: Boolean(carro.placa && almacen) });
+  hoja.pintar({ carro, fotos, empleados, conRegistro: Boolean(carro.placa && almacen) });
   const hayPiezas = Object.keys(carro.piezas).length > 0;
   ui.enviar.disabled = !hayPiezas;
   ui.limpiar.disabled = !hayPiezas;
@@ -564,7 +582,10 @@ function pintarFicha() {
   }
   const tipo = CARROCERIAS[normalizarCarroceria(carro.carroceria || 'sedan')].nombre;
   const largo = carro.medidas && carro.medidas.largo ? (carro.medidas.largo / 1000).toFixed(2).replace('.', ',') + ' m' : '';
-  ui.ficha.textContent = [nombre, tipo, largo].filter(Boolean).join(' · ') + ' · carrocería de referencia';
+  // Un carro entregado lo dice aquí arriba: lo que se le marque ya no
+  // entra en la nómina como trabajo nuevo sin que alguien se dé cuenta.
+  const entrega = carro.entregado ? 'entregado ' + fechaCorta(carro.entregado) : '';
+  ui.ficha.textContent = [nombre, tipo, largo, entrega].filter(Boolean).join(' · ') + ' · carrocería de referencia';
   ui.ficha.hidden = false;
 }
 
@@ -770,6 +791,7 @@ pintarFicha();
 async function arrancar() {
   try {
     almacen = await abrirAlmacen();
+    empleados = await almacen.listarEmpleados();
   } catch (e) {
     hoja.avisar('Este navegador no guarda el registro (' + e.message + '). El carro queda solo como borrador.');
   }
@@ -802,6 +824,10 @@ window.__visor = {
   alternar,
   fijar,
   fijarTrabajo: fijarTrabajoDe,
+  asignarPintor: asignarPintorDe,
+  get empleados() {
+    return empleados;
+  },
   abrirPieza,
   abrirDatos: () => fichaCarro.abrir(carro),
   agregarFoto,
