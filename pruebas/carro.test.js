@@ -57,6 +57,37 @@ test('las piezas están donde dice su nombre', () => {
   assert.ok(centro('estribo-der').y < centro('puerta-del-der').y, 'el estribo va debajo de la puerta');
 });
 
+// Qué se ve primero mirando el carro en línea recta desde un punto.
+function primeroQueSeVe(grupo, origen, direccion) {
+  grupo.updateMatrixWorld(true);
+  const rayo = new THREE.Raycaster(new THREE.Vector3(...origen), new THREE.Vector3(...direccion).normalize());
+  const cruces = rayo.intersectObject(grupo, true);
+  return cruces.length ? cruces[0].object : null;
+}
+
+test('placas, parrilla y faros asoman por fuera de los bómperes', () => {
+  const { grupo } = construirCarro();
+  const deFrente = (x, y) => primeroQueSeVe(grupo, [x, y, -6], [0, 0, 1]);
+  const deAtras = (x, y) => primeroQueSeVe(grupo, [x, y, 6], [0, 0, -1]);
+  assert.equal(deFrente(0, 0.52).name, 'parrilla');
+  assert.equal(deFrente(0, 0.40).name, 'placa');
+  assert.equal(deFrente(0.60, 0.72).name, 'luz', 'faro derecho');
+  assert.equal(deFrente(-0.60, 0.72).name, 'luz', 'faro izquierdo');
+  assert.equal(deAtras(0, 0.60).name, 'placa');
+  assert.equal(deAtras(0.60, 0.89).name, 'luz', 'stop derecho');
+  // Y donde no hay accesorio sigue viéndose el bómper, no un hueco.
+  assert.equal(deFrente(0.85, 0.45).name, 'bomper-del');
+});
+
+test('el bloque de las sillas no asoma a través del parabrisas', () => {
+  const { grupo } = construirCarro();
+  for (const y of [1.0, 1.1, 1.2, 1.3]) {
+    const primero = primeroQueSeVe(grupo, [0, y, -6], [0, 0, 1]);
+    assert.ok(primero, 'algo a la altura ' + y);
+    assert.notEqual(primero.name, 'interior', 'a ' + y + ' m se ve el interior antes que el vidrio');
+  }
+});
+
 test('cada pieza tiene su propio material, y resaltar solo cambia esa pieza', () => {
   const carro = construirCarro({ colorBase: 0xcfd4da });
   const materiales = new Set(carro.seleccionables.map((m) => m.material));

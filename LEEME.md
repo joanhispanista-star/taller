@@ -45,10 +45,18 @@ como evidencia por pieza (ver plan), no como fuente del 3D.
   y aparece en la lista de abajo. Otro toque (o la × de la lista) la quita.
 - Placa y marca del carro, y la selección, quedan guardadas en el teléfono:
   si se cierra la página no se pierde lo marcado.
-- **Enviar al asistente** abre la hoja de compartir del teléfono (WhatsApp
-  está ahí) con la orden escrita: carro, cantidad y lista numerada de piezas.
-  No hay cuenta ni servidor todavía; el canal que ya tiene el asistente es
-  WhatsApp, así que ese es el canal.
+- **Enviar al asistente** manda la orden escrita (carro, cantidad y lista
+  numerada de piezas) por WhatsApp. No hay cuenta ni servidor todavía; el
+  canal que ya tiene el asistente es WhatsApp, así que ese es el canal.
+  Detalle honesto: la hoja de compartir del teléfono solo existe por
+  **https** (cuando la app esté publicada); abierta por http en la red
+  Wi-Fi del taller, el botón abre WhatsApp directo (wa.me) con el mismo
+  texto.
+- Cambiar a **otra** placa es otro carro: se limpian las piezas marcadas y
+  la marca. Ponerle placa a un carro recién marcado no limpia nada.
+- El estribo y el espejo miden 14 px en la pantalla de un celular; un dedo
+  cubre 40. Por eso el toque lanza un anillo de rayos del tamaño de la yema
+  y, si alguno cae en una pieza delgada, esa gana (`js/toque.js`).
 
 ## Cómo abrirlo
 
@@ -68,7 +76,7 @@ npm run celular
 El servidor imprime la dirección `http://192.168.x.x:8310/` para abrirla en
 el teléfono. Windows puede pedir permiso al firewall la primera vez.
 
-Pruebas (16, en Node, sin navegador):
+Pruebas (26, en Node, sin navegador):
 
 ```bash
 npm test
@@ -83,10 +91,11 @@ npm test
 | `js/piezas.js` | El catálogo de piezas. Sin Three.js: lo usarán el registro y la nómina. |
 | `js/estado.js` | Qué carro es y qué piezas están marcadas; el texto para el asistente; guardar y cargar. Lógica pura, probada en Node. |
 | `js/carro.js` | El sedán, pieza por pieza, construido con perfiles extruidos. Cada pieza es un objeto aparte con su propio material. Sin DOM: también se construye en Node para probarlo. |
+| `js/toque.js` | Qué pieza hay bajo el dedo: rayo central más un anillo de ocho para que estribos y espejos se dejen tocar. Sin DOM, probado con la cámara y el carro reales. |
 | `js/visor.js` | Escena, luces, cámara, giro con el dedo, el toque que marca, la lista y el botón de enviar. |
 | `js/vendor/` | Three.js 0.169 copiado de npm (tres archivos). No se edita. Así la app no depende de internet ni de que cambie la versión. |
 | `herramientas/servidor.js` | Servidor estático sin dependencias; los módulos de JavaScript no cargan desde `file://`. |
-| `pruebas/` | `estado.test.js` (lógica) y `carro.test.js` (que el carro tenga las 17 piezas, mida como un sedán y sea simétrico). |
+| `pruebas/` | `estado.test.js` (lógica), `carro.test.js` (17 piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio) y `toque.test.js` (el dedo sobre el estribo y el espejo). |
 
 Decisiones que conviene conocer:
 
@@ -138,6 +147,11 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
   de la app. Las pruebas por JavaScript sí corren.
 - `node --test pruebas/` no funciona en Node 22 (toma la carpeta como
   archivo). Es `node --test` a secas, que busca `*.test.js` solo.
-- El estado guardado no sabe de carros: cambiar la placa no limpia la
-  selección. Es correcto hoy (un carro a la vez); el registro de la semana
-  del 19 lo vuelve por carro.
+- El servidor no se recarga solo: si se edita `herramientas/servidor.js`
+  hay que pararlo y volverlo a arrancar. La primera versión moría con una
+  URL mal formada (`/%`) y la prueba la hizo contra el proceso viejo.
+- Al volver de WhatsApp, Android puede haber tirado el contexto WebGL. El
+  visor lo recupera (regenera el entorno y pide un cuadro); si alguna vez
+  el carro vuelve negro, es ahí donde hay que mirar.
+- La inercia del giro se frena tocando la pantalla; ese toque no marca
+  nada. Es a propósito (si no, marcaba la pieza que pasaba bajo el dedo).

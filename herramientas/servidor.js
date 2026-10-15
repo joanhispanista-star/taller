@@ -29,7 +29,23 @@ const TIPOS = {
 
 http
   .createServer((peticion, respuesta) => {
-    let ruta = decodeURIComponent(new URL(peticion.url, 'http://x').pathname);
+    // Una URL mal formada ("/%" o "/%E0") hace que decodeURIComponent
+    // lance, y con --red cualquier aparato de la Wi-Fi puede mandarla: sin
+    // esta captura tumbaba el servidor entero. El byte nulo, además, hace
+    // lanzar a fs.readFile.
+    let ruta;
+    try {
+      ruta = decodeURIComponent(new URL(peticion.url, 'http://x').pathname);
+    } catch {
+      respuesta.writeHead(400);
+      respuesta.end();
+      return;
+    }
+    if (ruta.includes(String.fromCharCode(0))) {
+      respuesta.writeHead(400);
+      respuesta.end();
+      return;
+    }
     if (ruta.endsWith('/')) ruta += 'index.html';
     const archivo = path.join(RAIZ, path.normalize(ruta));
     if (!archivo.startsWith(RAIZ)) {

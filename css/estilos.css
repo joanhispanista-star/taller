@@ -104,9 +104,13 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
   gap: 6px;
   flex-wrap: wrap;
   padding: 0 8px;
+  /* La franja va de borde a borde sobre el lienzo; su espacio vacío tiene
+     que dejar pasar el dedo al carro (llantas, estribos, bómper). */
+  pointer-events: none;
 }
 
 .vistas button {
+  pointer-events: auto;
   background: rgba(36, 42, 50, 0.88);
   border: 1px solid var(--borde);
   color: var(--texto);

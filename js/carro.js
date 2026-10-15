@@ -84,7 +84,12 @@ function materialVidrio() {
 // extruye a lo ancho. `xDesde` es la cara exterior de la pieza y la pieza
 // crece hacia -X `grosor` metros. La misma función sirve para una puerta
 // de 8 cm y para el capó, que cruza el carro entero.
-function extruirPerfil(dibujar, { xDesde, grosor, bisel = BISEL, material }) {
+//
+// El bisel agranda el perfil hacia afuera `bisel` metros (en los paneles
+// finos ya está descontado en H). Con `biselHaciaAdentro` el bisel se
+// labra hacia adentro y el cuerpo coincide con el perfil dibujado: lo usan
+// los bómperes, cuyo bisel de 3 cm se tragaba las placas y la parrilla.
+function extruirPerfil(dibujar, { xDesde, grosor, bisel = BISEL, biselHaciaAdentro = false, material }) {
   const forma = new THREE.Shape();
   dibujar(forma);
   const geometria = new THREE.ExtrudeGeometry(forma, {
@@ -92,7 +97,7 @@ function extruirPerfil(dibujar, { xDesde, grosor, bisel = BISEL, material }) {
     bevelEnabled: bisel > 0,
     bevelThickness: bisel,
     bevelSize: bisel,
-    bevelOffset: 0,
+    bevelOffset: biselHaciaAdentro ? -bisel : 0,
     bevelSegments: 2,
     curveSegments: 18,
   });
@@ -264,18 +269,27 @@ function pilar(x, s1, y1, s2, y2) {
   return malla;
 }
 
-function luz(x, y, z, ancho, alto, color) {
+// `inclinacion` (radianes sobre X) acuesta la luz o la placa sobre la cara
+// inclinada del bómper, para que no quede flotando por arriba ni enterrada
+// por abajo.
+function luz(x, y, z, ancho, alto, color, inclinacion = 0) {
   const material = new THREE.MeshStandardMaterial({
     color,
     emissive: color,
     emissiveIntensity: 0.9,
     roughness: 0.2,
   });
-  return caja(ancho, alto, 0.05, material, x, y, z);
+  const malla = caja(ancho, alto, 0.05, material, x, y, z);
+  malla.rotation.x = inclinacion;
+  malla.name = 'luz';
+  return malla;
 }
 
-function placa(x, y, z) {
-  return caja(0.34, 0.13, 0.02, new THREE.MeshStandardMaterial({ color: 0xf2e9b4, roughness: 0.6 }), x, y, z);
+function placa(x, y, z, inclinacion = 0) {
+  const malla = caja(0.34, 0.13, 0.02, new THREE.MeshStandardMaterial({ color: 0xf2e9b4, roughness: 0.6 }), x, y, z);
+  malla.rotation.x = inclinacion;
+  malla.name = 'placa';
+  return malla;
 }
 
 // Cambia la tinta de una pieza marcada. `acento` en null la devuelve a su
@@ -321,15 +335,18 @@ export function construirCarro({ colorBase = 0xcfd4da } = {}) {
     registrar(id, extruirPerfil(perfil, { xDesde, grosor: CHAPA, material: materialPintura(base) }));
   }
 
-  function panelAncho(id, perfil, { bisel = BISEL, ancho = ANCHO } = {}) {
-    registrar(id, extruirPerfil(perfil, { xDesde: ancho / 2, grosor: ancho, bisel, material: materialPintura(base) }));
+  function panelAncho(id, perfil, { bisel = BISEL, biselHaciaAdentro = false, ancho = ANCHO } = {}) {
+    registrar(
+      id,
+      extruirPerfil(perfil, { xDesde: ancho / 2, grosor: ancho, bisel, biselHaciaAdentro, material: materialPintura(base) }),
+    );
   }
 
   panelAncho('capo', perfilCapo);
   panelAncho('techo', perfilTecho, { ancho: 1.76 });
   panelAncho('baul', perfilBaul);
-  panelAncho('bomper-del', perfilBomperDelantero, { bisel: 0.03 });
-  panelAncho('bomper-tras', perfilBomperTrasero, { bisel: 0.03 });
+  panelAncho('bomper-del', perfilBomperDelantero, { bisel: 0.03, biselHaciaAdentro: true });
+  panelAncho('bomper-tras', perfilBomperTrasero, { bisel: 0.03, biselHaciaAdentro: true });
 
   for (const lado of ['izq', 'der']) {
     panelLateral('guardafango-del-' + lado, perfilGuardafangoDelantero, lado);
@@ -352,22 +369,33 @@ export function construirCarro({ colorBase = 0xcfd4da } = {}) {
   }
 
   // Vidrio y bloques interiores (no se pintan, no se seleccionan).
-  grupo.add(extruirPerfil(perfilVidrio, { xDesde: ANCHO_VIDRIO / 2, grosor: ANCHO_VIDRIO, bisel: 0, material: materialVidrio() }));
+  const vidrio = extruirPerfil(perfilVidrio, { xDesde: ANCHO_VIDRIO / 2, grosor: ANCHO_VIDRIO, bisel: 0, material: materialVidrio() });
+  vidrio.name = 'vidrio';
+  grupo.add(vidrio);
   grupo.add(extruirPerfil(perfilNucleoDelantero, { xDesde: ANCHO_NUCLEO / 2, grosor: ANCHO_NUCLEO, bisel: 0, material: materialNegro() }));
   grupo.add(caja(ANCHO_NUCLEO, 0.94 - RADIO_RUEDA, BAUL_DEL - CAPO_TRAS, materialNegro(), 0, (0.94 + RADIO_RUEDA) / 2, (BAUL_DEL + CAPO_TRAS) / 2));
   grupo.add(caja(ANCHO_NUCLEO, 0.81 - RADIO_RUEDA, BOMPER_TRAS - BAUL_DEL, materialNegro(), 0, (0.81 + RADIO_RUEDA) / 2, (BOMPER_TRAS + BAUL_DEL) / 2));
   // Sillas y tablero: un bloque oscuro dentro de la cabina para que el
-  // vidrio no deje ver un carro hueco.
-  grupo.add(caja(1.44, 0.27, 1.6, materialNegro(), 0, CINTURA + 0.135, 0.6));
+  // vidrio no deje ver un carro hueco. Cabe entero bajo la pendiente del
+  // parabrisas (tope en 1,17 m; el vidrio a esa Z va por 1,24 m): un bloque
+  // más alto asomaba como una franja negra a través del vidrio.
+  const interior = caja(1.44, 0.22, 1.5, materialNegro(), 0, CINTURA + 0.11, 0.65);
+  interior.name = 'interior';
+  grupo.add(interior);
 
-  // Luces, parrilla y placas.
-  grupo.add(luz(-0.60, 0.75, -2.21, 0.42, 0.11, 0xfff1cc));
-  grupo.add(luz(0.60, 0.75, -2.21, 0.42, 0.11, 0xfff1cc));
-  grupo.add(caja(0.72, 0.18, 0.04, materialNegro(), 0, 0.52, -2.245));
-  grupo.add(placa(0, 0.36, -2.235));
-  grupo.add(luz(-0.60, 0.89, BAUL_TRAS, 0.38, 0.09, 0xe0262e));
-  grupo.add(luz(0.60, 0.89, BAUL_TRAS, 0.38, 0.09, 0xe0262e));
-  grupo.add(placa(0, 0.60, 2.245));
+  // Luces, parrilla y placas, acostadas sobre la cara del bómper que las
+  // lleva. Las de adelante van sobre caras inclinadas (30° la de los faros,
+  // 27° la de la placa); las de atrás sobre caras casi verticales.
+  const inclinacionFaro = Math.atan2(0.08, 0.14);
+  grupo.add(luz(-0.60, 0.725, -2.215, 0.42, 0.11, 0xfff1cc, inclinacionFaro));
+  grupo.add(luz(0.60, 0.725, -2.215, 0.42, 0.11, 0xfff1cc, inclinacionFaro));
+  const parrilla = caja(0.72, 0.18, 0.04, materialNegro(), 0, 0.52, -2.265);
+  parrilla.name = 'parrilla';
+  grupo.add(parrilla);
+  grupo.add(placa(0, 0.40, -2.255, -Math.atan2(0.05, 0.10)));
+  grupo.add(luz(-0.60, 0.89, 2.055, 0.38, 0.09, 0xe0262e));
+  grupo.add(luz(0.60, 0.89, 2.055, 0.38, 0.09, 0xe0262e));
+  grupo.add(placa(0, 0.60, 2.257));
 
   return { grupo, seleccionables, porId };
 }

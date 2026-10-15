@@ -17,7 +17,10 @@
     <div class="marca-app">Taller de Pintura</div>
     <label class="campo">
       <span>Placa</span>
-      <input id="placa" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" maxlength="6" placeholder="ABC123">
+      <!-- Sin maxlength: una placa pegada como "ABC-123" se cortaría a
+           "ABC-12" antes de limpiarla. La limpieza (6 caracteres) la hace
+           el código al salir del campo. -->
+      <input id="placa" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" placeholder="ABC123">
     </label>
     <label class="campo">
       <span>Marca</span>

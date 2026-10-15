@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { PIEZAS, PIEZAS_POR_ID, nombreDePieza } from '../js/piezas.js';
 import {
   alternarPieza,
+  cambiarPlaca,
   crearEstado,
   deserializar,
   limpiarSeleccion,
@@ -46,6 +47,35 @@ test('limpiarSeleccion deja el carro sin marcas', () => {
   const estado = crearEstado({ seleccion: ['capo', 'techo'] });
   limpiarSeleccion(estado);
   assert.equal(estado.seleccion.size, 0);
+});
+
+test('ponerle placa a un carro recién marcado no borra las marcas', () => {
+  const estado = crearEstado({ marca: 'Kia Picanto', seleccion: ['capo'] });
+  assert.equal(cambiarPlaca(estado, 'abc-123'), false);
+  assert.equal(estado.placa, 'ABC123');
+  assert.deepEqual([...estado.seleccion], ['capo']);
+  assert.equal(estado.marca, 'Kia Picanto');
+});
+
+test('escribir la misma placa de otra forma no cambia nada', () => {
+  const estado = crearEstado({ placa: 'ABC123', seleccion: ['capo'] });
+  assert.equal(cambiarPlaca(estado, 'abc 123'), false);
+  assert.deepEqual([...estado.seleccion], ['capo']);
+});
+
+test('cambiar a otra placa es otro carro: se limpian marcas y marca', () => {
+  const estado = crearEstado({ placa: 'ABC123', marca: 'Chevrolet Onix', seleccion: ['capo', 'puerta-del-izq'] });
+  assert.equal(cambiarPlaca(estado, 'XYZ789'), true);
+  assert.equal(estado.placa, 'XYZ789');
+  assert.equal(estado.seleccion.size, 0);
+  assert.equal(estado.marca, '');
+  assert.match(textoParaAsistente(estado), /placa XYZ789/);
+  assert.doesNotMatch(textoParaAsistente(estado), /Onix|Capó/);
+});
+
+test('cambiar de placa sin nada marcado no reporta limpieza', () => {
+  const estado = crearEstado({ placa: 'ABC123' });
+  assert.equal(cambiarPlaca(estado, 'XYZ789'), false);
 });
 
 test('normalizarPlaca limpia lo que escribe la persona', () => {

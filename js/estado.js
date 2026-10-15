@@ -36,6 +36,22 @@ export function limpiarSeleccion(estado) {
   estado.seleccion.clear();
 }
 
+// Cambiar a OTRA placa es cambiar de carro: las piezas marcadas y la marca
+// eran del anterior y se limpian (si no, la orden del XYZ789 saldría con el
+// capó del ABC123). Pasar de "sin placa" a una placa no limpia nada: es el
+// dueño poniéndole nombre al carro que acaba de marcar. Devuelve true si
+// limpió algo.
+export function cambiarPlaca(estado, texto) {
+  const nueva = normalizarPlaca(texto);
+  const otroCarro = estado.placa !== '' && nueva !== estado.placa;
+  estado.placa = nueva;
+  if (!otroCarro) return false;
+  const habiaAlgo = estado.seleccion.size > 0 || estado.marca !== '';
+  estado.seleccion.clear();
+  estado.marca = '';
+  return habiaAlgo;
+}
+
 // Placas colombianas: tres letras y tres números en carros (ABC123), tres
 // letras, dos números y una letra en motos (ABC12D). Aquí solo se limpia lo
 // que escribe la persona; la validación estricta llega con el registro.

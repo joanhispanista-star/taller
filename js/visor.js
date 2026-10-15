@@ -3,14 +3,14 @@ import * as THREE from 'three';
 import { OrbitControls } from './vendor/OrbitControls.js';
 import { RoomEnvironment } from './vendor/RoomEnvironment.js';
 import { construirCarro, resaltar } from './carro.js';
-import { nombreDePieza } from './piezas.js';
+import { piezaTocada } from './toque.js';
 import {
   CLAVE_GUARDADO,
   alternarPieza,
+  cambiarPlaca,
   crearEstado,
   deserializar,
   limpiarSeleccion,
-  normalizarPlaca,
   piezasSeleccionadas,
   serializar,
   textoParaAsistente,
@@ -86,13 +86,28 @@ renderizador.toneMappingExposure = 1.05;
 
 const escena = new THREE.Scene();
 escena.background = new THREE.Color(0x1a1e24);
-{
-  // Un "cuarto" de luz suave reflejado en la pintura: es lo que hace que la
-  // chapa se vea como metal pintado y no como plástico mate.
+
+// Un "cuarto" de luz suave reflejado en la pintura: es lo que hace que la
+// chapa se vea como metal pintado y no como plástico mate.
+function crearEntorno() {
+  if (escena.environment) escena.environment.dispose();
   const pmrem = new THREE.PMREMGenerator(renderizador);
   escena.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   pmrem.dispose();
 }
+crearEntorno();
+
+// En Android, al irse a WhatsApp y volver, Chrome puede haber tirado el
+// contexto WebGL: three.js lo recupera, pero el entorno (una textura
+// dibujada en la GPU) se pierde y nadie pide un cuadro nuevo. Sin esto el
+// carro volvía negro o mate hasta que la persona arrastrara.
+ui.lienzo.addEventListener('webglcontextrestored', () => {
+  crearEntorno();
+  pedirCuadro();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') pedirCuadro();
+});
 escena.add(new THREE.HemisphereLight(0xffffff, 0x3a4048, 0.45));
 const sol = new THREE.DirectionalLight(0xffffff, 1.1);
 sol.position.set(3, 6, -4);
@@ -150,12 +165,14 @@ function crearPiso() {
 // arrancar, y `let` no existe hasta su línea (la primera versión reventaba
 // aquí en cualquier pantalla con tamaño, y solo se vio en una prueba).
 let cuadroPedido = true;
+let enMovimiento = false; // la cámara cambió en el último cuadro (giro o inercia)
 function pedirCuadro() {
   cuadroPedido = true;
 }
 function bucle() {
   requestAnimationFrame(bucle);
   const seMovio = controles.update();
+  enMovimiento = seMovio;
   if (seMovio || cuadroPedido) {
     cuadroPedido = false;
     renderizador.render(escena, camara);
@@ -177,21 +194,25 @@ ajustarTamano();
 
 // ---------- Tocar una pieza ----------
 
-const rayo = new THREE.Raycaster();
-const puntero = new THREE.Vector2();
-
+// Devuelve el id de la pieza bajo el dedo, o null (la lógica del anillo de
+// rayos vive en toque.js, donde se prueba con la cámara y el carro reales).
 function piezaBajo(xPantalla, yPantalla) {
   const r = ui.lienzo.getBoundingClientRect();
-  puntero.x = ((xPantalla - r.left) / r.width) * 2 - 1;
-  puntero.y = -((yPantalla - r.top) / r.height) * 2 + 1;
-  rayo.setFromCamera(puntero, camara);
-  // Se cruza con TODO el carro, no solo con las piezas pintables: si el
-  // vidrio o una llanta están delante, el toque no debe "atravesarlos" y
-  // marcar la puerta que hay detrás.
-  const cruces = rayo.intersectObject(carro.grupo, true);
-  if (cruces.length === 0) return null;
-  const objeto = cruces[0].object;
-  return objeto.userData.piezaId ? objeto : null;
+  return piezaTocada({
+    camara,
+    grupo: carro.grupo,
+    x: xPantalla - r.left,
+    y: yPantalla - r.top,
+    ancho: r.width,
+    alto: r.height,
+  });
+}
+
+// _sphericalDelta es la inercia interna de OrbitControls 0.169 (js/vendor).
+// Si una versión futura lo renombra, el freno deja de actuar pero nada se
+// rompe: por eso la comprobación.
+function frenarInercia() {
+  if (controles._sphericalDelta) controles._sphericalDelta.set(0, 0, 0);
 }
 
 // Un toque es un dedo que baja y sube casi en el mismo sitio y rápido;
@@ -200,11 +221,22 @@ let toque = null;
 let dedos = 0;
 ui.lienzo.addEventListener('pointerdown', (e) => {
   dedos += 1;
+  // Si un botón de vista tiene la cámara en camino, el dedo manda: la
+  // animación termina ya y el arrastre se atiende al instante.
+  if (animacionActiva) terminarAnimacion();
+  // Si el carro venía girando por inercia, este dedo es para frenarlo, no
+  // para marcar lo que pasaba por debajo: se corta la inercia y el toque
+  // no cuenta.
+  if (enMovimiento) {
+    frenarInercia();
+    toque = null;
+    return;
+  }
   toque = dedos === 1 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null;
 });
 ui.lienzo.addEventListener('pointerup', (e) => {
   dedos = Math.max(0, dedos - 1);
-  if (!toque) return;
+  if (!toque || !controles.enabled) return;
   const { x, y, t } = toque;
   toque = null;
   if (Math.hypot(e.clientX - x, e.clientY - y) < 10 && performance.now() - t < 400) {
@@ -217,9 +249,9 @@ ui.lienzo.addEventListener('pointercancel', () => {
 });
 
 function alTocar(x, y) {
-  const malla = piezaBajo(x, y);
-  if (!malla) return;
-  alternar(malla.userData.piezaId);
+  const id = piezaBajo(x, y);
+  if (!id) return;
+  alternar(id);
   ui.pista.hidden = true;
 }
 
@@ -276,9 +308,11 @@ ui.limpiar.addEventListener('click', () => {
 });
 
 // Sin cuenta ni servidor todavía, el canal que ya tiene el asistente es
-// WhatsApp: la hoja de compartir del teléfono (o wa.me si no existe) lleva
-// la lista tal cual. Cuando haya registro en la nube, esto será un aviso
-// dentro de la app además del mensaje.
+// WhatsApp. La hoja de compartir del teléfono (navigator.share) solo existe
+// por https o en localhost: cuando la app esté publicada aparece la hoja
+// con WhatsApp dentro; abierta por http en la red Wi-Fi del taller, se va
+// directo a WhatsApp por wa.me. Las dos llevan la misma orden. Cuando haya
+// registro en la nube, esto será además un aviso dentro de la app.
 ui.enviar.addEventListener('click', async () => {
   const texto = textoParaAsistente(estado);
   if (navigator.share) {
@@ -293,9 +327,18 @@ ui.enviar.addEventListener('click', async () => {
 });
 
 ui.placa.value = estado.placa;
-ui.placa.addEventListener('input', () => {
-  estado.placa = normalizarPlaca(ui.placa.value);
-  if (ui.placa.value !== estado.placa) ui.placa.value = estado.placa;
+// La placa se toma al salir del campo (change), no en cada tecla:
+// reescribir el campo mientras la persona escribe manda el cursor al final
+// y en Android duplica letras. El CSS ya la muestra en mayúsculas mientras
+// tanto, y al tocar cualquier botón el campo pierde el foco primero.
+ui.placa.addEventListener('change', () => {
+  const eraOtroCarro = cambiarPlaca(estado, ui.placa.value);
+  ui.placa.value = estado.placa;
+  if (eraOtroCarro) {
+    ui.marca.value = estado.marca;
+    aplicarSeleccion();
+    pintarLista();
+  }
   guardar();
 });
 ui.marca.value = estado.marca;
@@ -307,6 +350,7 @@ ui.marca.addEventListener('input', () => {
 // ---------- Botones de vista ----------
 
 let animacion = 0;
+let animacionActiva = null;
 function irA(nombre) {
   const destino = VISTAS[nombre];
   if (!destino) return;
@@ -322,8 +366,9 @@ function irA(nombre) {
   const paso = new THREE.Spherical();
   const id = ++animacion;
   controles.enabled = false;
+  animacionActiva = { destino: new THREE.Vector3(...destino), objetivo };
   function cuadro(ahora) {
-    if (id !== animacion) return; // otra vista pedida en medio
+    if (id !== animacion) return; // otra vista pedida en medio, o un dedo la cortó
     const k = Math.min(1, (ahora - inicio) / duracion);
     const s = k * k * (3 - 2 * k);
     paso.set(
@@ -337,11 +382,25 @@ function irA(nombre) {
     if (k < 1) {
       requestAnimationFrame(cuadro);
     } else {
-      controles.enabled = true;
-      controles.update();
+      terminarAnimacion();
     }
   }
   requestAnimationFrame(cuadro);
+}
+
+// Deja la cámara en el destino y devuelve el mando al dedo. Se llama al
+// acabar la animación y también si el dueño toca la pantalla a mitad de
+// camino: con los controles apagados su arrastre se perdería y un toque
+// marcaría una pieza con la cámara a medio girar.
+function terminarAnimacion() {
+  if (!animacionActiva) return;
+  camara.position.copy(animacionActiva.destino);
+  camara.lookAt(animacionActiva.objetivo);
+  animacionActiva = null;
+  animacion += 1;
+  controles.enabled = true;
+  controles.update();
+  pedirCuadro();
 }
 for (const boton of ui.vistas) {
   boton.addEventListener('click', () => irA(boton.dataset.vista));
