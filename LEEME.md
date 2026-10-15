@@ -81,6 +81,20 @@ carro".
   y en el navegador; desde el frente un sedán y un hatchback son iguales). La
   persona confirma con un toque, escribe la placa y abre el 3D. La primera
   vez descarga 89 MB (el reconocedor); después funciona sin internet.
+- **La marca por el logo** (15-oct, tarde): la foto se muestra entera y la
+  persona **toca el emblema**; la app recorta alrededor del toque a tres
+  tamaños y CLIP compara los recortes con los 70 logos del catálogo
+  (frases que describen la forma: "gold bowtie", "silver diamond"). Medido
+  con diez fotos reales: 8 de 10 de primera, con Nissan y Kia al 70-90 % y
+  Chevrolet, Renault y Mazda al 20-30 % pero con ventaja clara; falla un
+  Logan con el rombo en sombra y un Onix de lado. Si gana con claridad, la
+  marca queda puesta ("Marca por el logo: Chevrolet") y abajo solo salen
+  **las líneas de esa marca** (las familias de Chevrolet ordenadas por lo
+  que se parecen a la foto, con empujón a la carrocería que votó la foto);
+  si no, la app lo dice y ofrece las tres marcas más probables para tocar
+  una, o tocar el logo más de cerca. "Otra marca" quita el filtro. Sin
+  toque, barrer la foto a ciegas acertaba 4 de 10: por eso se pide el toque
+  (un segundo de la persona, no treinta del teléfono).
 - **Cuatro carrocerías a la medida**: sedán, hatchback, SUV y camioneta de
   platón, dibujadas por código con las mismas 17 piezas (en el hatchback la
   pieza trasera se llama compuerta; en la camioneta, compuerta y costados
@@ -280,8 +294,10 @@ npm test
 | `js/garaje.js` | El registro: el modelo del carro (placa, marca, línea, carrocería, color, medidas, cobro, fecha de entrega, piezas con estado, trabajo, pintor y fecha) y del empleado como funciones puras, la tarifa (`TARIFA_PIEZA`), y el almacén en IndexedDB versión 2 (carros, fotos y empleados; `quitarDemo`). Sin DOM; probado en Node con `fake-indexeddb`. |
 | `js/fotos.js` | Reducir una foto a 1280 px y sacarle la miniatura con canvas. La cuenta de medidas es pura y se prueba en Node. |
 | `js/color-foto.js` | El color de la pintura a partir de la foto (k-medias sobre el centro, descartando vidrios y llantas) y su nombre de taller (plateado, vinotinto...). La parte pura se prueba en Node. |
-| `js/reconocer.js` | El reconocedor en el navegador: CLIP (visión) sobre la foto, comparado con los vectores de texto de `js/etiquetas-clip.json`. Devuelve carrocerías, líneas y marcas ordenadas por parecido. |
-| `js/etiquetas-clip.json` | GENERADO por `herramientas/calcular-etiquetas.mjs`: un vector por carrocería y por línea del catálogo (Int8 en base64). Hay que regenerarlo cuando cambie el catálogo. |
+| `js/reconocer.js` | El reconocedor en el navegador: CLIP (visión) sobre la foto, comparado con los vectores de texto de `js/etiquetas-clip.json`. `reconocerCarro` (carrocerías, líneas y marcas por la foto entera, más el vector de la foto), `reconocerMarcaPorLogo` (recortes alrededor del toque contra los logos) y `lineasDeMarca` (las familias de una marca ordenadas por parecido). |
+| `js/logo.js` | La parte pura de la marca por el logo: nombres de marca como los conoce CLIP, frases con la forma de cada logo, recorte alrededor del toque, clasificación de los recortes, cuándo un logo es "seguro", y del toque en pantalla al punto de la foto. Sin modelo ni DOM; probado en Node. |
+| `js/etiquetas-clip.json` | GENERADO por `herramientas/calcular-etiquetas.mjs`: un vector por carrocería, por logo de marca (70) y por familia del catálogo (784, con su presencia; el carro entero se compara solo con las "muy común"). Int8 en base64, unos 600 KB. Hay que regenerarlo cuando cambie el catálogo o `logo.js`. |
+| `herramientas/medir-logo.mjs` | Mide en el PC la marca por el logo con las fotos de `pruebas/fotos-reconocer/` (coordenadas del logo a ojo): por escala, promedio, con y sin prior, y con `--auto` el barrido sin toque. Es lo que dio los números del LEEME. |
 | `js/hoja.js` | La hoja de abajo del visor: chips con estado, trabajo (latonería), pintor y cámara; menú de estado, trabajo y pintor; tira de fotos y foto grande, con los nombres de la carrocería. DOM puro, sin Three.js. |
 | `js/ficha-carro.js` | La ficha "Datos del carro" del visor: marca, línea con el catálogo, versión, carrocería, color, cobro al cliente y entrega. DOM puro. |
 | `js/garaje-pantalla.js` | La pantalla Garaje: lista con portada y color (con "entregado" y lo cobrado, y la insignia «demo»), abrir o crear por placa, borrar, la ficha del carro nuevo con foto (color, reconocedor, catálogo, confirmación) y la demostración. |
@@ -511,3 +527,13 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
 - GitHub Pages sirve `.mjs` como `text/javascript` y `.wasm` como
   `application/wasm` (comprobado el 15-oct): el motor del reconocedor
   carga igual que con `herramientas/servidor.js`.
+- A CLIP la palabra "Chevrolet" le suena a carro entero, no a emblema: con
+  frases de solo el nombre, el corbatín salía al 8 % y el rombo de Renault
+  igual. Describir la FORMA del logo en las frases ("the gold Chevrolet
+  bowtie emblem") lo subió a 29 % con ventaja clara, y la medición pasó de
+  7 a 8 de 10. Si una marca nueva falla, lo primero es describir su logo
+  en `DESCRIPCION_LOGO` (`js/logo.js`) y regenerar las etiquetas.
+- El toque sobre la foto se convierte a un punto de la foto REAL
+  (`puntoEnFoto`): la foto se muestra entera con `object-fit: contain`, con
+  franjas vacías a los lados; un toque en la franja no es foto y se ignora.
+  Con `object-fit: cover` (como estaba) el toque habría caído en otro sitio.

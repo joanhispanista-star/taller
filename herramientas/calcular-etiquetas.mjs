@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { AutoTokenizer, CLIPTextModelWithProjection, env } from '@huggingface/transformers';
 import { CATALOGO } from '../js/catalogo-carros.js';
 import { familiaDe } from '../js/catalogo.js';
+import { frasesDeLogo, marcasConLogo } from '../js/logo.js';
 
 export const MODELO = 'Xenova/clip-vit-base-patch32';
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -57,10 +58,19 @@ async function vectorDe(frases) {
   return promedio(text_embeds.tolist().map(normalizar));
 }
 
-const salida = { modelo: MODELO, dim: 512, carrocerias: {}, lineas: [] };
+const salida = { modelo: MODELO, dim: 512, carrocerias: {}, marcas: [], lineas: [] };
 for (const [tipo, frases] of Object.entries(FRASES_CARROCERIA)) {
   salida.carrocerias[tipo] = aBase64(await vectorDe(frases));
 }
+
+// Un vector por LOGO de marca (15-oct-2026): con un recorte alrededor del
+// emblema que la persona toca, CLIP reconoce la marca; las frases y el
+// agrupamiento viven en js/logo.js, que también usa el teléfono.
+for (const m of marcasConLogo(CATALOGO)) {
+  const vector = await vectorDe(frasesDeLogo(m.nombre));
+  salida.marcas.push({ nombre: m.nombre, marcas: m.marcas, prior: m.prior, e: aBase64(vector) });
+}
+console.log(salida.marcas.length + ' logos de marca');
 
 // Al reconocedor van FAMILIAS (Logan, Hilux, Kona), no cada generación:
 // medido el 15-oct-2026, con 604 líneas sueltas las generaciones de un
@@ -85,11 +95,14 @@ for (const entrada of CATALOGO) {
   f.carrocerias[entrada.carroceria] = (f.carrocerias[entrada.carroceria] || 0) + (3 - PESO[entrada.presencia]);
 }
 
-// Solo las familias "muy común" (89 el 15-oct-2026): con las 400 que tienen
-// algún miembro común, la línea acertaba 3 de 9 fotos; con 89, 4 de 9 y la
-// carrocería 6 de 9. Un carro raro se escoge a mano en la lista.
+// Van TODAS las familias, cada una con su presencia. El reconocedor del
+// carro entero sigue comparando solo contra las "muy común" (89 el
+// 15-oct-2026: con las 400 que tienen algún miembro común, la línea
+// acertaba 3 de 9 fotos; con 89, 4 de 9 y la carrocería 6 de 9). Las demás
+// sirven cuando ya se sabe la MARCA por el logo: entre las 20 familias de
+// Chevrolet elegir es fácil, entre 700 no.
 let n = 0;
-for (const f of [...familias.values()].filter((f) => f.presencia === 'muy comun')) {
+for (const f of familias.values()) {
   const nombre = f.marca + ' ' + f.familia;
   const carroceria = Object.entries(f.carrocerias).sort((a, b) => b[1] - a[1])[0][0];
   const tipo = EN_INGLES[carroceria] || 'car';

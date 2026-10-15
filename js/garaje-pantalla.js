@@ -9,11 +9,12 @@
 import { CLAVE_GUARDADO, normalizarPlaca } from './estado.js';
 import { PIEZA_CARRO, abrirAlmacen, deserializarCarro, fechaCorta, nombreCompletoDelCarro, resumen } from './garaje.js';
 import { CARROCERIAS, normalizarCarroceria } from './carrocerias.js';
-import { buscarLinea, catalogoOrdenado, datosDeEntrada, mejorDeFamilia, nombreDeLinea } from './catalogo.js';
+import { buscarLinea, catalogoOrdenado, datosDeEntrada, familiaDe, mejorDeFamilia, nombreDeLinea } from './catalogo.js';
 import { colorDeFoto, nombreDeColor } from './color-foto.js';
 import { reducirFoto } from './fotos.js';
 import { cargarDemo, estadoDemo } from './demo.js';
 import { pesos } from './tablero.js';
+import { puntoEnFoto } from './logo.js';
 
 const ui = {
   demo: document.getElementById('demo'),
@@ -31,6 +32,11 @@ const ui = {
   ficha: {
     dialogo: document.getElementById('ficha-nueva'),
     foto: document.getElementById('ficha-foto'),
+    marco: document.getElementById('ficha-foto-marco'),
+    toque: document.getElementById('ficha-toque'),
+    pistaLogo: document.getElementById('ficha-pista-logo'),
+    marcaTexto: document.getElementById('ficha-marca-texto'),
+    marcas: document.getElementById('ficha-marcas'),
     progreso: document.getElementById('ficha-progreso'),
     estado: document.getElementById('ficha-estado'),
     placa: document.getElementById('ficha-placa'),
@@ -258,9 +264,20 @@ ui.formulario.addEventListener('submit', async (e) => {
 
 // ---------- Con foto ----------
 
-// Lo que la persona va confirmando en la ficha.
+// Lo que la persona va confirmando en la ficha. `marcasLineas` son las
+// marcas del catálogo cuyas líneas se proponen (vacío = todas); `marcaPor`
+// dice de dónde salió la marca: 'logo' (tocó el emblema y se reconoció),
+// 'mano' (la eligió o la escribió) o '' (nada todavía).
 let ficha = null;
 let urlFicha = '';
+let reconocedor = null; // el módulo, importado la primera vez que hace falta
+
+// El reconocedor se importa aquí y no arriba: su motor pesa 28 MB y solo
+// hace falta cuando hay una foto.
+function cargarReconocedor() {
+  if (!reconocedor) reconocedor = import('./reconocer.js');
+  return reconocedor;
+}
 
 function estadoFicha(texto, porcentaje) {
   ui.ficha.estado.textContent = texto;
@@ -303,6 +320,9 @@ function elegirEntrada(entrada) {
   ficha.medidas = datos.medidas;
   ficha.entrada = entrada;
   ui.ficha.linea.value = nombreDeLinea(entrada);
+  // La carrocería que más votos tiene manda sobre la de la línea: desde el
+  // frente, un sedán y un hatchback se parecen, y ahí la foto sabe más.
+  if (ficha.carroceriaVotada) ficha.carroceria = ficha.carroceriaVotada;
   pintarCarrocerias();
   pintarSugerencias();
 }
@@ -314,7 +334,9 @@ function pintarSugerencias() {
       // La sugerencia es una familia (Logan); se abre su entrada más común y reciente.
       const entrada = mejorDeFamilia(s.marca, s.linea);
       const activo = Boolean(ficha.entrada && entrada && ficha.entrada === entrada);
-      const b = chip(s.marca + ' ' + s.linea, CARROCERIAS[normalizarCarroceria(s.carroceria)].nombre, activo);
+      // Con la marca ya sabida, el chip no la repite: "Captiva", no "Chevrolet Captiva".
+      const texto = ficha.marcasLineas.length ? s.linea : s.marca + ' ' + s.linea;
+      const b = chip(texto, CARROCERIAS[normalizarCarroceria(s.carroceria)].nombre, activo);
       b.addEventListener('click', () => {
         if (entrada) elegirEntrada(entrada);
       });
@@ -323,15 +345,171 @@ function pintarSugerencias() {
   );
 }
 
+// ---- La marca ----
+
+function pintarMarcaTexto() {
+  const t = ui.ficha.marcaTexto;
+  if (ficha.marcaPor === 'logo') {
+    t.textContent = 'Marca por el logo: ' + ficha.marca + '. Abajo van solo las líneas de ' + ficha.marca + '; si no es, toca otra.';
+  } else if (ficha.marcaPor === 'mano' && ficha.marca) {
+    t.textContent = 'Marca: ' + ficha.marca + '. Abajo van solo sus líneas.';
+  } else if (ficha.logo && !ficha.logoSeguro) {
+    const nombres = ficha.logo.slice(0, 3).map((m) => m.nombre);
+    t.textContent = 'El logo no se ve claro. ¿Es ' + nombres.slice(0, -1).join(', ') + ' o ' + nombres[nombres.length - 1] + '? Toca una, o toca el logo más de cerca.';
+  } else if (ficha.marcasFoto && ficha.marcasFoto.length) {
+    t.textContent = 'Por la foto entera parece ' + ficha.marcasFoto[0].marca + ', pero eso se equivoca seguido: toca el logo en la foto para estar seguros.';
+  } else {
+    t.textContent = 'Toca el logo en la foto y la app te dice la marca.';
+  }
+}
+
+// Los chips de marca: las tres que más votó el logo (o, sin logo, las que
+// más votó la foto entera), la elegida si no está entre ellas, y "Otra".
+function pintarMarcas() {
+  const candidatas = [];
+  const agregar = (nombre, marcas, detalle) => {
+    if (!candidatas.some((c) => c.nombre === nombre)) candidatas.push({ nombre, marcas, detalle });
+  };
+  if (ficha.logo) for (const m of ficha.logo.slice(0, 3)) agregar(m.nombre, m.marcas, Math.round(m.p * 100) + ' %');
+  else if (ficha.marcasFoto) for (const m of ficha.marcasFoto.slice(0, 3)) agregar(m.marca, [m.marca], 'por la foto');
+  if (ficha.marca && !candidatas.some((c) => c.marcas.includes(ficha.marca))) {
+    candidatas.unshift({ nombre: ficha.marca, marcas: [ficha.marca], detalle: '' });
+  }
+  const chips = candidatas.map((c) => {
+    const activo = ficha.marcasLineas.length > 0 && c.marcas.includes(ficha.marca);
+    const b = chip(c.nombre, c.detalle, activo);
+    b.setAttribute('aria-pressed', String(activo));
+    b.addEventListener('click', () => elegirMarca(c.marcas, 'mano'));
+    return b;
+  });
+  const otra = chip('Otra marca', '', false);
+  otra.addEventListener('click', () => {
+    elegirMarca([], 'mano');
+    ui.ficha.linea.focus();
+  });
+  ui.ficha.marcas.replaceChildren(...chips, otra);
+}
+
+// Fija la marca (una o varias del catálogo que comparten logo): el
+// buscador de líneas y las sugerencias pasan a ser solo de esa marca.
+async function elegirMarca(marcas, por) {
+  ficha.marcasLineas = marcas;
+  ficha.marcaPor = marcas.length ? por : '';
+  if (marcas.length) {
+    ficha.marca = marcas[0];
+    // Una línea de otra marca ya no vale.
+    if (ficha.entrada && !marcas.includes(ficha.entrada.marca)) {
+      ficha.entrada = null;
+      ficha.linea = '';
+      ficha.medidas = null;
+      ui.ficha.linea.value = '';
+    }
+  } else if (!ficha.entrada) {
+    ficha.marca = '';
+  }
+  llenarCatalogo(marcas);
+  pintarMarcaTexto();
+  pintarMarcas();
+  await actualizarSugerencias();
+}
+
+// Las familias de una marca por lo común que son, para proponer algo
+// mientras el reconocedor no ha mirado la foto (o si no pudo).
+function familiasComunesDe(marcas) {
+  const vistas = new Set();
+  const salida = [];
+  for (const e of catalogoOrdenado()) {
+    if (!marcas.includes(e.marca)) continue;
+    const familia = familiaDe(e);
+    const clave = e.marca + '|' + familia;
+    if (vistas.has(clave)) continue;
+    vistas.add(clave);
+    salida.push({ marca: e.marca, linea: familia, carroceria: e.carroceria, presencia: e.presencia });
+  }
+  const PESO = { 'muy comun': 0, comun: 1, 'poco comun': 2 };
+  return salida.sort((a, b) => PESO[a.presencia] - PESO[b.presencia]);
+}
+
+// Las sugerencias de línea según lo que se sepa: con marca y foto ya
+// mirada, las familias de la marca que más se parecen a la foto; con marca
+// y sin foto mirada, las más comunes de la marca; sin marca, lo que votó la
+// foto entera.
+async function actualizarSugerencias() {
+  const sesion = ficha;
+  if (ficha.marcasLineas.length && ficha.vector) {
+    const { lineasDeMarca } = await cargarReconocedor();
+    const lineas = await lineasDeMarca(ficha.vector, ficha.marcasLineas, ficha.carroceriaVotada);
+    if (ficha !== sesion) return;
+    ficha.sugerencias = lineas.slice(0, 6);
+  } else if (ficha.marcasLineas.length) {
+    ficha.sugerencias = familiasComunesDe(ficha.marcasLineas).slice(0, 6);
+  } else {
+    ficha.sugerencias = (ficha.sugerenciasFoto || []).slice(0, 6);
+  }
+  if (!ficha.entrada && ficha.sugerencias[0]) {
+    const mejor = mejorDeFamilia(ficha.sugerencias[0].marca, ficha.sugerencias[0].linea);
+    if (mejor) elegirEntrada(mejor);
+  }
+  pintarSugerencias();
+}
+
+// El toque sobre la foto: se convierte a un punto de la foto real, se
+// marca con el anillo y se manda al reconocedor con el recorte del logo.
+async function tocarLogo(e) {
+  if (!ficha) return;
+  const foto = ui.ficha.foto;
+  const punto = puntoEnFoto(e.clientX, e.clientY, foto.getBoundingClientRect(), { width: foto.naturalWidth, height: foto.naturalHeight });
+  if (!punto) return;
+  const sesion = ficha;
+  const n = ++ficha.toqueN;
+  const marco = ui.ficha.marco.getBoundingClientRect();
+  ui.ficha.toque.style.left = e.clientX - marco.left + 'px';
+  ui.ficha.toque.style.top = e.clientY - marco.top + 'px';
+  ui.ficha.toque.hidden = false;
+  ui.ficha.toque.classList.add('mirando');
+  ui.ficha.pistaLogo.textContent = 'Mirando el logo…';
+  ui.ficha.marcaTexto.textContent = 'Mirando el logo…';
+  try {
+    const { reconocerMarcaPorLogo } = await cargarReconocedor();
+    const r = await reconocerMarcaPorLogo(ficha.archivo, punto, (texto, pct) => estadoFicha(texto, 10 + pct * 0.8));
+    if (ficha !== sesion || ficha.toqueN !== n) return; // otro toque, u otra foto
+    ficha.logo = r.marcas;
+    ficha.logoSeguro = r.seguro;
+    ui.ficha.toque.classList.remove('mirando');
+    if (r.seguro) {
+      ui.ficha.pistaLogo.textContent = r.marcas[0].nombre + ' · ' + (r.milisegundos / 1000).toFixed(1) + ' s';
+      await elegirMarca(r.marcas[0].marcas, 'logo');
+    } else {
+      ui.ficha.pistaLogo.textContent = 'No se ve claro · toca el logo más de cerca';
+      pintarMarcaTexto();
+      pintarMarcas();
+    }
+  } catch (err) {
+    if (ficha !== sesion) return;
+    ui.ficha.toque.classList.remove('mirando');
+    ui.ficha.pistaLogo.textContent = 'No pude mirar el logo';
+    ui.ficha.marcaTexto.textContent = 'No pude mirar el logo (' + err.message + '). Elige la marca abajo o escríbela.';
+  }
+}
+
 // Lo que escribió la persona en "Marca y línea": si casa con el catálogo,
 // se toma la entrada entera (carrocería y medidas incluidas); si no, queda
-// como texto libre: primera palabra la marca, el resto la línea.
+// como texto libre: primera palabra la marca, el resto la línea. Lo
+// escrito manda sobre la marca del logo: si escribe un Logan con la marca
+// en Chevrolet, la marca pasa a Renault.
 function tomarLineaEscrita() {
   const texto = ui.ficha.linea.value.trim();
   if (!texto) return;
   const encontrada = buscarLinea(texto, 1)[0];
   if (encontrada && nombreDeLinea(encontrada).toLowerCase() === texto.toLowerCase()) {
     elegirEntrada(encontrada);
+    if (ficha.marcasLineas.length && !ficha.marcasLineas.includes(encontrada.marca)) {
+      ficha.marcasLineas = [encontrada.marca];
+      ficha.marcaPor = 'mano';
+      llenarCatalogo(ficha.marcasLineas);
+      pintarMarcaTexto();
+      pintarMarcas();
+    }
     return;
   }
   const [marca, ...resto] = texto.split(/\s+/);
@@ -345,16 +523,40 @@ function tomarLineaEscrita() {
 async function abrirFicha(archivo) {
   if (urlFicha) URL.revokeObjectURL(urlFicha);
   urlFicha = URL.createObjectURL(archivo);
-  ficha = { archivo, color: '', marca: '', linea: '', carroceria: '', medidas: null, entrada: null, sugerencias: [] };
+  ficha = {
+    archivo,
+    color: '',
+    marca: '',
+    linea: '',
+    carroceria: '',
+    medidas: null,
+    entrada: null,
+    sugerencias: [],
+    marcasLineas: [],
+    marcaPor: '',
+    logo: null,
+    logoSeguro: false,
+    vector: null,
+    carroceriaVotada: '',
+    marcasFoto: null,
+    sugerenciasFoto: null,
+    toqueN: 0,
+  };
   ui.ficha.foto.src = urlFicha;
+  ui.ficha.toque.hidden = true;
+  ui.ficha.toque.classList.remove('mirando');
+  ui.ficha.pistaLogo.textContent = 'Toca el logo de la marca';
   ui.ficha.placa.value = '';
   ui.ficha.linea.value = '';
   ui.ficha.version.value = '';
   ui.ficha.color.value = '#cfd4da';
   ui.ficha.colorNombre.textContent = 'plateado';
   ui.ficha.abrir.disabled = false;
+  llenarCatalogo([]);
   pintarCarrocerias();
   pintarSugerencias();
+  pintarMarcaTexto();
+  pintarMarcas();
   estadoFicha('Mirando el color…', 5);
   ui.ficha.dialogo.showModal();
 
@@ -367,23 +569,25 @@ async function abrirFicha(archivo) {
     // Sin color no pasa nada: la persona lo elige.
   }
 
-  // El reconocedor se importa aquí y no arriba: su motor pesa 28 MB y solo
-  // hace falta en este momento.
   try {
     estadoFicha('Reconociendo el carro…', 10);
-    const { reconocerCarro } = await import('./reconocer.js');
+    const { reconocerCarro } = await cargarReconocedor();
     const resultado = await reconocerCarro(archivo, (texto, pct) => estadoFicha(texto, 10 + pct * 0.8));
     if (!ficha || ficha.archivo !== archivo) return; // la persona cerró o abrió otra foto
-    ficha.sugerencias = resultado.lineas.slice(0, 6);
-    const mejor = resultado.lineas[0] && mejorDeFamilia(resultado.lineas[0].marca, resultado.lineas[0].linea);
-    if (mejor) elegirEntrada(mejor);
-    // La carrocería que más votos tiene manda sobre la de la línea: desde el
-    // frente, un sedán y un hatchback se parecen, y ahí la foto sabe más.
+    ficha.vector = resultado.vector;
+    ficha.marcasFoto = resultado.marcas;
+    ficha.sugerenciasFoto = resultado.lineas;
     if (resultado.carrocerias[0] && resultado.carrocerias[0].p > 0.6) {
-      ficha.carroceria = resultado.carrocerias[0].tipo;
+      ficha.carroceriaVotada = resultado.carrocerias[0].tipo;
+      ficha.carroceria = ficha.carroceriaVotada;
       pintarCarrocerias();
     }
-    pintarSugerencias();
+    // Si ya tocó el logo (o eligió marca) mientras cargaba, las líneas son
+    // de esa marca; si no, lo que votó la foto entera, con aviso de que la
+    // marca por la foto entera no es de fiar.
+    await actualizarSugerencias();
+    pintarMarcaTexto();
+    pintarMarcas();
     estadoFicha('Esto propone la app (' + (resultado.milisegundos / 1000).toFixed(1) + ' s). Corrige lo que no sea.', 100);
   } catch (e) {
     estadoFicha('No pude reconocer el carro (' + e.message + '). Escribe la marca y la línea.', 100);
@@ -396,6 +600,7 @@ ui.fotoCarro.addEventListener('change', () => {
   ui.fotoCarro.value = '';
   if (archivo) abrirFicha(archivo);
 });
+ui.ficha.foto.addEventListener('click', tocarLogo);
 
 ui.ficha.color.addEventListener('input', () => {
   ficha.color = ui.ficha.color.value;
@@ -451,9 +656,12 @@ ui.ficha.abrir.addEventListener('click', async () => {
 
 // ---------- Arranque ----------
 
-function llenarCatalogo() {
+// El buscador de líneas: todo el catálogo, o solo las líneas de las marcas
+// dadas cuando la marca ya se sabe (así "Captiva" no compite con 1.100).
+function llenarCatalogo(marcas = []) {
+  const entradas = marcas.length ? catalogoOrdenado().filter((e) => marcas.includes(e.marca)) : catalogoOrdenado();
   ui.ficha.lineas.replaceChildren(
-    ...catalogoOrdenado().map((e) => {
+    ...entradas.map((e) => {
       const opcion = document.createElement('option');
       opcion.value = nombreDeLinea(e);
       opcion.label = CARROCERIAS[normalizarCarroceria(e.carroceria)].nombre;

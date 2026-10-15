@@ -65,10 +65,18 @@
        persona confirma. Es un diálogo para que en el celular ocupe la
        pantalla y nada más se mueva debajo. -->
   <dialog id="ficha-nueva" class="ficha-nueva" aria-label="Carro nuevo">
-    <img id="ficha-foto" alt="">
+    <!-- La foto entera (no recortada): tocar el logo de la marca manda ese
+         pedazo al reconocedor, que con el emblema grande sí sabe la marca. -->
+    <div class="ficha-foto-marco" id="ficha-foto-marco">
+      <img id="ficha-foto" alt="Foto del carro. Toca el logo de la marca.">
+      <b id="ficha-toque" class="toque-logo" hidden></b>
+      <span id="ficha-pista-logo" class="pista-logo">Toca el logo de la marca</span>
+    </div>
     <div class="ficha-cuerpo">
       <div class="progreso" aria-hidden="true"><b id="ficha-progreso"></b></div>
       <p id="ficha-estado" class="aviso" hidden></p>
+      <p class="ayuda" id="ficha-marca-texto">Toca el logo en la foto y la app te dice la marca.</p>
+      <div id="ficha-marcas" class="sugerencias" aria-label="Marca"></div>
       <div class="ficha-campos">
         <label class="campo">
           <span>Placa</span>
@@ -80,7 +88,7 @@
         </label>
       </div>
       <p class="ayuda" id="ficha-ayuda">La app propone; tú confirmas con un toque.</p>
-      <div id="ficha-sugerencias" class="sugerencias" aria-label="Carros parecidos"></div>
+      <div id="ficha-sugerencias" class="sugerencias" aria-label="Líneas parecidas"></div>
       <label class="campo">
         <span>Marca y línea</span>
         <input id="ficha-linea" type="text" list="lineas-catalogo" placeholder="Chevrolet Onix" autocomplete="off">

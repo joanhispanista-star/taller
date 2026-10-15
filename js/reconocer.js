@@ -21,6 +21,7 @@
 // motor (ONNX Runtime, en js/vendor/transformers) sí viaja con la app.
 import { env, AutoProcessor, CLIPVisionModelWithProjection, RawImage } from './vendor/transformers/transformers.min.js';
 import { normalizarCarroceria } from './carrocerias.js';
+import { ESCALAS_RECORTE, clasificarLogo, logoSeguro, recorteAlrededor } from './logo.js';
 
 export const MODELO = 'Xenova/clip-vit-base-patch32';
 const ESCALA = 100; // la "temperatura" de CLIP: convierte parecidos en probabilidades
@@ -68,7 +69,11 @@ export function prepararReconocedor(alAvanzar = () => {}) {
       const crudo = await respuesta.json();
       const etiquetas = {
         carrocerias: Object.fromEntries(Object.entries(crudo.carrocerias).map(([k, v]) => [k, desdeBase64(v)])),
+        // Todas las familias del catálogo; el carro entero se compara solo
+        // con las "muy común" (ver reconocerCarro) y las demás entran
+        // cuando ya se sabe la marca.
         lineas: crudo.lineas.map((l) => ({ ...l, e: desdeBase64(l.e) })),
+        marcas: (crudo.marcas || []).map((m) => ({ ...m, e: desdeBase64(m.e) })),
       };
       const progreso = (p) => {
         if (p.status === 'progress' && p.file && p.file.endsWith('.onnx')) {
@@ -93,19 +98,28 @@ export function prepararReconocedor(alAvanzar = () => {}) {
 // marcas: [{marca, p}], milisegundos }, todo ordenado de más a menos probable.
 // `linea` es la FAMILIA del catálogo (Logan, Hilux): catalogo.js la
 // convierte en una entrada concreta con mejorDeFamilia.
-export async function reconocerCarro(archivo, alAvanzar) {
-  const { procesador, vision, etiquetas } = await prepararReconocedor(alAvanzar);
-  const inicio = performance.now();
-  const imagen = await RawImage.fromBlob(archivo);
+// El vector (normalizado) de una imagen ya leída.
+async function vectorDeImagen(procesador, vision, imagen) {
   const entradas = await procesador(imagen);
   const { image_embeds } = await vision(entradas);
   const vector = Float32Array.from(image_embeds.data);
   const norma = Math.hypot(...vector);
   for (let i = 0; i < vector.length; i++) vector[i] /= norma;
+  return vector;
+}
+
+export async function reconocerCarro(archivo, alAvanzar) {
+  const { procesador, vision, etiquetas } = await prepararReconocedor(alAvanzar);
+  const inicio = performance.now();
+  const imagen = await RawImage.fromBlob(archivo);
+  const vector = await vectorDeImagen(procesador, vision, imagen);
 
   const tipos = Object.keys(etiquetas.carrocerias);
   const pTipos = softmax(tipos.map((t) => ESCALA * punto(vector, etiquetas.carrocerias[t])));
-  const pLineas = softmax(etiquetas.lineas.map((l) => ESCALA * punto(vector, l.e)));
+  // Contra el carro entero solo compiten las familias "muy común": con
+  // cientos de candidatas CLIP se confunde más (medido el 15-oct-2026).
+  const candidatas = etiquetas.lineas.filter((l) => l.presencia === 'muy comun');
+  const pLineas = softmax(candidatas.map((l) => ESCALA * punto(vector, l.e)));
 
   // La carrocería final mezcla lo que CLIP ve directamente (30 %) con lo
   // que votan las líneas más parecidas (70 %): si la foto se parece a un
@@ -116,7 +130,7 @@ export async function reconocerCarro(archivo, alAvanzar) {
   const mezcla = {};
   tipos.forEach((t, i) => (mezcla[t] = PESO_DIRECTO * pTipos[i]));
   const marcas = {};
-  const lineas = etiquetas.lineas.map((l, i) => {
+  const lineas = candidatas.map((l, i) => {
     const tipo = normalizarCarroceria(l.carroceria);
     mezcla[tipo] = (mezcla[tipo] || 0) + (1 - PESO_DIRECTO) * pLineas[i];
     marcas[l.marca] = (marcas[l.marca] || 0) + pLineas[i];
@@ -127,6 +141,57 @@ export async function reconocerCarro(archivo, alAvanzar) {
     carrocerias: ordenar(Object.entries(mezcla).map(([tipo, p]) => ({ tipo, p }))),
     lineas: ordenar(lineas).slice(0, 12),
     marcas: ordenar(Object.entries(marcas).map(([marca, p]) => ({ marca, p }))).slice(0, 5),
+    // El vector de la foto se devuelve para volver a clasificar sin pasar
+    // la foto otra vez por el modelo (cuando la marca cambia).
+    vector,
     milisegundos: Math.round(performance.now() - inicio),
   };
+}
+
+// La marca por el logo: recorta la foto alrededor del punto que la persona
+// tocó (fracciones del ancho y del alto), a tres escalas, y compara cada
+// recorte con los logos. Devuelve { marcas: [{ nombre, marcas, p }],
+// seguro, milisegundos }. Medido el 15-oct-2026 con diez fotos reales
+// (herramientas/medir-logo.mjs): 8 de 10 de primera; Nissan y Kia salen
+// con 70-90 %, Chevrolet, Renault y Mazda con 20-30 % (pero con ventaja
+// clara), y fallan un Logan con el rombo en sombra y un Onix de lado sin
+// emblema a la vista. Sin toque, barriendo la foto a ciegas, 4 de 10: por
+// eso se pide el toque.
+export async function reconocerMarcaPorLogo(archivo, { x, y }, alAvanzar) {
+  const { procesador, vision, etiquetas } = await prepararReconocedor(alAvanzar);
+  const inicio = performance.now();
+  if (etiquetas.marcas.length === 0) throw new Error('etiquetas-clip.json no trae logos: hay que regenerarlo');
+  const imagen = await RawImage.fromBlob(archivo);
+  const vectores = [];
+  for (const escala of ESCALAS_RECORTE) {
+    const r = recorteAlrededor(imagen.width, imagen.height, x, y, escala);
+    const recorte = await imagen.crop([r.x1, r.y1, r.x2, r.y2]);
+    vectores.push(await vectorDeImagen(procesador, vision, recorte));
+  }
+  const marcas = clasificarLogo(vectores, etiquetas.marcas, { escala: ESCALA });
+  return { marcas: marcas.slice(0, 5), seguro: logoSeguro(marcas), milisegundos: Math.round(performance.now() - inicio) };
+}
+
+// Las líneas de UNA marca (o varias que comparten logo), ordenadas por lo
+// que se parece la foto entera a cada familia, con un empujón a las de la
+// carrocería que la foto votó. Aquí sí entran todas las familias de la
+// marca, raras incluidas: entre veinte candidatas CLIP acierta mucho más
+// que entre setecientas. Devuelve [{ marca, linea, carroceria, p }].
+export async function lineasDeMarca(vector, marcas, carroceriaVotada = '') {
+  const { etiquetas } = await prepararReconocedor();
+  const familias = etiquetas.lineas.filter((l) => marcas.includes(l.marca));
+  if (familias.length === 0) return [];
+  const p = softmax(familias.map((l) => ESCALA * punto(vector, l.e)));
+  const PESO_CARROCERIA = 1.5; // una familia de la carrocería votada pesa 50 % más
+  // Lo raro parte con desventaja: con 0,6 un Bolt EUV (poco común) salía
+  // segundo para la Captiva de Joan, delante de la Captiva (común).
+  const PRIOR = { 'muy comun': 1, comun: 0.75, 'poco comun': 0.35 };
+  let lista = familias.map((l, i) => {
+    const carroceria = normalizarCarroceria(l.carroceria);
+    const empujon = carroceriaVotada && carroceria === carroceriaVotada ? PESO_CARROCERIA : 1;
+    return { marca: l.marca, linea: l.linea, carroceria, p: p[i] * empujon * (PRIOR[l.presencia] || 0.6) };
+  });
+  const total = lista.reduce((s, l) => s + l.p, 0);
+  lista = lista.map((l) => ({ ...l, p: l.p / total }));
+  return lista.sort((a, b) => b.p - a.p);
 }
