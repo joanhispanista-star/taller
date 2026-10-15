@@ -207,6 +207,33 @@ y entrar a <http://127.0.0.1:8310/garaje.html> (el Garaje) o a
 <http://127.0.0.1:8310/> (el visor). Desde la sesión de Claude, la entrada
 `taller-pintura` de `.claude/launch.json` (en PLAZA) arranca lo mismo.
 
+### Desde cualquier celular (publicado)
+
+Joan pidió el 15-oct que abriera desde cualquier celular, sin estar en la
+red del PC. Como la app es estática (HTML y JavaScript, sin servidor
+propio), vive en **GitHub Pages**, como sus otros proyectos:
+
+```
+https://joanhispanista-star.github.io/taller-pintura/garaje.html
+```
+
+Publicar es `git push` (repo `joanhispanista-star/taller-pintura`, rama
+`master`, carpeta raíz; `.nojekyll` evita que GitHub procese los archivos).
+GitHub Pages solo es gratis con repo público: el código se ve, y no hay
+nada que esconder (sin claves, sin números de teléfono; el enlace de
+WhatsApp no lleva número). Dos cosas que hay que saber:
+
+- **Cada teléfono tiene su propio Garaje.** Los carros viven en el navegador
+  de cada aparato (IndexedDB); lo que se marque en un celular no aparece en
+  otro hasta la nube de la semana del 26. Y el Garaje de `github.io` es
+  distinto del de `192.168.x.x`: origen distinto, datos distintos.
+- Por **https** la hoja de compartir del teléfono sí funciona (WhatsApp y lo
+  demás), y lo instalable (PWA) ya es posible. El reconocedor sigue bajando
+  89 MB de Hugging Face la primera vez; GitHub Pages no manda las cabeceras
+  COOP/COEP, así que corre en un solo hilo (igual que en el PC: ya era así).
+
+### En la red del PC (desarrollo)
+
 Para verlo en el celular (misma red Wi-Fi):
 
 ```bash
