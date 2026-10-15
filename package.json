@@ -1,0 +1,15 @@
+{
+  "name": "taller-pintura",
+  "version": "0.1.0",
+  "private": true,
+  "description": "App del taller de latonería y pintura: carro en 3D por piezas, registro por placa y nómina de pintores.",
+  "type": "module",
+  "scripts": {
+    "dev": "node herramientas/servidor.js 8310",
+    "celular": "node herramientas/servidor.js 8310 --red",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "three": "0.169.0"
+  }
+}

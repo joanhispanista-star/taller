@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1e24">
+  <title>Taller de Pintura · Visor</title>
+  <link rel="stylesheet" href="css/estilos.css">
+  <!-- Three.js vive en la carpeta (js/vendor): la app no depende de internet
+       para dibujar el carro, y la versión no cambia sola. -->
+  <script type="importmap">
+    { "imports": { "three": "./js/vendor/three.module.min.js" } }
+  </script>
+</head>
+<body>
+  <header class="barra">
+    <div class="marca-app">Taller de Pintura</div>
+    <label class="campo">
+      <span>Placa</span>
+      <input id="placa" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" maxlength="6" placeholder="ABC123">
+    </label>
+    <label class="campo">
+      <span>Marca</span>
+      <input id="marca" type="text" autocomplete="off" maxlength="40" placeholder="Chevrolet Onix">
+    </label>
+  </header>
+
+  <main id="escena">
+    <canvas id="lienzo" aria-label="Carro en 3D. Arrastra para girarlo y toca una pieza para marcarla."></canvas>
+    <div id="pista" class="pista">Arrastra para girar · toca una pieza para marcarla</div>
+    <nav class="vistas" aria-label="Vistas del carro">
+      <button type="button" data-vista="frente">Frente</button>
+      <button type="button" data-vista="izquierdo">Izquierdo</button>
+      <button type="button" data-vista="derecho">Derecho</button>
+      <button type="button" data-vista="atras">Atrás</button>
+      <button type="button" data-vista="arriba">Arriba</button>
+    </nav>
+    <div id="error" class="error" hidden></div>
+  </main>
+
+  <section class="hoja" aria-live="polite">
+    <p id="contador">Toca las piezas que necesitan pintura.</p>
+    <ul id="lista"></ul>
+    <div class="acciones">
+      <button type="button" id="limpiar" disabled>Limpiar</button>
+      <button type="button" id="enviar" class="primario" disabled>Enviar al asistente</button>
+    </div>
+  </section>
+
+  <script type="module" src="js/visor.js"></script>
+</body>
+</html>

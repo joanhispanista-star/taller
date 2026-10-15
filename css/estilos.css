@@ -1,0 +1,191 @@
+/* Primero que nada: que `hidden` gane siempre. Una regla con display:flex
+   le gana al hidden del navegador y deja pintadas pantallas que deberían
+   estar ocultas (ya pasó en otro proyecto). */
+[hidden] { display: none !important; }
+
+:root {
+  --fondo: #1a1e24;
+  --panel: #242a32;
+  --panel-2: #2f363f;
+  --texto: #eef1f4;
+  --texto-suave: #a7b0bb;
+  --acento: #ff7a1a;
+  --acento-texto: #1a1e24;
+  --borde: #3a424c;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; height: 100%; }
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--fondo);
+  color: var(--texto);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button { font: inherit; cursor: pointer; touch-action: manipulation; }
+
+.barra {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 8px 12px 10px;
+  padding-top: calc(8px + env(safe-area-inset-top));
+  background: var(--panel);
+  border-bottom: 1px solid var(--borde);
+}
+
+.marca-app {
+  font-weight: 700;
+  flex: 1;
+  padding-bottom: 6px;
+  white-space: nowrap;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--texto-suave);
+}
+
+.campo input {
+  width: 88px;
+  background: var(--panel-2);
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 14px;
+}
+
+#placa { text-transform: uppercase; letter-spacing: 1px; }
+#marca { width: 120px; }
+
+#escena { position: relative; min-height: 0; }
+
+#lienzo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none; /* el dedo gira el carro, no la página */
+}
+
+.pista {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.55);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.vistas {
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 0 8px;
+}
+
+.vistas button {
+  background: rgba(36, 42, 50, 0.88);
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 13px;
+}
+
+.hoja {
+  background: var(--panel);
+  border-top: 1px solid var(--borde);
+  padding: 10px 12px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  max-height: 42vh;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#contador { margin: 0; font-size: 14px; color: var(--texto-suave); }
+
+#lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+#lista li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--acento);
+  border-radius: 999px;
+  padding: 4px 6px 4px 10px;
+  font-size: 13px;
+}
+
+#lista li button {
+  background: none;
+  border: 0;
+  color: var(--texto-suave);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.acciones { display: flex; gap: 8px; }
+
+.acciones button {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--borde);
+  background: var(--panel-2);
+  color: var(--texto);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.acciones .primario {
+  background: var(--acento);
+  color: var(--acento-texto);
+  border-color: var(--acento);
+}
+
+.acciones button:disabled { opacity: 0.45; cursor: default; }
+
+.error {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+  background: var(--fondo);
+  font-size: 16px;
+}
