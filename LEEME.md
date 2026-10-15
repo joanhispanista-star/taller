@@ -214,7 +214,13 @@ npm run celular
 ```
 
 El servidor imprime la dirección `http://192.168.x.x:8310/` para abrirla en
-el teléfono (en el PC de Joan, el 15-oct, era `http://192.168.101.16:8310/garaje.html`).
+el teléfono ("Desde el celular: ..."). **Esa IP cambia** al cambiar de red:
+el 15-oct el PC de Joan tenía `192.168.101.16` por Wi-Fi y esa misma tarde
+`192.168.197.36` por cable, y el enlace viejo dejó de abrir. Antes de pasar
+el enlace, mirarla en la salida del servidor (o en `ipconfig`). El teléfono
+tiene que estar en la Wi-Fi del mismo router al que va el PC; y como los
+carros viven por origen, con una IP nueva el Garaje del teléfono arranca
+vacío (los de la IP vieja siguen ahí, en esa dirección).
 Windows puede pedir permiso al firewall la primera vez. Desde la sesión de
 Claude, la entrada `taller-pintura-celular` de `.claude/launch.json` arranca
 el servidor abierto a la red. El reconocedor de fotos sí necesita internet
