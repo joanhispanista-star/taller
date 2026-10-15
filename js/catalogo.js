@@ -119,3 +119,45 @@ export function datosDeEntrada(entrada) {
     },
   };
 }
+
+// ---- Lo que la persona escribe en "Marca y línea" ----
+
+const MARCAS = [...new Set(CATALOGO.map((e) => e.marca))];
+
+// La marca del catálogo que casa con una palabra escrita ("chevrolet",
+// "mercedes", "ssangyong"), o '' si la palabra no es una marca. Sirve para
+// saber si lo escrito trae marca o es solo la línea.
+export function marcaDelCatalogo(palabra) {
+  const p = sinTildes(palabra);
+  if (!p) return '';
+  return MARCAS.find((m) => sinTildes(m) === p || sinTildes(m).split(/[\s/(-]+/)[0] === p) || '';
+}
+
+// Lo escrito convertido a una entrada del catálogo, o null si no casa con
+// ninguna. Casa el nombre completo ("Chevrolet Captiva (nueva)"); "marca +
+// familia" ("chevrolet captiva" → la mejor Captiva); y, cuando la marca ya
+// se sabe (`marcas`, por el logo o por un chip), también solo la línea
+// ("captiva", "captiva sport"): la gente escribe la línea sin la marca
+// cuando la pantalla ya la mostró.
+export function entradaEscrita(texto, marcas = []) {
+  const q = sinTildes(texto);
+  if (!q) return null;
+  const completa = CATALOGO.find((e) => sinTildes(nombreDeLinea(e)) === q);
+  if (completa) return completa;
+  const marcaEscrita = marcaDelCatalogo(q.split(/\s+/)[0]);
+  let lineaTexto = q;
+  let candidatas = [];
+  if (marcaEscrita) {
+    const m = sinTildes(marcaEscrita);
+    lineaTexto = q.startsWith(m + ' ') ? q.slice(m.length + 1) : q.split(/\s+/).slice(1).join(' ');
+    candidatas = CATALOGO.filter((e) => e.marca === marcaEscrita);
+  } else if (marcas.length) {
+    candidatas = CATALOGO.filter((e) => marcas.includes(e.marca));
+  }
+  if (!lineaTexto || candidatas.length === 0) return null;
+  const exacta = candidatas.find((e) => sinTildes(e.linea) === lineaTexto);
+  if (exacta) return exacta;
+  const deFamilia = candidatas.find((e) => sinTildes(familiaDe(e)) === lineaTexto);
+  if (deFamilia) return mejorDeFamilia(deFamilia.marca, familiaDe(deFamilia)) || deFamilia;
+  return null;
+}

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CATALOGO } from '../js/catalogo-carros.js';
-import { buscarLinea, catalogoOrdenado, datosDeEntrada, entradaDe, entradasDeFamilia, familiaDe, mejorDeFamilia, nombreDeLinea } from '../js/catalogo.js';
+import { buscarLinea, catalogoOrdenado, datosDeEntrada, entradaDe, entradaEscrita, entradasDeFamilia, familiaDe, marcaDelCatalogo, mejorDeFamilia, nombreDeLinea } from '../js/catalogo.js';
 import { medidasParaDibujar } from '../js/carrocerias.js';
 
 test('el catálogo tiene entradas completas y sin repetidos', () => {
@@ -103,4 +103,32 @@ test('catalogoOrdenado pone las muy comunes primero', () => {
   const primerComun = lista.findIndex((e) => e.presencia === 'comun');
   const ultimoMuyComun = lista.map((e) => e.presencia).lastIndexOf('muy comun');
   assert.ok(primerComun === -1 || ultimoMuyComun < primerComun);
+});
+
+test('marcaDelCatalogo reconoce una marca escrita de cualquier forma y rechaza lo que no es marca', () => {
+  assert.equal(marcaDelCatalogo('CHEVROLET'), 'Chevrolet');
+  assert.equal(marcaDelCatalogo('mercedes'), 'Mercedes-Benz');
+  assert.equal(marcaDelCatalogo('ssangyong'), 'SsangYong / KGM');
+  assert.equal(marcaDelCatalogo('captiva'), '');
+  assert.equal(marcaDelCatalogo(''), '');
+});
+
+test('entradaEscrita entiende el nombre completo, marca + familia, y solo la línea cuando la marca ya se sabe', () => {
+  const completa = entradaEscrita('chevrolet captiva (nueva)');
+  assert.equal(completa.marca, 'Chevrolet');
+  assert.equal(completa.linea, 'Captiva (nueva)');
+  // Marca + familia: la mejor entrada de la familia, no la primera que empiece igual.
+  const familia = entradaEscrita('Chevrolet Captiva');
+  assert.equal(familia, mejorDeFamilia('Chevrolet', 'Captiva'));
+  assert.ok(familia.linea.startsWith('Captiva') && !familia.linea.startsWith('Captiva Sport'));
+  // Solo la línea: sin marca sabida no es nada; con la marca, sí.
+  assert.equal(entradaEscrita('captiva'), null);
+  assert.equal(entradaEscrita('captiva', ['Chevrolet']), mejorDeFamilia('Chevrolet', 'Captiva'));
+  assert.equal(entradaEscrita('captiva sport', ['Chevrolet']).linea, 'Captiva Sport');
+  // Lo escrito con otra marca manda sobre la marca sabida.
+  assert.equal(entradaEscrita('renault logan', ['Chevrolet']), mejorDeFamilia('Renault', 'Logan'));
+  // Una línea que no es de la marca sabida no se inventa.
+  assert.equal(entradaEscrita('onix', ['Renault']), null);
+  assert.equal(entradaEscrita('', ['Chevrolet']), null);
+  assert.equal(entradaEscrita('chevrolet', []), null);
 });

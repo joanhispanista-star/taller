@@ -9,7 +9,7 @@
 import { CLAVE_GUARDADO, normalizarPlaca } from './estado.js';
 import { PIEZA_CARRO, abrirAlmacen, deserializarCarro, fechaCorta, nombreCompletoDelCarro, resumen } from './garaje.js';
 import { CARROCERIAS, normalizarCarroceria } from './carrocerias.js';
-import { buscarLinea, catalogoOrdenado, datosDeEntrada, familiaDe, mejorDeFamilia, nombreDeLinea } from './catalogo.js';
+import { catalogoOrdenado, datosDeEntrada, entradaEscrita, familiaDe, marcaDelCatalogo, mejorDeFamilia, nombreDeLinea } from './catalogo.js';
 import { colorDeFoto, nombreDeColor } from './color-foto.js';
 import { reducirFoto } from './fotos.js';
 import { cargarDemo, estadoDemo } from './demo.js';
@@ -264,10 +264,14 @@ ui.formulario.addEventListener('submit', async (e) => {
 
 // ---------- Con foto ----------
 
-// Lo que la persona va confirmando en la ficha. `marcasLineas` son las
-// marcas del catálogo cuyas líneas se proponen (vacío = todas); `marcaPor`
-// dice de dónde salió la marca: 'logo' (tocó el emblema y se reconoció),
-// 'mano' (la eligió o la escribió) o '' (nada todavía).
+// Lo que la persona va confirmando en la ficha. La regla de la casa: lo
+// hecho a mano manda sobre lo que la app propone. Por eso cada dato lleva
+// de dónde salió: `lineaPor` y `carroceriaPor` son 'mano' (tocó o escribió)
+// o 'app' (propuesta automática) o ''; `marcaPor` es 'logo' (tocó el
+// emblema y se reconoció), 'mano' (la eligió o la escribió) o ''.
+// `marcasLineas` son las marcas del catálogo cuyas líneas se proponen
+// (vacío = todas). La app solo elige sola donde la persona no ha elegido,
+// y solo reemplaza lo que ella misma propuso.
 let ficha = null;
 let urlFicha = '';
 let reconocedor = null; // el módulo, importado la primera vez que hace falta
@@ -305,6 +309,7 @@ function pintarCarrocerias() {
       b.setAttribute('aria-pressed', String(ficha.carroceria === tipo));
       b.addEventListener('click', () => {
         ficha.carroceria = tipo;
+        ficha.carroceriaPor = 'mano';
         pintarCarrocerias();
       });
       return b;
@@ -312,17 +317,20 @@ function pintarCarrocerias() {
   );
 }
 
-function elegirEntrada(entrada) {
+// `por`: 'mano' (tocó un chip o la escribió) o 'app' (propuesta automática).
+function elegirEntrada(entrada, por = 'mano') {
   const datos = datosDeEntrada(entrada);
   ficha.marca = datos.marca;
   ficha.linea = datos.linea;
-  ficha.carroceria = datos.carroceria;
   ficha.medidas = datos.medidas;
   ficha.entrada = entrada;
+  ficha.lineaPor = por;
   ui.ficha.linea.value = nombreDeLinea(entrada);
-  // La carrocería que más votos tiene manda sobre la de la línea: desde el
-  // frente, un sedán y un hatchback se parecen, y ahí la foto sabe más.
-  if (ficha.carroceriaVotada) ficha.carroceria = ficha.carroceriaVotada;
+  ficha.ultimoTexto = ui.ficha.linea.value;
+  // La carrocería: la que la persona tocó manda. Si no tocó, la que votó
+  // la foto (desde el frente un sedán y un hatchback se parecen, y ahí la
+  // foto sabe más que el catálogo) y, si la foto no votó, la del catálogo.
+  if (ficha.carroceriaPor !== 'mano') ficha.carroceria = ficha.carroceriaVotada || datos.carroceria;
   pintarCarrocerias();
   pintarSugerencias();
 }
@@ -338,7 +346,7 @@ function pintarSugerencias() {
       const texto = ficha.marcasLineas.length ? s.linea : s.marca + ' ' + s.linea;
       const b = chip(texto, CARROCERIAS[normalizarCarroceria(s.carroceria)].nombre, activo);
       b.addEventListener('click', () => {
-        if (entrada) elegirEntrada(entrada);
+        if (entrada) elegirEntrada(entrada, 'mano');
       });
       return b;
     }),
@@ -349,10 +357,14 @@ function pintarSugerencias() {
 
 function pintarMarcaTexto() {
   const t = ui.ficha.marcaTexto;
+  const logo = ficha.logo && ficha.logoSeguro ? ficha.logo[0] : null;
   if (ficha.marcaPor === 'logo') {
     t.textContent = 'Marca por el logo: ' + ficha.marca + '. Abajo van solo las líneas de ' + ficha.marca + '; si no es, toca otra.';
   } else if (ficha.marcaPor === 'mano' && ficha.marca) {
-    t.textContent = 'Marca: ' + ficha.marca + '. Abajo van solo sus líneas.';
+    const contradice = logo && !logo.marcas.includes(ficha.marca) ? ' El logo parecía ' + logo.nombre + '; si es, tócala arriba.' : '';
+    t.textContent = 'Marca: ' + ficha.marca + (ficha.marcasLineas.length ? '. Abajo van solo sus líneas.' : ' (escrita).') + contradice;
+  } else if (ficha.marcaSoltada) {
+    t.textContent = 'Sin marca fija: escribe la marca y la línea, o toca una marca arriba.';
   } else if (ficha.logo && !ficha.logoSeguro) {
     const nombres = ficha.logo.slice(0, 3).map((m) => m.nombre);
     t.textContent = 'El logo no se ve claro. ¿Es ' + nombres.slice(0, -1).join(', ') + ' o ' + nombres[nombres.length - 1] + '? Toca una, o toca el logo más de cerca.';
@@ -383,34 +395,61 @@ function pintarMarcas() {
     return b;
   });
   const otra = chip('Otra marca', '', false);
-  otra.addEventListener('click', () => {
-    elegirMarca([], 'mano');
-    ui.ficha.linea.focus();
-  });
+  otra.addEventListener('click', soltarMarca);
   ui.ficha.marcas.replaceChildren(...chips, otra);
 }
 
-// Fija la marca (una o varias del catálogo que comparten logo): el
-// buscador de líneas y las sugerencias pasan a ser solo de esa marca.
+function soltarLinea() {
+  ficha.entrada = null;
+  ficha.linea = '';
+  ficha.medidas = null;
+  ficha.lineaPor = '';
+  ui.ficha.linea.value = '';
+  ficha.ultimoTexto = '';
+}
+
+// Fija la marca (una o varias del catálogo que comparten logo): el buscador
+// de líneas y las sugerencias pasan a ser solo de esa marca. Si la marca
+// viene del logo y la persona ya había escrito o tocado una línea de OTRA
+// marca, lo suyo manda: el logo queda en los chips, sin aplicarse.
 async function elegirMarca(marcas, por) {
-  ficha.marcasLineas = marcas;
-  ficha.marcaPor = marcas.length ? por : '';
-  if (marcas.length) {
-    ficha.marca = marcas[0];
-    // Una línea de otra marca ya no vale.
-    if (ficha.entrada && !marcas.includes(ficha.entrada.marca)) {
-      ficha.entrada = null;
-      ficha.linea = '';
-      ficha.medidas = null;
-      ui.ficha.linea.value = '';
-    }
-  } else if (!ficha.entrada) {
-    ficha.marca = '';
+  const marcaActual = ficha.entrada ? ficha.entrada.marca : ficha.marca;
+  if (por === 'logo' && ficha.lineaPor === 'mano' && marcaActual && !marcas.includes(marcaActual)) {
+    pintarMarcaTexto();
+    pintarMarcas();
+    return;
   }
+  ficha.marcasLineas = marcas;
+  ficha.marcaPor = por;
+  ficha.marcaSoltada = false;
+  ficha.marca = marcas[0];
+  // Una línea de otra marca ya no vale (la persona acaba de decir que la
+  // marca es otra, o el logo lo dijo y ella no había elegido nada).
+  if (ficha.entrada && !marcas.includes(ficha.entrada.marca)) soltarLinea();
   llenarCatalogo(marcas);
   pintarMarcaTexto();
   pintarMarcas();
   await actualizarSugerencias();
+}
+
+// "Otra marca": quita el filtro. Lo que propuso la app se suelta (el campo
+// queda vacío para escribir); lo que la persona escribió o tocó se queda.
+function soltarMarca() {
+  ficha.marcasLineas = [];
+  ficha.marcaPor = '';
+  ficha.marcaSoltada = true;
+  if (ficha.lineaPor !== 'mano') {
+    soltarLinea();
+    ficha.marca = '';
+  } else if (ficha.entrada) {
+    ficha.marca = ficha.entrada.marca;
+  }
+  llenarCatalogo([]);
+  ficha.sugerencias = (ficha.sugerenciasFoto || []).slice(0, 6);
+  pintarMarcaTexto();
+  pintarMarcas();
+  pintarSugerencias();
+  ui.ficha.linea.focus();
 }
 
 // Las familias de una marca por lo común que son, para proponer algo
@@ -433,7 +472,9 @@ function familiasComunesDe(marcas) {
 // Las sugerencias de línea según lo que se sepa: con marca y foto ya
 // mirada, las familias de la marca que más se parecen a la foto; con marca
 // y sin foto mirada, las más comunes de la marca; sin marca, lo que votó la
-// foto entera.
+// foto entera. La app elige sola la primera solo si la persona no ha
+// elegido ni escrito nada; lo que la propia app eligió antes se reemplaza
+// por lo mejor de ahora (una marca nueva trae otra mejor línea).
 async function actualizarSugerencias() {
   const sesion = ficha;
   if (ficha.marcasLineas.length && ficha.vector) {
@@ -446,9 +487,9 @@ async function actualizarSugerencias() {
   } else {
     ficha.sugerencias = (ficha.sugerenciasFoto || []).slice(0, 6);
   }
-  if (!ficha.entrada && ficha.sugerencias[0]) {
+  if (ficha.lineaPor !== 'mano' && ficha.sugerencias[0]) {
     const mejor = mejorDeFamilia(ficha.sugerencias[0].marca, ficha.sugerencias[0].linea);
-    if (mejor) elegirEntrada(mejor);
+    if (mejor && mejor !== ficha.entrada) elegirEntrada(mejor, 'app');
   }
   pintarSugerencias();
 }
@@ -458,8 +499,16 @@ async function actualizarSugerencias() {
 async function tocarLogo(e) {
   if (!ficha) return;
   const foto = ui.ficha.foto;
+  if (!foto.naturalWidth) {
+    ui.ficha.pistaLogo.textContent = 'Espera a que cargue la foto…';
+    return;
+  }
   const punto = puntoEnFoto(e.clientX, e.clientY, foto.getBoundingClientRect(), { width: foto.naturalWidth, height: foto.naturalHeight });
-  if (!punto) return;
+  if (!punto) {
+    // La franja negra al lado de la foto no es foto.
+    ui.ficha.pistaLogo.textContent = 'Toca encima del emblema, dentro de la foto';
+    return;
+  }
   const sesion = ficha;
   const n = ++ficha.toqueN;
   const marco = ui.ficha.marco.getBoundingClientRect();
@@ -492,31 +541,60 @@ async function tocarLogo(e) {
   }
 }
 
-// Lo que escribió la persona en "Marca y línea": si casa con el catálogo,
-// se toma la entrada entera (carrocería y medidas incluidas); si no, queda
-// como texto libre: primera palabra la marca, el resto la línea. Lo
-// escrito manda sobre la marca del logo: si escribe un Logan con la marca
-// en Chevrolet, la marca pasa a Renault.
+// Fija la marca a partir de lo escrito (sin tocar la línea, que ya quedó:
+// actualizarSugerencias no elige sola porque la línea es de la persona).
+function fijarMarcaEscrita(marcas) {
+  ficha.marcasLineas = marcas;
+  ficha.marcaPor = 'mano';
+  ficha.marcaSoltada = false;
+  llenarCatalogo(marcas);
+  pintarMarcaTexto();
+  pintarMarcas();
+  actualizarSugerencias();
+}
+
+// Lo que escribió la persona en "Marca y línea". Si casa con el catálogo
+// (nombre completo, marca + familia, o solo la línea cuando la marca ya se
+// sabe), se toma la entrada entera, carrocería y medidas incluidas; si no,
+// queda como texto libre. Lo escrito manda sobre la marca del logo: si
+// escribe "Renault Logan" con la marca en Chevrolet, la marca pasa a
+// Renault. Vaciar el campo es dejar el carro sin línea, y la app no lo
+// vuelve a llenar. Y si el campo no cambió, no se toca nada: "Abrir en 3D"
+// vuelve a llamar aquí y no debe pisar lo elegido.
 function tomarLineaEscrita() {
   const texto = ui.ficha.linea.value.trim();
-  if (!texto) return;
-  const encontrada = buscarLinea(texto, 1)[0];
-  if (encontrada && nombreDeLinea(encontrada).toLowerCase() === texto.toLowerCase()) {
-    elegirEntrada(encontrada);
-    if (ficha.marcasLineas.length && !ficha.marcasLineas.includes(encontrada.marca)) {
-      ficha.marcasLineas = [encontrada.marca];
-      ficha.marcaPor = 'mano';
-      llenarCatalogo(ficha.marcasLineas);
-      pintarMarcaTexto();
-      pintarMarcas();
-    }
+  if (texto === ficha.ultimoTexto) return;
+  ficha.ultimoTexto = texto;
+  if (!texto) {
+    ficha.entrada = null;
+    ficha.linea = '';
+    ficha.medidas = null;
+    ficha.lineaPor = 'mano';
+    if (!ficha.marcasLineas.length) ficha.marca = '';
+    pintarSugerencias();
     return;
   }
-  const [marca, ...resto] = texto.split(/\s+/);
-  ficha.marca = marca;
-  ficha.linea = resto.join(' ');
+  const encontrada = entradaEscrita(texto, ficha.marcasLineas);
+  if (encontrada) {
+    elegirEntrada(encontrada, 'mano');
+    if (!ficha.marcasLineas.includes(encontrada.marca)) fijarMarcaEscrita([encontrada.marca]);
+    return;
+  }
+  // Texto libre: con la marca ya sabida y sin marca al inicio, es solo la
+  // línea; si empieza por una marca, esa es la marca y el resto la línea.
+  const [primera, ...resto] = texto.split(/\s+/);
+  const marcaEscrita = marcaDelCatalogo(primera);
   ficha.entrada = null;
   ficha.medidas = null;
+  ficha.lineaPor = 'mano';
+  if (ficha.marcasLineas.length && !marcaEscrita) {
+    ficha.linea = texto;
+  } else {
+    ficha.marca = marcaEscrita || primera;
+    ficha.linea = resto.join(' ');
+    if (marcaEscrita && !ficha.marcasLineas.includes(marcaEscrita)) fijarMarcaEscrita([marcaEscrita]);
+    else if (!marcaEscrita) fijarMarcaEscrita([]);
+  }
   pintarSugerencias();
 }
 
@@ -532,8 +610,11 @@ async function abrirFicha(archivo) {
     medidas: null,
     entrada: null,
     sugerencias: [],
+    lineaPor: '',
+    carroceriaPor: '',
     marcasLineas: [],
     marcaPor: '',
+    marcaSoltada: false,
     logo: null,
     logoSeguro: false,
     vector: null,
@@ -541,6 +622,7 @@ async function abrirFicha(archivo) {
     marcasFoto: null,
     sugerenciasFoto: null,
     toqueN: 0,
+    ultimoTexto: '',
   };
   ui.ficha.foto.src = urlFicha;
   ui.ficha.toque.hidden = true;
@@ -579,8 +661,10 @@ async function abrirFicha(archivo) {
     ficha.sugerenciasFoto = resultado.lineas;
     if (resultado.carrocerias[0] && resultado.carrocerias[0].p > 0.6) {
       ficha.carroceriaVotada = resultado.carrocerias[0].tipo;
-      ficha.carroceria = ficha.carroceriaVotada;
-      pintarCarrocerias();
+      if (ficha.carroceriaPor !== 'mano') {
+        ficha.carroceria = ficha.carroceriaVotada;
+        pintarCarrocerias();
+      }
     }
     // Si ya tocó el logo (o eligió marca) mientras cargaba, las líneas son
     // de esa marca; si no, lo que votó la foto entera, con aviso de que la

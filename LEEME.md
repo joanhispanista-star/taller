@@ -85,10 +85,12 @@ carro".
   persona **toca el emblema**; la app recorta alrededor del toque a tres
   tamaños y CLIP compara los recortes con los 70 logos del catálogo
   (frases que describen la forma: "gold bowtie", "silver diamond"). Medido
-  con diez fotos reales: 8 de 10 de primera, con Nissan y Kia al 70-90 % y
-  Chevrolet, Renault y Mazda al 20-30 % pero con ventaja clara; falla un
-  Logan con el rombo en sombra y un Onix de lado. Si gana con claridad, la
-  marca queda puesta ("Marca por el logo: Chevrolet") y abajo solo salen
+  con diez fotos reales: la marca correcta sale de primera en 8 de 10, y en
+  7 de 10 con ventaja suficiente para ponerla sola (en la otra, un Tucson al
+  12 %, la app pregunta); Nissan y Kia al 70-90 %, Chevrolet, Renault y
+  Mazda al 20-30 % pero con ventaja clara; falla un Logan con el rombo en
+  sombra y un Onix de lado. Si gana con claridad, la marca queda puesta
+  ("Marca por el logo: Chevrolet") y abajo solo salen
   **las líneas de esa marca** (las familias de Chevrolet ordenadas por lo
   que se parecen a la foto, con empujón a la carrocería que votó la foto);
   si no, la app lo dice y ofrece las tres marcas más probables para tocar
@@ -533,6 +535,17 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
   bowtie emblem") lo subió a 29 % con ventaja clara, y la medición pasó de
   7 a 8 de 10. Si una marca nueva falla, lo primero es describir su logo
   en `DESCRIPCION_LOGO` (`js/logo.js`) y regenerar las etiquetas.
+- **Lo hecho a mano manda** en la ficha de la foto. Cada dato lleva de dónde
+  salió (`lineaPor`, `carroceriaPor`, `marcaPor`: 'mano', 'app', 'logo'):
+  la app solo elige sola donde la persona no eligió, solo reemplaza lo que
+  ella misma propuso, y el logo no pisa una línea escrita de otra marca (lo
+  dice: "El logo parecía Chevrolet; si es, tócala arriba"). Una revisión
+  con tres lentes (15-oct) encontró trece formas de pisar lo de la persona
+  —"Abrir en 3D" releyendo el campo y perdiendo la carrocería tocada,
+  escribir "captiva" con la marca ya puesta y guardar marca "captiva" sin
+  línea, el logo borrando un "Renault Logan" escrito mientras miraba—; todas
+  salían de no distinguir lo de la app de lo de la persona. `entradaEscrita`
+  (`catalogo.js`) entiende "captiva" cuando la marca ya se sabe.
 - El toque sobre la foto se convierte a un punto de la foto REAL
   (`puntoEnFoto`): la foto se muestra entera con `object-fit: contain`, con
   franjas vacías a los lados; un toque en la franja no es foto y se ignora.

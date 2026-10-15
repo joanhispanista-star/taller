@@ -98,6 +98,32 @@ export function prepararReconocedor(alAvanzar = () => {}) {
 // marcas: [{marca, p}], milisegundos }, todo ordenado de más a menos probable.
 // `linea` es la FAMILIA del catálogo (Logan, Hilux): catalogo.js la
 // convierte en una entrada concreta con mejorDeFamilia.
+// La foto leída UNA vez por archivo y reducida a 1600 px por el lado mayor:
+// una foto de teléfono de 12 MP ocupa 48 MB decodificada, y cada recorte
+// la clona entera; con tres recortes por toque un teléfono con poca RAM se
+// quedaba sin memoria. A 1600 px (lo que midió medir-logo.mjs) el logo
+// recortado sigue siendo más grande que los 224 px que mira CLIP.
+const LADO_MAXIMO = 1600;
+const imagenesLeidas = new WeakMap();
+
+async function leerFoto(archivo) {
+  let pendiente = imagenesLeidas.get(archivo);
+  if (!pendiente) {
+    pendiente = (async () => {
+      let imagen = await RawImage.fromBlob(archivo);
+      const mayor = Math.max(imagen.width, imagen.height);
+      if (mayor > LADO_MAXIMO) {
+        const factor = LADO_MAXIMO / mayor;
+        imagen = await imagen.resize(Math.round(imagen.width * factor), Math.round(imagen.height * factor));
+      }
+      return imagen;
+    })();
+    imagenesLeidas.set(archivo, pendiente);
+    pendiente.catch(() => imagenesLeidas.delete(archivo));
+  }
+  return pendiente;
+}
+
 // El vector (normalizado) de una imagen ya leída.
 async function vectorDeImagen(procesador, vision, imagen) {
   const entradas = await procesador(imagen);
@@ -111,7 +137,7 @@ async function vectorDeImagen(procesador, vision, imagen) {
 export async function reconocerCarro(archivo, alAvanzar) {
   const { procesador, vision, etiquetas } = await prepararReconocedor(alAvanzar);
   const inicio = performance.now();
-  const imagen = await RawImage.fromBlob(archivo);
+  const imagen = await leerFoto(archivo);
   const vector = await vectorDeImagen(procesador, vision, imagen);
 
   const tipos = Object.keys(etiquetas.carrocerias);
@@ -152,16 +178,18 @@ export async function reconocerCarro(archivo, alAvanzar) {
 // tocó (fracciones del ancho y del alto), a tres escalas, y compara cada
 // recorte con los logos. Devuelve { marcas: [{ nombre, marcas, p }],
 // seguro, milisegundos }. Medido el 15-oct-2026 con diez fotos reales
-// (herramientas/medir-logo.mjs): 8 de 10 de primera; Nissan y Kia salen
-// con 70-90 %, Chevrolet, Renault y Mazda con 20-30 % (pero con ventaja
-// clara), y fallan un Logan con el rombo en sombra y un Onix de lado sin
-// emblema a la vista. Sin toque, barriendo la foto a ciegas, 4 de 10: por
-// eso se pide el toque.
+// (herramientas/medir-logo.mjs): la marca correcta sale de primera en 8 de
+// 10, y en 7 de 10 con ventaja suficiente para ponerla sola (`seguro`); en
+// la otra (un Tucson al 12 %) la pantalla pregunta. Nissan y Kia salen con
+// 70-90 %, Chevrolet, Renault y Mazda con 20-30 % pero con ventaja clara;
+// fallan un Logan con el rombo en sombra y un Onix de lado sin emblema a
+// la vista. Sin toque, barriendo la foto a ciegas, 4 de 10: por eso se
+// pide el toque.
 export async function reconocerMarcaPorLogo(archivo, { x, y }, alAvanzar) {
   const { procesador, vision, etiquetas } = await prepararReconocedor(alAvanzar);
   const inicio = performance.now();
   if (etiquetas.marcas.length === 0) throw new Error('etiquetas-clip.json no trae logos: hay que regenerarlo');
-  const imagen = await RawImage.fromBlob(archivo);
+  const imagen = await leerFoto(archivo);
   const vectores = [];
   for (const escala of ESCALAS_RECORTE) {
     const r = recorteAlrededor(imagen.width, imagen.height, x, y, escala);

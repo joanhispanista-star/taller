@@ -155,9 +155,11 @@ export function clasificarLogo(vectoresRecortes, etiquetasMarcas, { escala = 100
 // Un logo "reconocido" es uno que gana con claridad: probabilidad alta y
 // ventaja sobre el segundo. Por debajo, la pantalla pide tocar más cerca o
 // elegir la marca a mano, en vez de afirmar una marca por un pelo. Los
-// umbrales salen de medir diez fotos (15-oct-2026): las marcas acertadas
-// salían con 20-90 % y 10+ puntos de ventaja; las equivocadas, con 5-10 %
-// y uno o dos puntos. Son 70 marcas: un 29 % ya es ganar por mucho.
+// umbrales salen de medir diez fotos (15-oct-2026): siete de las ocho
+// marcas acertadas salían con 20-90 % y 10+ puntos de ventaja (la octava,
+// un Tucson al 12 % contra 7 %, queda fuera a propósito: ahí se pregunta);
+// las equivocadas, con 5-10 % y uno o dos puntos. Son 70 marcas: un 29 %
+// ya es ganar por mucho.
 export function logoSeguro(lista, { minimo = 0.15, ventaja = 0.07 } = {}) {
   if (lista.length === 0) return false;
   const [a, b] = lista;
