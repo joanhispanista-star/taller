@@ -155,6 +155,16 @@ sol.position.set(3, 6, -4);
 escena.add(sol);
 
 const camara = new THREE.PerspectiveCamera(38, 1, 0.1, 60);
+
+// Las vistas están medidas para un sedán de 4,5 m en una pantalla
+// apaisada. Una camioneta de 5,3 m, o cualquier carro en un celular en
+// vertical (la pantalla es más alta que ancha), se salía del cuadro: la
+// cámara se aleja en proporción al largo y, en vertical, un 40 % más.
+function posicionDeVista(nombre) {
+  const largo = modelo ? modelo.disposicion.largo : 4.5;
+  const factor = Math.max(1, largo / 4.5) * (camara.aspect < 1 ? 1.4 : 1);
+  return VISTAS[nombre].map((v) => v * factor);
+}
 camara.position.set(...VISTAS.inicio);
 
 const controles = new OrbitControls(camara, ui.lienzo);
@@ -201,6 +211,10 @@ function reconstruirModelo() {
   modelo = construirCarro(opcionesDelModelo());
   firmaModelo = firma;
   escena.add(modelo.grupo);
+  // Otro carro, otro largo: la cámara vuelve a la vista de inicio a la
+  // distancia que le toca, para que no aparezca cortado.
+  camara.position.set(...posicionDeVista('inicio'));
+  controles.update();
   pedirCuadro();
 }
 
@@ -253,6 +267,7 @@ function bucle() {
 }
 bucle();
 
+let primerTamano = true;
 function ajustarTamano() {
   const ancho = ui.escena.clientWidth;
   const alto = ui.escena.clientHeight;
@@ -260,6 +275,13 @@ function ajustarTamano() {
   renderizador.setSize(ancho, alto, false);
   camara.aspect = ancho / alto;
   camara.updateProjectionMatrix();
+  // La primera vez que se sabe el tamaño real de la pantalla, la vista
+  // inicial se recalcula para ese tamaño y ese carro.
+  if (primerTamano) {
+    primerTamano = false;
+    camara.position.set(...posicionDeVista('inicio'));
+    controles.update();
+  }
   pedirCuadro();
 }
 new ResizeObserver(ajustarTamano).observe(ui.escena);
@@ -531,8 +553,8 @@ ui.marca.addEventListener('input', () => {
 let animacion = 0;
 let animacionActiva = null;
 function irA(nombre) {
-  const destino = VISTAS[nombre];
-  if (!destino) return;
+  if (!VISTAS[nombre]) return;
+  const destino = posicionDeVista(nombre);
   const objetivo = controles.target.clone();
   const desde = new THREE.Spherical().setFromVector3(camara.position.clone().sub(objetivo));
   const hasta = new THREE.Spherical().setFromVector3(new THREE.Vector3(...destino).sub(objetivo));
