@@ -501,3 +501,13 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
 - La demostración se ofrece siempre que no esté cargada, no solo con el
   Garaje vacío: Joan ya tiene su Captiva y aun así quiere ver los carros
   demo al lado.
+- GitHub **bloqueó el primer push** ("Push cannot contain secrets"): dentro
+  de `transformers.min.js` hay una cadena que su detector toma por una
+  clave de Mistral. Es el paquete de npm byte a byte (se comparó con
+  `node_modules`), un falso positivo. Se marcó como tal en la página que
+  GitHub da en el mensaje del push (hay que estar conectado con la cuenta
+  de Joan), y el push pasó. Si alguna vez se actualiza Transformers.js,
+  puede volver a pasar.
+- GitHub Pages sirve `.mjs` como `text/javascript` y `.wasm` como
+  `application/wasm` (comprobado el 15-oct): el motor del reconocedor
+  carga igual que con `herramientas/servidor.js`.
