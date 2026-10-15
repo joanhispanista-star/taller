@@ -202,7 +202,9 @@ export function nombreDePiezaEnOrden(carro, id, nombreBase) {
 // (textoParaAsistente, en estado.js); esto convierte el carro del registro
 // al estado que esa función entiende.
 export function estadoParaOrden(carro) {
-  return crearEstado({ placa: carro.placa, marca: carro.marca, seleccion: Object.keys(carro.piezas) });
+  // La orden lleva el carro completo ("Chevrolet Captiva (nueva) · 5
+  // puestos"), no solo la marca: el asistente tiene que saber cuál es.
+  return crearEstado({ placa: carro.placa, marca: nombreCompletoDelCarro(carro), seleccion: Object.keys(carro.piezas) });
 }
 
 export function serializarCarro(carro) {

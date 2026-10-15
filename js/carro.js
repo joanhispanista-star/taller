@@ -138,13 +138,42 @@ function materialNegro() {
 }
 
 function materialVidrio() {
+  // Oscuro y con el reflejo del entorno a la mitad: con el reflejo entero
+  // el parabrisas salía blanco en la vista de frente.
   return new THREE.MeshStandardMaterial({
-    color: 0x24323f,
+    color: 0x151c24,
     metalness: 0.1,
-    roughness: 0.08,
+    roughness: 0.12,
     transparent: true,
-    opacity: 0.55,
+    opacity: 0.7,
+    envMapIntensity: 0.45,
   });
+}
+
+// Un carro de verdad se angosta hacia las puntas visto desde arriba: el
+// frente y la cola no son el rectángulo de la chapa. Una zona de afinado
+// va de `inicio` (donde el ancho es el entero) a `punta`, donde queda en
+// `factor` del ancho, con una curva suave: casi todo el estrechamiento
+// ocurre cerca de la punta, como en un bómper redondeado.
+function kEn(z, zona) {
+  const t = (z - zona.inicio) / (zona.punta - zona.inicio);
+  if (t <= 0) return 1;
+  const tt = Math.min(1, t);
+  return 1 - (1 - zona.factor) * tt * tt;
+}
+
+// Acerca al eje los vértices de una malla ya construida, según su z en el
+// carro (la geometría extruida ya está en coordenadas del carro; una caja
+// lleva su z en `position`). Solo para mallas simétricas respecto al eje.
+function afinarMalla(malla, zona) {
+  const posiciones = malla.geometry.attributes.position;
+  for (let i = 0; i < posiciones.count; i++) {
+    const k = kEn(posiciones.getZ(i) + malla.position.z, zona);
+    if (k < 1) posiciones.setX(i, posiciones.getX(i) * k);
+  }
+  posiciones.needsUpdate = true;
+  malla.geometry.computeVertexNormals();
+  return malla;
 }
 
 function materialPlastico() {
@@ -574,6 +603,15 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
   panelAncho('bomper-del', perfilBomperDelantero(d), { bisel: 0.03, biselHaciaAdentro: true });
   panelAncho('bomper-tras', perfilBomperTrasero(d), { bisel: 0.03, biselHaciaAdentro: true });
 
+  // Las zonas de afinado de las puntas y las mallas que se afinan al final
+  // (las que llegan hasta el frente o hasta la cola). Las luces, que no son
+  // simétricas, se acercan al eje por su posición.
+  const zonaDel = { inicio: d.ejeDel - 0.25, punta: d.punta, factor: 0.86 };
+  const zonaTras = { inicio: d.ejeTras + 0.25, punta: d.cola, factor: d.tipo === 'camioneta' ? 0.95 : 0.9 };
+  const afinarDel = [porId.get('bomper-del'), porId.get('capo')];
+  const afinarTras = [porId.get('bomper-tras'), porId.get('baul')];
+  const luces = [];
+
   const espejo = d.tipo === 'camioneta' ? [0.12, 0.1, 0.2] : [0.1, 0.08, 0.16];
   for (const lado of ['izq', 'der']) {
     panelLateral('guardafango-del-' + lado, perfilGuardafangoDelantero(d), lado);
@@ -581,6 +619,8 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
     panelLateral('puerta-tras-' + lado, perfilPuerta(d, d.puertaMedia, d.puertaTras), lado);
     panelLateral('costado-' + lado, perfilCostado(d), lado);
     panelLateral('estribo-' + lado, perfilEstribo(d), lado);
+    afinarDel.push(porId.get('guardafango-del-' + lado));
+    afinarTras.push(porId.get('costado-' + lado));
 
     const signo = lado === 'der' ? 1 : -1;
     const zEspejo = d.puertaDel + 0.18;
@@ -605,7 +645,9 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
     if (d.tipo === 'suv' || d.tipo === 'camioneta') {
       const xDesde = lado === 'der' ? d.medio + 0.035 : -d.medio + 0.015;
       for (const eje of [d.ejeDel, d.ejeTras]) {
-        grupo.add(decorativo(extruirPerfil(perfilPasarrueda(d, eje), { xDesde, grosor: 0.05, bisel: 0, material: materialPlastico() })));
+        const aro = decorativo(extruirPerfil(perfilPasarrueda(d, eje), { xDesde, grosor: 0.05, bisel: 0, material: materialPlastico() }));
+        grupo.add(aro);
+        (eje === d.ejeDel ? afinarDel : afinarTras).push(aro);
       }
       grupo.add(decorativo(caja(0.02, 0.07, d.puertaTras - d.puertaDel - 0.02, materialPlastico(), xFuera, d.estriboAlto + 0.045, (d.puertaDel + d.puertaTras) / 2)));
     }
@@ -622,22 +664,28 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
   const vidrio = extruirPerfil(perfilVidrio(d), { xDesde: d.anchoVidrio / 2, grosor: d.anchoVidrio, bisel: 0, material: materialVidrio() });
   vidrio.name = 'vidrio';
   grupo.add(vidrio);
-  grupo.add(extruirPerfil(perfilNucleoDelantero(d), { xDesde: d.anchoNucleo / 2, grosor: d.anchoNucleo, bisel: 0, material: materialNegro() }));
+  const nucleoDelantero = extruirPerfil(perfilNucleoDelantero(d), { xDesde: d.anchoNucleo / 2, grosor: d.anchoNucleo, bisel: 0, material: materialNegro() });
+  grupo.add(nucleoDelantero);
+  afinarDel.push(nucleoDelantero);
 
   // El bloque del medio llena el carro bajo la cintura; lo que haya detrás
   // depende de la carrocería (el baúl, la cola del hatchback o el platón).
-  const bloque = (desde, hasta, arriba) =>
-    caja(d.anchoNucleo, arriba - d.radioRueda, hasta - desde, materialNegro(), 0, (arriba + d.radioRueda) / 2, (desde + hasta) / 2);
+  const bloque = (desde, hasta, arriba) => {
+    const b = caja(d.anchoNucleo, arriba - d.radioRueda, hasta - desde, materialNegro(), 0, (arriba + d.radioRueda) / 2, (desde + hasta) / 2);
+    grupo.add(b);
+    afinarTras.push(b);
+    return b;
+  };
   if (d.tipo === 'sedan') {
-    grupo.add(bloque(d.capoTras, d.baulDel, d.cintura - 0.01));
-    grupo.add(bloque(d.baulDel, d.bomperTras, d.piso + 0.51));
+    bloque(d.capoTras, d.baulDel, d.cintura - 0.01);
+    bloque(d.baulDel, d.bomperTras, d.piso + 0.51);
   } else if (d.tipo === 'camioneta') {
-    grupo.add(bloque(d.capoTras, d.cabinaTras, d.cintura - 0.01));
+    bloque(d.capoTras, d.cabinaTras, d.cintura - 0.01);
     // El platón: el piso de carga va más bajo que los costados, para que
     // desde arriba se vea que es una caja abierta.
-    grupo.add(bloque(d.platonDel, d.finCostado, d.cintura - 0.28));
+    bloque(d.platonDel, d.finCostado, d.cintura - 0.28);
   } else {
-    grupo.add(bloque(d.capoTras, d.finCostado, d.cintura - 0.01));
+    bloque(d.capoTras, d.finCostado, d.cintura - 0.01);
   }
 
   // Sillas y tablero: un bloque oscuro dentro de la cabina para que el
@@ -661,7 +709,9 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
     }
   }
   if (d.tipo === 'suv' || d.tipo === 'hatchback') {
-    grupo.add(decorativo(caja(d.anchoTecho - 0.2, 0.045, 0.2, materialPlastico(), 0, d.techo + 0.04, d.techoTras + 0.04)));
+    const aleron = decorativo(caja(d.anchoTecho - 0.2, 0.045, 0.2, materialPlastico(), 0, d.techo + 0.04, d.techoTras + 0.04));
+    grupo.add(aleron);
+    afinarTras.push(aleron);
   }
 
   // Luces, parrilla y placas, acostadas sobre la cara del bómper que las
@@ -669,31 +719,44 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
   // 27° la de la placa); las de atrás sobre caras casi verticales.
   const xLuz = d.ancho * 0.326;
   const inclinacionFaro = Math.atan2(0.08, 0.14);
-  grupo.add(luz(-xLuz, d.piso + 0.425, d.punta + 0.035, 0.42, 0.11, 0xfff1cc, inclinacionFaro));
-  grupo.add(luz(xLuz, d.piso + 0.425, d.punta + 0.035, 0.42, 0.11, 0xfff1cc, inclinacionFaro));
+  luces.push(luz(-xLuz, d.piso + 0.425, d.punta + 0.035, 0.42, 0.11, 0xfff1cc, inclinacionFaro));
+  luces.push(luz(xLuz, d.piso + 0.425, d.punta + 0.035, 0.42, 0.11, 0xfff1cc, inclinacionFaro));
   const parrilla = caja(0.72, 0.18, 0.04, materialNegro(), 0, d.piso + 0.22, d.punta - 0.015);
   parrilla.name = 'parrilla';
   grupo.add(parrilla);
+  afinarDel.push(parrilla);
   // La barra cromada sobre la parrilla y los exploradores en el bómper: lo
   // poco que hace que un frente se vea de carro y no de caja.
-  grupo.add(decorativo(caja(0.8, 0.03, 0.03, materialCromo(), 0, d.piso + 0.325, d.punta - 0.012)));
+  const barra = decorativo(caja(0.8, 0.03, 0.03, materialCromo(), 0, d.piso + 0.325, d.punta - 0.012));
+  grupo.add(barra);
+  afinarDel.push(barra);
   for (const signo of [-1, 1]) {
-    grupo.add(decorativo(caja(0.16, 0.09, 0.03, materialPlastico(), signo * d.ancho * 0.36, d.piso + 0.2, d.punta - 0.005)));
+    luces.push(decorativo(caja(0.16, 0.09, 0.03, materialPlastico(), signo * d.ancho * 0.36, d.piso + 0.2, d.punta - 0.005)));
   }
   grupo.add(placa(0, d.piso + 0.1, d.punta - 0.005, -Math.atan2(0.05, 0.1), numeroPlaca, -1));
   if (d.tipo === 'sedan') {
-    grupo.add(luz(-xLuz, d.piso + 0.59, d.cola - 0.195, 0.38, 0.09, 0xe0262e));
-    grupo.add(luz(xLuz, d.piso + 0.59, d.cola - 0.195, 0.38, 0.09, 0xe0262e));
+    luces.push(luz(-xLuz, d.piso + 0.59, d.cola - 0.195, 0.38, 0.09, 0xe0262e));
+    luces.push(luz(xLuz, d.piso + 0.59, d.cola - 0.195, 0.38, 0.09, 0xe0262e));
     grupo.add(placa(0, d.piso + 0.3, d.cola + 0.007, 0, numeroPlaca, 1));
   } else if (d.tipo === 'camioneta') {
     // Las luces van en las esquinas del platón y la placa en la compuerta.
-    grupo.add(luz(-(d.medio - 0.2), d.cintura - 0.3, d.compuertaZ + 0.03, 0.14, 0.3, 0xe0262e));
-    grupo.add(luz(d.medio - 0.2, d.cintura - 0.3, d.compuertaZ + 0.03, 0.14, 0.3, 0xe0262e));
+    luces.push(luz(-(d.medio - 0.2), d.cintura - 0.3, d.compuertaZ + 0.03, 0.14, 0.3, 0xe0262e));
+    luces.push(luz(d.medio - 0.2, d.cintura - 0.3, d.compuertaZ + 0.03, 0.14, 0.3, 0xe0262e));
     grupo.add(placa(0, d.piso + 0.5, d.compuertaZ + 0.025, 0, numeroPlaca, 1));
   } else {
-    grupo.add(luz(-xLuz, d.piso + 0.62, d.compuertaZ + 0.03, 0.34, 0.1, 0xe0262e));
-    grupo.add(luz(xLuz, d.piso + 0.62, d.compuertaZ + 0.03, 0.34, 0.1, 0xe0262e));
+    luces.push(luz(-xLuz, d.piso + 0.62, d.compuertaZ + 0.03, 0.34, 0.1, 0xe0262e));
+    luces.push(luz(xLuz, d.piso + 0.62, d.compuertaZ + 0.03, 0.34, 0.1, 0xe0262e));
     grupo.add(placa(0, d.piso + 0.82, d.compuertaZ + 0.03, 0, numeroPlaca, 1));
+  }
+
+  // Afinar las puntas: las mallas simétricas por su geometría; las luces y
+  // los exploradores, que están a un lado, acercándolos al eje.
+  for (const malla of afinarDel) afinarMalla(malla, zonaDel);
+  for (const malla of afinarTras) afinarMalla(malla, zonaTras);
+  for (const malla of luces) {
+    const zona = malla.position.z < 0 ? zonaDel : zonaTras;
+    malla.position.x *= kEn(malla.position.z, zona);
+    grupo.add(malla);
   }
 
   return { grupo, seleccionables, porId, disposicion: d };

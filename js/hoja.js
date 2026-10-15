@@ -63,7 +63,10 @@ export function crearHoja(acciones) {
     cerrar: ui.dialogo.querySelector('[data-accion="cerrar"]'),
   };
 
-  let urls = []; // object URLs de las miniaturas vivas, para liberarlas al repintar
+  // Una URL temporal por foto, viva mientras la foto esté en la lista: si se
+  // liberaran al repintar, las miniaturas que aún no habían cargado fallaban
+  // (y la consola se llenaba de ERR_FILE_NOT_FOUND).
+  const urls = new Map();
   let urlGrande = '';
   let fotoAbierta = null;
   let piezaDelMenu = null;
@@ -201,15 +204,20 @@ export function crearHoja(acciones) {
   // ---------- Fotos ----------
 
   function pintarFotos(fotos) {
-    for (const url of urls) URL.revokeObjectURL(url);
-    urls = [];
+    const vivas = new Set(fotos.map((f) => f.id));
+    for (const [id, url] of urls) {
+      if (!vivas.has(id)) {
+        URL.revokeObjectURL(url);
+        urls.delete(id);
+      }
+    }
     ui.fotos.hidden = fotos.length === 0;
     ui.fotos.replaceChildren(
       ...fotos.map((foto) => {
         const b = boton('foto', '', 'Ver la foto de ' + nombreDe(carroceria, foto.pieza));
         const imagen = document.createElement('img');
-        const url = URL.createObjectURL(foto.miniatura || foto.foto);
-        urls.push(url);
+        if (!urls.has(foto.id)) urls.set(foto.id, URL.createObjectURL(foto.miniatura || foto.foto));
+        const url = urls.get(foto.id);
         imagen.src = url;
         imagen.alt = '';
         imagen.decoding = 'async';

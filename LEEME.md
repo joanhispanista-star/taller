@@ -82,7 +82,12 @@ carro".
   del platón) y estiradas a las medidas reales de la línea (largo, ancho,
   alto, distancia entre ejes) que trae el catálogo. El carro sale además del
   color de la foto. Arriba del 3D, la ficha dice qué carro es y que la
-  carrocería es de referencia.
+  carrocería es de referencia. Lo que lo hace ver de carro y no de caja:
+  capó y techo abombados, las puntas afinadas vistas desde arriba, rines de
+  cinco rayos, moldura en la cintura, manijas cromadas, pasarruedas y
+  faldón negro en SUV y camioneta, barras de techo en la SUV, alerón en
+  hatchback y SUV, barra cromada en la parrilla y exploradores. Nada de eso
+  se toca: el dedo lo atraviesa y marca la pieza de debajo.
 - **Catálogo de carros de Colombia** (`js/catalogo-carros.js`): marcas y
   líneas que se venden o que todavía ruedan (el parque tiene 13 años de
   edad promedio), con carrocería, medidas, años y qué tan comunes son:
@@ -333,5 +338,12 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
 - Desde el frente, un sedán y un hatchback son el mismo carro para
   cualquier IA: el baúl está atrás. Si la foto se toma de tres cuartos
   (frente y lado), la carrocería acierta más.
+- Las URL temporales de las miniaturas (`URL.createObjectURL`) no se
+  liberan al repintar la tira sino cuando la foto sale de la lista: si se
+  liberaban antes, las imágenes que aún no habían cargado fallaban con
+  `ERR_FILE_NOT_FOUND` en la consola.
+- El toque salta los adornos (`userData.decorativo`) pero no el vidrio ni
+  las llantas: tocar una manija marca la puerta; tocar el vidrio no marca la
+  puerta del otro lado.
 - La dirección del PC para el celular sale de `ipconfig` como "Dirección
   IPv4" del adaptador Wi-Fi (los nombres salen en español y con la ñ rota).

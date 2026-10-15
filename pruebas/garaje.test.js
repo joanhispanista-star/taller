@@ -214,6 +214,9 @@ test('la orden para el asistente sale del carro del registro, con todas las piez
   assert.equal(lineas[1], '2 piezas para pintar:');
   assert.equal(lineas[2], '1. Capó');
   assert.equal(lineas[3], '2. Techo');
+  // Con línea y versión, la orden dice el carro completo.
+  const captiva = crearCarro({ placa: 'JRX248', marca: 'Chevrolet', linea: 'Captiva (nueva)', version: '5 puestos', piezas: { capo: {} } });
+  assert.equal(textoParaAsistente(estadoParaOrden(captiva)).split(String.fromCharCode(10))[0], 'ORDEN DE PINTURA - Chevrolet Captiva (nueva) · 5 puestos, placa JRX248');
 });
 
 test('serializar y deserializar conservan placa, marca, fechas y estados', () => {
