@@ -156,7 +156,8 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
   padding: 6px 12px;
   border-radius: 999px;
   font-size: 12px;
-  white-space: nowrap;
+  max-width: calc(100% - 20px);
+  text-align: center;
   pointer-events: none;
 }
 

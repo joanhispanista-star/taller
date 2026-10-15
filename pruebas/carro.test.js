@@ -20,7 +20,8 @@ test('cada pieza del catálogo existe en el carro, y ninguna más', () => {
   assert.equal(carro.seleccionables.length, PIEZAS.length);
   for (const malla of carro.seleccionables) {
     assert.equal(malla.userData.piezaId, malla.name);
-    assert.ok(carro.grupo.children.includes(malla), malla.name + ' no cuelga del carro');
+    // Directo del carro, o de una bisagra que cuelga del carro.
+    assert.ok(malla.parent === carro.grupo || malla.parent.parent === carro.grupo, malla.name + ' no cuelga del carro');
   }
 });
 

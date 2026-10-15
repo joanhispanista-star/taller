@@ -355,6 +355,124 @@ function alTocar(x, y) {
   ui.pista.hidden = true;
 }
 
+// ---------- Abrir puertas, capó y compuerta ----------
+//
+// Arrastrar una pieza con bisagra la abre o la cierra siguiendo el dedo;
+// al soltar queda abierta o cerrada, lo que esté más cerca. Un toque sin
+// arrastre la marca, como a cualquier pieza. Arrastrar en otra parte (una
+// pieza fija, el piso, el vidrio) gira el carro, como siempre.
+//
+// Estos manejadores van en fase de captura para correr ANTES que los de
+// OrbitControls (que escuchan el mismo lienzo): así, al apagar los
+// controles aquí, el giro no arranca con este dedo.
+let gesto = null; // { art, x0, y0, angulo0, direccion, arrastro }
+
+function posicionEnPantalla(vector) {
+  const r = ui.lienzo.getBoundingClientRect();
+  const p = vector.clone().project(camara);
+  return { x: ((p.x + 1) / 2) * r.width, y: ((1 - p.y) / 2) * r.height };
+}
+
+// Hacia dónde se mueve en la pantalla el borde libre de la pieza al
+// abrirse del todo. Mover el dedo en esa dirección abre; en la contraria,
+// cierra. Se mide con la cámara de ahora: depende de desde dónde se mira.
+function direccionDeApertura(art) {
+  const anguloActual = art.angulo;
+  const punto = (angulo) => {
+    art.fijar(angulo);
+    art.pivote.updateMatrixWorld(true);
+    return posicionEnPantalla(art.pivote.localToWorld(art.referencia.clone()));
+  };
+  const cerrada = punto(0);
+  const abierta = punto(art.max);
+  art.fijar(anguloActual);
+  art.pivote.updateMatrixWorld(true);
+  const dx = abierta.x - cerrada.x;
+  const dy = abierta.y - cerrada.y;
+  const distancia = Math.max(60, Math.hypot(dx, dy));
+  return { x: dx / distancia, y: dy / distancia, distancia };
+}
+
+let animacionBisagra = 0;
+function animarArticulacion(art, destino) {
+  const desde = art.angulo;
+  const inicio = performance.now();
+  const id = ++animacionBisagra;
+  function cuadro(ahora) {
+    if (id !== animacionBisagra) return;
+    const k = Math.min(1, (ahora - inicio) / 180);
+    art.fijar(desde + (destino - desde) * k * (2 - k));
+    pedirCuadro();
+    if (k < 1) requestAnimationFrame(cuadro);
+  }
+  requestAnimationFrame(cuadro);
+}
+
+function abrirPieza(id, angulo) {
+  const art = modelo.articulaciones.get(id);
+  if (!art) return false;
+  animarArticulacion(art, angulo == null ? (art.angulo > 0 ? 0 : art.max) : angulo);
+  return true;
+}
+
+ui.lienzo.addEventListener(
+  'pointerdown',
+  (e) => {
+    if (gesto) {
+      // Llegó otro dedo: el gesto se suelta donde iba y los controles
+      // vuelven (será un pellizco para acercar).
+      gesto = null;
+      controles.enabled = !animacionActiva;
+      return;
+    }
+    if (dedos !== 0 || enMovimiento || animacionActiva) return;
+    const id = piezaBajo(e.clientX, e.clientY);
+    const art = id && modelo.articulaciones.get(id);
+    if (!art) return;
+    gesto = { art, x0: e.clientX, y0: e.clientY, angulo0: art.angulo, direccion: direccionDeApertura(art), arrastro: false };
+    controles.enabled = false;
+  },
+  true,
+);
+ui.lienzo.addEventListener(
+  'pointermove',
+  (e) => {
+    if (!gesto) return;
+    const dx = e.clientX - gesto.x0;
+    const dy = e.clientY - gesto.y0;
+    if (!gesto.arrastro && Math.hypot(dx, dy) < 8) return;
+    gesto.arrastro = true;
+    toque = null; // ya no es un toque: no se marca la pieza al soltar
+    const avance = (dx * gesto.direccion.x + dy * gesto.direccion.y) / gesto.direccion.distancia;
+    gesto.art.fijar(gesto.angulo0 + avance * gesto.art.max);
+    pedirCuadro();
+  },
+  true,
+);
+ui.lienzo.addEventListener(
+  'pointerup',
+  () => {
+    if (!gesto) return;
+    const { art, arrastro } = gesto;
+    gesto = null;
+    controles.enabled = !animacionActiva;
+    if (!arrastro) return; // fue un toque: lo atiende el manejador de marcar
+    // Al soltar, a lo que esté más cerca: abierta o cerrada.
+    animarArticulacion(art, art.angulo > art.max * 0.4 ? art.max : 0);
+    ui.pista.hidden = true;
+  },
+  true,
+);
+ui.lienzo.addEventListener(
+  'pointercancel',
+  () => {
+    if (!gesto) return;
+    gesto = null;
+    controles.enabled = !animacionActiva;
+  },
+  true,
+);
+
 function tenir(id) {
   const malla = modelo.porId.get(id);
   if (!malla) return;
@@ -667,9 +785,12 @@ window.__visor = {
   get modelo() {
     return modelo;
   },
+  camara,
+  depurar: () => ({ enMovimiento, dedos, animacionActiva: Boolean(animacionActiva), gesto: Boolean(gesto), controles: controles.enabled }),
   alternar,
   fijar,
   fijarTrabajo: fijarTrabajoDe,
+  abrirPieza,
   abrirDatos: () => fichaCarro.abrir(carro),
   agregarFoto,
   borrarFoto,

@@ -29,6 +29,14 @@ export const PIEZAS = [
   { id: 'estribo-der', nombre: 'Estribo derecho', lado: 'der' },
   { id: 'espejo-izq', nombre: 'Espejo izquierdo', lado: 'izq' },
   { id: 'espejo-der', nombre: 'Espejo derecho', lado: 'der' },
+  // Las de interior (15-oct-2026): se ven con algo abierto y también se
+  // pintan. El marco es el umbral y los pilares por dentro de ese lado; el
+  // vano del motor es la bandeja y las paredes bajo el capó; el vano del
+  // baúl es el piso del baúl (o de la compuerta, o del platón).
+  { id: 'marco-izq', nombre: 'Marco de puertas izquierdo', lado: 'izq' },
+  { id: 'marco-der', nombre: 'Marco de puertas derecho', lado: 'der' },
+  { id: 'vano-motor', nombre: 'Vano del motor', lado: null },
+  { id: 'vano-baul', nombre: 'Vano del baúl', lado: null },
 ];
 
 export const PIEZAS_POR_ID = new Map(PIEZAS.map((p) => [p.id, p]));

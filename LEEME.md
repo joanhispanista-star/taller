@@ -110,6 +110,20 @@ carro".
   WhatsApp lo dice entre paréntesis y la nómina lo pagará aparte.
 - **La placa pintada en el 3D**: las dos placas del carro llevan el número
   del registro ("JRX 248"), dibujado en un canvas amarillo.
+- **Puertas, capó y compuerta que se abren con el dedo**: arrastrar una de
+  esas piezas la abre siguiendo el dedo y arrastrarla de vuelta la cierra;
+  al soltar queda abierta o cerrada, lo que esté más cerca. Un toque sin
+  arrastre la marca, como siempre; arrastrar en otra parte gira el carro.
+  Cada ventana viaja con su puerta (el vidrio ya no es un bloque: es un
+  panel por ventana), el espejo con la puerta delantera, y el vidrio
+  trasero, la placa y el alerón con la compuerta. El baúl del sedán abre
+  por su borde delantero y la compuerta del platón cae hacia atrás.
+- **Piezas de interior** (21 en total ahora): con algo abierto aparecen el
+  **vano del motor** (la bandeja y las paredes bajo el capó, con el motor en
+  negro), el **marco de puertas** de cada lado (el umbral y los pilares por
+  dentro) y el **vano del baúl** (el piso del baúl, de la compuerta o del
+  platón). Se marcan y se pintan como las demás; la puerta abierta deja ver
+  su cara interior, que es la misma pieza.
 - Cada pieza marcada tiene **estado**: pendiente (naranja), en proceso
   (amarillo) o terminada (verde). La chapa en 3D y el chip de la lista van
   del mismo color. Se cambia tocando el nombre en el chip: sale un menú con
@@ -186,7 +200,7 @@ npm test
 | `js/hoja.js` | La hoja de abajo del visor: chips con estado, trabajo (latonería) y cámara, menú de estado y trabajo, tira de fotos y foto grande, con los nombres de la carrocería. DOM puro, sin Three.js. |
 | `js/ficha-carro.js` | La ficha "Datos del carro" del visor: marca, línea con el catálogo, versión, carrocería y color. DOM puro. |
 | `js/garaje-pantalla.js` | La pantalla Garaje: lista con portada y color, abrir o crear por placa, borrar, y la ficha del carro nuevo con foto (color, reconocedor, catálogo, confirmación). |
-| `js/carro.js` | El carro, pieza por pieza, construido con perfiles extruidos, en cuatro carrocerías y a las medidas de la línea (`disposicion` convierte medidas en bordes y alturas). Cada pieza es un objeto aparte con su propio material. Sin DOM: también se construye en Node para probarlo. |
+| `js/carro.js` | El carro, pieza por pieza, construido con perfiles extruidos, en cuatro carrocerías y a las medidas de la línea (`disposicion` convierte medidas en bordes y alturas). Cada pieza es un objeto aparte con su propio material; las articuladas (puertas, capó, pieza trasera) cuelgan de un pivote en su bisagra (`articular`) y las de interior comparten material con sus paredes (`acompanar`). Sin DOM: también se construye en Node para probarlo. |
 | `js/toque.js` | Qué pieza hay bajo el dedo: rayo central más un anillo de ocho para que estribos y espejos se dejen tocar. Sin DOM, probado con la cámara y el carro reales. |
 | `js/visor.js` | Escena, luces, cámara, giro con el dedo, el toque que marca, y el pegamento con el registro: qué carro está abierto (por la URL o el último), el 3D con su carrocería, color y medidas (se reconstruye al cambiar de carro), teñir por estado, guardar. |
 | `js/vendor/` | Three.js 0.169 (tres archivos) y, en `transformers/`, Transformers.js 4.3.1 con el motor ONNX Runtime (dos .wasm, 41 MB). Copiados de npm, no se editan. Así la app no depende de internet para dibujar ni de que cambie la versión. |
@@ -290,6 +304,11 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
    Gemini con la lista de candidatos), que cuesta centavos por foto pero
    necesita una cuenta de API pagada con tarjeta y un servidor que guarde la
    clave: es la semana del 26 (la nube) y una decisión de plata.
+9. **¿Cómo se pagan las piezas de interior y la latonería?** El vano del
+   motor, los marcos de puertas y el vano del baúl ya se marcan; la
+   latonería ya se distingue de la pintura. Falta saber si el vano paga los
+   mismos 90.000 que un capó, y cuánto paga la latonería: la nómina de la
+   semana del 26 no se puede cerrar sin eso.
 
 ## Trampas conocidas
 
@@ -345,5 +364,18 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
 - El toque salta los adornos (`userData.decorativo`) pero no el vidrio ni
   las llantas: tocar una manija marca la puerta; tocar el vidrio no marca la
   puerta del otro lado.
+- Los manejadores del gesto de abrir van en **fase de captura** sobre el
+  lienzo: así corren antes que los de OrbitControls (que escuchan el mismo
+  lienzo) y pueden apagar los controles antes de que el giro arranque con
+  ese dedo. Si fueran normales, OrbitControls ya habría empezado a girar.
+- Al medir una pieza que cuelga de una bisagra hay que actualizar primero
+  la bisagra (`updateWorldMatrix(true, true)`): `Box3.setFromObject` solo
+  actualiza la malla con la matriz vieja del padre, y la puerta "abierta"
+  salía donde estaba cerrada.
+- Con el panel de Claude tapado, `requestAnimationFrame` no corre: las
+  animaciones (la cámara yendo a una vista, una puerta abriéndose) se
+  quedan quietas hasta que algo pinta. Las coordenadas de una pieza en
+  pantalla, calculadas en ese estado, son de donde la cámara venía, no de
+  donde iba; un arrastre de prueba cayó en otra parte por eso.
 - La dirección del PC para el celular sale de `ipconfig` como "Dirección
   IPv4" del adaptador Wi-Fi (los nombres salen en español y con la ñ rota).

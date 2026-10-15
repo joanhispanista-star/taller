@@ -16,7 +16,8 @@ import {
 } from '../js/carrocerias.js';
 
 function caja(objeto) {
-  objeto.updateMatrixWorld(true);
+  // Primero los padres (la bisagra puede haber girado), luego los hijos.
+  objeto.updateWorldMatrix(true, true);
   return new THREE.Box3().setFromObject(objeto);
 }
 
@@ -134,6 +135,82 @@ test('el carro acepta el número de la placa y en Node (sin canvas) la deja amar
   }
 });
 
+test('cada carrocería tiene bisagras en las cuatro puertas, el capó y la pieza trasera', () => {
+  for (const tipo of TIPOS) {
+    const carro = construirCarro({ carroceria: tipo });
+    assert.deepEqual(
+      [...carro.articulaciones.keys()].sort(),
+      ['baul', 'capo', 'puerta-del-der', 'puerta-del-izq', 'puerta-tras-der', 'puerta-tras-izq'],
+      tipo,
+    );
+    for (const art of carro.articulaciones.values()) {
+      assert.equal(art.angulo, 0, tipo + ': nace cerrada');
+      assert.ok(art.max > 0.5, tipo + ': abre de verdad');
+    }
+  }
+});
+
+test('abrir una puerta la saca hacia afuera; el capó sube por delante; la pieza trasera se levanta', () => {
+  for (const tipo of TIPOS) {
+    const carro = construirCarro({ carroceria: tipo });
+    const puerta = carro.porId.get('puerta-del-izq');
+    const cerrada = caja(puerta);
+    carro.articulaciones.get('puerta-del-izq').fijar(1.0);
+    const abierta = caja(puerta);
+    assert.ok(abierta.min.x < cerrada.min.x - 0.5, tipo + ': la puerta izquierda sale hacia -X ' + abierta.min.x.toFixed(2));
+    // La ventana viaja con la puerta: ningún vidrio queda donde estaba la puerta cerrada.
+    const vidriosEnSuSitio = [];
+    carro.grupo.traverse((o) => {
+      if (o.name === 'vidrio' && o.parent === carro.articulaciones.get('puerta-del-izq').pivote) vidriosEnSuSitio.push(caja(o).min.x);
+    });
+    assert.equal(vidriosEnSuSitio.length, 1, tipo + ': una ventana en la puerta delantera');
+    assert.ok(vidriosEnSuSitio[0] < cerrada.min.x - 0.4, tipo + ': la ventana se fue con la puerta');
+
+    const capo = carro.porId.get('capo');
+    const capoCerrado = caja(capo);
+    carro.articulaciones.get('capo').fijar(0.8);
+    assert.ok(caja(capo).max.y > capoCerrado.max.y + 0.5, tipo + ': el capó sube');
+
+    const trasera = carro.porId.get('baul');
+    const traseraCerrada = caja(trasera);
+    carro.articulaciones.get('baul').fijar(carro.articulaciones.get('baul').max);
+    const traseraAbierta = caja(trasera);
+    if (tipo === 'camioneta') {
+      assert.ok(traseraAbierta.max.z > traseraCerrada.max.z + 0.3, tipo + ': la compuerta del platón cae hacia atrás');
+    } else {
+      assert.ok(traseraAbierta.max.y > traseraCerrada.max.y + 0.3, tipo + ': la pieza trasera se levanta');
+    }
+    // Las puertas derechas abren hacia +X.
+    const der = carro.porId.get('puerta-tras-der');
+    const derCerrada = caja(der);
+    carro.articulaciones.get('puerta-tras-der').fijar(1.0);
+    assert.ok(caja(der).max.x > derCerrada.max.x + 0.5, tipo + ': la puerta derecha sale hacia +X');
+    // Cerrar deja todo como estaba.
+    for (const art of carro.articulaciones.values()) art.fijar(0);
+    assert.ok(Math.abs(caja(puerta).min.x - cerrada.min.x) < 1e-9, tipo + ': cerrada vuelve a su sitio');
+  }
+});
+
+test('las piezas de interior existen, comparten material con sus paredes y quedan dentro de la chapa', () => {
+  for (const tipo of TIPOS) {
+    const carro = construirCarro({ carroceria: tipo });
+    for (const id of ['marco-izq', 'marco-der', 'vano-motor', 'vano-baul']) assert.ok(carro.porId.has(id), tipo + ' ' + id);
+    const vano = carro.porId.get('vano-motor');
+    let paredes = 0;
+    carro.grupo.traverse((o) => {
+      if (o !== vano && o.userData.piezaId === 'vano-motor') {
+        paredes += 1;
+        assert.equal(o.material, vano.material, 'la pared comparte material con la bandeja');
+      }
+    });
+    assert.equal(paredes, 3, tipo + ': dos paredes y el torpedo');
+    const d = carro.disposicion;
+    const marco = caja(carro.porId.get('marco-izq'));
+    assert.ok(marco.max.x < -d.medio + 0.2 && marco.min.x > -d.medio, tipo + ': el marco va justo detrás de la puerta');
+    assert.ok(caja(vano).max.y < caja(carro.porId.get('capo')).min.y + 0.05, tipo + ': el vano queda bajo el capó');
+  }
+});
+
 test('los adornos no se pintan ni se tocan: están marcados como decorativos', () => {
   const carro = construirCarro({ carroceria: 'suv' });
   let decorativos = 0;
@@ -154,9 +231,11 @@ test('la SUV es más alta que el hatchback con el mismo dibujo', () => {
   assert.ok(suv.piso > hatch.piso && suv.cintura > hatch.cintura && suv.techo > hatch.techo && suv.radioRueda > hatch.radioRueda);
 });
 
-test('piezasDe devuelve las 17 piezas en el orden del catálogo con los nombres de la carrocería', () => {
+test('piezasDe devuelve las 21 piezas en el orden del catálogo con los nombres de la carrocería', () => {
   const lista = piezasDe('camioneta');
-  assert.equal(lista.length, 17);
+  assert.equal(lista.length, 21);
+  assert.equal(lista.find((p) => p.id === 'vano-baul').nombre, 'Piso del platón');
+  assert.equal(piezasDe('suv').find((p) => p.id === 'vano-baul').nombre, 'Vano de la compuerta');
   assert.deepEqual(
     lista.map((p) => p.id),
     PIEZAS.map((p) => p.id),
