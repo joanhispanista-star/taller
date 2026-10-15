@@ -9,7 +9,7 @@
 import { CLAVE_GUARDADO, normalizarPlaca } from './estado.js';
 import { PIEZA_CARRO, abrirAlmacen, deserializarCarro, fechaCorta, nombreDelCarro, resumen } from './garaje.js';
 import { CARROCERIAS, normalizarCarroceria } from './carrocerias.js';
-import { buscarLinea, catalogoOrdenado, datosDeEntrada, entradaDe, nombreDeLinea } from './catalogo.js';
+import { buscarLinea, catalogoOrdenado, datosDeEntrada, mejorDeFamilia, nombreDeLinea } from './catalogo.js';
 import { colorDeFoto, nombreDeColor } from './color-foto.js';
 import { reducirFoto } from './fotos.js';
 
@@ -250,7 +250,8 @@ function pintarSugerencias() {
   const lista = ficha.sugerencias || [];
   ui.ficha.sugerencias.replaceChildren(
     ...lista.map((s) => {
-      const entrada = entradaDe(s.marca, s.linea);
+      // La sugerencia es una familia (Logan); se abre su entrada más común y reciente.
+      const entrada = mejorDeFamilia(s.marca, s.linea);
       const activo = Boolean(ficha.entrada && entrada && ficha.entrada === entrada);
       const b = chip(s.marca + ' ' + s.linea, CARROCERIAS[normalizarCarroceria(s.carroceria)].nombre, activo);
       b.addEventListener('click', () => {
@@ -312,7 +313,7 @@ async function abrirFicha(archivo) {
     const resultado = await reconocerCarro(archivo, (texto, pct) => estadoFicha(texto, 10 + pct * 0.8));
     if (!ficha || ficha.archivo !== archivo) return; // la persona cerró o abrió otra foto
     ficha.sugerencias = resultado.lineas.slice(0, 6);
-    const mejor = resultado.lineas[0] && entradaDe(resultado.lineas[0].marca, resultado.lineas[0].linea);
+    const mejor = resultado.lineas[0] && mejorDeFamilia(resultado.lineas[0].marca, resultado.lineas[0].linea);
     if (mejor) elegirEntrada(mejor);
     // La carrocería que más votos tiene manda sobre la de la línea: desde el
     // frente, un sedán y un hatchback se parecen, y ahí la foto sabe más.

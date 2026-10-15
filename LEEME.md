@@ -70,8 +70,10 @@ carro".
   el teléfono y sin servidor, saca el color de la pintura (siempre acierta,
   salvo luz muy rara), y propone el tipo de carrocería y seis carros
   parecidos del catálogo (CLIP, un modelo de OpenAI que corre en el
-  navegador: acierta la carrocería unas 7 de cada 10 veces y el modelo unas
-  6 de cada 10; desde el frente un sedán y un hatchback son iguales). La
+  navegador, comparando contra las 89 familias de carros más comunes:
+  acierta la carrocería 6 o 7 de 9 veces y el modelo 3 o 4 de 9 de primera,
+  4 o 5 de 9 entre las tres primeras, medido con nueve fotos reales en el PC
+  y en el navegador; desde el frente un sedán y un hatchback son iguales). La
   persona confirma con un toque, escribe la placa y abre el 3D. La primera
   vez descarga 89 MB (el reconocedor); después funciona sin internet.
 - **Cuatro carrocerías a la medida**: sedán, hatchback, SUV y camioneta de
@@ -83,8 +85,9 @@ carro".
   carrocería es de referencia.
 - **Catálogo de carros de Colombia** (`js/catalogo-carros.js`): marcas y
   líneas que se venden o que todavía ruedan (el parque tiene 13 años de
-  edad promedio), con carrocería, medidas, años y qué tan comunes son.
-  Investigado y revisado por agentes con fuentes; se regenera con una
+  edad promedio), con carrocería, medidas, años y qué tan comunes son:
+  1.136 líneas de 72 marcas (34 sin medidas confirmadas), investigadas y
+  revisadas por agentes con la fuente de cada medida; se regenera con una
   herramienta, no se edita a mano.
 - **Garaje** (`garaje.html`): la lista de todos los carros, con la foto o
   el color, placa, marca y línea, carrocería, cuándo se tocó por última vez
@@ -219,10 +222,14 @@ Decisiones que conviene conocer:
   IA en la nube porque no exige clave de API ni pago por foto, y porque el
   dato de la foto es una sugerencia, no la verdad. Los vectores de texto se
   calculan en el PC (`calcular-etiquetas.mjs`) para que el teléfono no
-  tenga que bajar también el modelo de texto. Medido con nueve fotos reales:
-  carrocería 7 de 9 (mezclando lo que ve CLIP con lo que votan las líneas
-  parecidas), línea 6 de 9. Un reconocedor mejor es cuestión de nube y de
-  plata (decisión 8).
+  tenga que bajar también el modelo de texto. Las candidatas son FAMILIAS
+  (Logan, no Logan I y Logan II: con las generaciones sueltas se repartían
+  el voto) y solo las 89 "muy comunes": con 400 la línea acertaba 3 de 9.
+  Medido con nueve fotos reales: carrocería 6 o 7 de 9 (30 % lo que ve CLIP
+  directo, 70 % lo que votan las líneas parecidas), línea 3 o 4 de 9 de
+  primera y 4 o 5 de 9 en las tres primeras (el PC y el navegador difieren
+  en una foto: el modelo cuantizado no es idéntico). Un reconocedor mejor es
+  cuestión de nube y de plata (decisión 8).
 - La foto del carro entero se guarda como una foto más, con la pieza
   especial `carro`: así vive en el mismo almacén, se reduce igual y se va
   con el carro al borrarlo.
@@ -260,8 +267,9 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
    taller quiere es "cada visita es una orden nueva", hace falta una orden
    por visita, no solo un carro por placa, y eso cambia la nómina.
 8. **¿Basta con que la foto sugiera, o hace falta que acierte casi
-   siempre?** Hoy acierta la carrocería 7 de 10 y el modelo 6 de 10, en el
-   teléfono y gratis. Subir a 8 o 9 de 10 exige una IA en la nube (Claude o
+   siempre?** Hoy acierta la carrocería 6 o 7 de 9 y el modelo 3 o 4 de 9
+   (4 o 5 de 9 entre las tres sugerencias), en el teléfono y gratis. Subir
+   a 8 o 9 de 10 exige una IA en la nube (Claude o
    Gemini con la lista de candidatos), que cuesta centavos por foto pero
    necesita una cuenta de API pagada con tarjeta y un servidor que guarde la
    clave: es la semana del 26 (la nube) y una decisión de plata.

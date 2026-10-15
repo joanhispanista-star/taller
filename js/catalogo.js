@@ -59,6 +59,52 @@ export function entradaDe(marca, linea) {
   return CATALOGO.find((e) => sinTildes(e.marca) === m && sinTildes(e.linea) === l) || null;
 }
 
+// La familia de una línea: "Logan I" y "Logan II" son Logan; "Hilux (AN120)
+// doble cabina" y "Hilux Vigo" son Hilux y Hilux Vigo. El reconocedor
+// trabaja por familias (si no, las generaciones de un mismo carro se
+// reparten el voto y gana cualquier otro), y al elegir una familia se toma
+// su entrada más común y más reciente (mejorDeFamilia).
+const SOBRAN_AL_FINAL = new Set([
+  'i', 'ii', 'iii', 'iv', 'hatchback', 'hatch', 'sedan', 'sedán', 'doble', 'cabina', 'sencilla',
+  'larga', 'corta', 'largo', 'corto', 'clasico', 'clásico', 'clasica', 'clásica', 'facelift',
+  'restyling', 'wagon', 'coupe', 'coupé', '5p', '3p', '4p', 'pick-up', 'pickup',
+]);
+const SOBRAN_AL_INICIO = new Set(['new', 'nueva', 'nuevo', 'all', 'the']);
+
+export function familiaDe(entrada) {
+  let texto = String(entrada.linea || '')
+    .replace(/\s*\(.*?\)\s*/g, ' ')
+    .replace(/\s*\/.*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const marca = String(entrada.marca || '').trim();
+  if (marca && texto.toLowerCase().startsWith(marca.toLowerCase() + ' ')) texto = texto.slice(marca.length + 1);
+  const palabras = texto.split(' ').filter(Boolean);
+  while (palabras.length > 1 && SOBRAN_AL_INICIO.has(palabras[0].toLowerCase())) palabras.shift();
+  while (palabras.length > 1 && SOBRAN_AL_FINAL.has(palabras[palabras.length - 1].toLowerCase())) palabras.pop();
+  return palabras.join(' ') || texto;
+}
+
+function anoFinal(anos) {
+  const texto = String(anos || '');
+  if (/hoy|actual|presente/i.test(texto)) return 9999;
+  const numeros = texto.match(/\d{4}/g);
+  return numeros ? Math.max(...numeros.map(Number)) : 0;
+}
+
+// Las entradas de una familia, la más común y más reciente primero.
+export function entradasDeFamilia(marca, familia) {
+  const m = sinTildes(marca);
+  const f = sinTildes(familia);
+  return CATALOGO.filter((e) => sinTildes(e.marca) === m && sinTildes(familiaDe(e)) === f).sort(
+    (a, b) => (PESO_PRESENCIA[a.presencia] ?? 1) - (PESO_PRESENCIA[b.presencia] ?? 1) || anoFinal(b.anos) - anoFinal(a.anos),
+  );
+}
+
+export function mejorDeFamilia(marca, familia) {
+  return entradasDeFamilia(marca, familia)[0] || null;
+}
+
 // Lo que el carro del registro guarda de una entrada del catálogo.
 export function datosDeEntrada(entrada) {
   return {

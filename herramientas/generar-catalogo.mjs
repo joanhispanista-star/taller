@@ -41,7 +41,9 @@ const porClave = new Map();
 for (const e of lista) {
   if (!e || !e.marca || !e.linea) continue;
   const marca = String(e.marca).trim();
-  const linea = String(e.linea).trim();
+  let linea = String(e.linea).trim();
+  // "Hyundai Eon" con marca Hyundai saldría como "Hyundai Hyundai Eon".
+  if (linea.toLowerCase().startsWith(marca.toLowerCase() + ' ')) linea = linea.slice(marca.length + 1).trim();
   const clave = (marca + ' ' + linea).toLowerCase();
   const limpia = {
     marca,

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CATALOGO } from '../js/catalogo-carros.js';
-import { buscarLinea, catalogoOrdenado, datosDeEntrada, entradaDe, nombreDeLinea } from '../js/catalogo.js';
+import { buscarLinea, catalogoOrdenado, datosDeEntrada, entradaDe, entradasDeFamilia, familiaDe, mejorDeFamilia, nombreDeLinea } from '../js/catalogo.js';
 import { medidasParaDibujar } from '../js/carrocerias.js';
 
 test('el catálogo tiene entradas completas y sin repetidos', () => {
@@ -25,33 +25,76 @@ test('el catálogo tiene entradas completas y sin repetidos', () => {
 });
 
 test('las medidas del catálogo sirven para dibujar sin caer a las típicas', () => {
-  const onix = entradaDe('chevrolet', 'onix');
-  assert.ok(onix);
+  const onix = buscarLinea('onix').find((e) => e.largo > 0 && e.entreEjes > 0);
+  assert.ok(onix, 'hay un Onix con medidas');
   const m = medidasParaDibujar(onix.carroceria, datosDeEntrada(onix).medidas);
   assert.ok(Math.abs(m.largo - onix.largo / 1000) < 1e-9);
   assert.ok(Math.abs(m.entreEjes - onix.entreEjes / 1000) < 1e-9);
 });
 
 test('buscarLinea encuentra por línea sola, por marca y línea, y sin tildes', () => {
-  assert.equal(buscarLinea('onix')[0].linea, 'Onix');
-  assert.equal(buscarLinea('chevrolet onix')[0].linea, 'Onix');
-  // Las palabras pueden ir en cualquier orden: "sedan onix" es el Onix sedán.
-  assert.equal(buscarLinea('sedan onix')[0].linea, 'Onix sedán');
+  assert.ok(buscarLinea('onix')[0].linea.startsWith('Onix'));
+  assert.equal(buscarLinea('chevrolet onix')[0].marca, 'Chevrolet');
+  // Las palabras pueden ir en cualquier orden: "sedan onix" encuentra el Onix sedán.
+  const sedan = buscarLinea('sedan onix');
+  assert.ok(sedan.length > 0 && sedan.every((e) => e.linea.toLowerCase().includes('onix')));
   assert.equal(buscarLinea('nave espacial').length, 0);
   assert.equal(buscarLinea('Logan')[0].marca, 'Renault');
   assert.equal(buscarLinea('')[0], undefined);
   const duster = buscarLinea('duster');
   assert.ok(duster.length >= 2, 'Duster y Duster Oroch');
-  assert.equal(duster[0].linea, 'Duster', 'la coincidencia exacta va primero');
+  assert.ok(duster[0].linea.startsWith('Duster'), 'la coincidencia por el principio va primero');
+  assert.ok(buscarLinea('kwid')[0].linea.startsWith('Kwid'));
 });
 
 test('entradaDe y datosDeEntrada', () => {
-  assert.equal(entradaDe('Toyota', 'Hilux').carroceria, 'camioneta');
+  const hilux = buscarLinea('hilux')[0];
+  assert.equal(hilux.carroceria, 'camioneta');
+  assert.equal(entradaDe(hilux.marca, hilux.linea), hilux);
   assert.equal(entradaDe('Toyota', 'Nave'), null);
-  const d = datosDeEntrada(entradaDe('Renault', 'Kwid'));
+  const kwid = buscarLinea('kwid')[0];
+  const d = datosDeEntrada(kwid);
   assert.deepEqual(Object.keys(d).sort(), ['carroceria', 'linea', 'marca', 'medidas']);
   assert.equal(d.carroceria, 'hatchback');
   assert.ok(d.medidas.largo > 3000);
+});
+
+test('el catálogo cubre lo que más rueda en Colombia', () => {
+  for (const [marca, linea] of [['Chevrolet', 'spark'], ['Chevrolet', 'sail'], ['Renault', 'logan'], ['Renault', 'sandero'], ['Kia', 'picanto'], ['Mazda', 'cx-30'], ['Toyota', 'corolla'], ['Nissan', 'versa'], ['BYD', 'yuan'], ['Suzuki', 'swift']]) {
+    const hallada = buscarLinea(linea).find((e) => e.marca === marca);
+    assert.ok(hallada, marca + ' ' + linea);
+  }
+  assert.ok(CATALOGO.length >= 500, 'líneas: ' + CATALOGO.length);
+  assert.ok(new Set(CATALOGO.map((e) => e.marca)).size >= 40, 'marcas');
+});
+
+test('familiaDe quita generaciones, paréntesis, carrocerías y la marca repetida', () => {
+  const f = (marca, linea) => familiaDe({ marca, linea });
+  assert.equal(f('Renault', 'Logan II'), 'Logan');
+  assert.equal(f('Renault', 'Duster I'), 'Duster');
+  assert.equal(f('Toyota', 'Hilux (AN120) doble cabina'), 'Hilux');
+  assert.equal(f('Toyota', 'Hilux Vigo (AN10/AN30) doble cabina'), 'Hilux Vigo');
+  assert.equal(f('Chevrolet', 'Onix Plus / Onix sedán (2ª generación)'), 'Onix Plus');
+  assert.equal(f('Chevrolet', 'Onix (hatchback 2ª generación)'), 'Onix');
+  assert.equal(f('Chevrolet', 'Spark (M200, base Matiz) / Spark Life'), 'Spark');
+  assert.equal(f('Chevrolet', 'Spark GT'), 'Spark GT');
+  assert.equal(f('Kia', 'New Sportage (NQ5 facelift, carrocería larga)'), 'Sportage');
+  assert.equal(f('Nissan', 'Nueva Kicks (P16)'), 'Kicks');
+  assert.equal(f('Hyundai', 'Hyundai Eon'), 'Eon');
+  assert.equal(f('Mazda', 'Mazda 3 (BP) sedán'), '3');
+  assert.equal(f('Kia', 'Picanto (3ª gen JA) / New Picanto'), 'Picanto');
+});
+
+test('mejorDeFamilia da la entrada más común y más reciente de la familia', () => {
+  const logan = entradasDeFamilia('Renault', 'Logan');
+  assert.ok(logan.length >= 2, 'Logan I y II');
+  assert.ok(logan.every((e) => familiaDe(e) === 'Logan'));
+  const mejor = mejorDeFamilia('renault', 'logan');
+  assert.equal(mejor.carroceria, 'sedan');
+  assert.ok(mejor.largo > 4000);
+  assert.equal(mejorDeFamilia('Renault', 'Nave'), null);
+  const hilux = mejorDeFamilia('Toyota', 'Hilux');
+  assert.equal(hilux.carroceria, 'camioneta');
 });
 
 test('catalogoOrdenado pone las muy comunes primero', () => {

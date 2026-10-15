@@ -8,11 +8,13 @@
 // un producto punto: lo que más se parece gana.
 //
 // Lo que hay que saber antes de confiar en esto (medido el 15-oct-2026 con
-// nueve fotos reales): la carrocería acierta unas 7 de cada 10 veces y la
-// línea unas 6 de cada 10; desde el frente, un sedán y un hatchback son
-// iguales (el baúl está atrás). Por eso esto es una SUGERENCIA que la
-// persona confirma con un toque, nunca el dato final. Lo que la foto sí da
-// con certeza es el color (color-foto.js).
+// nueve fotos reales y las 89 familias más comunes como candidatas): la
+// carrocería acierta 6 o 7 de 9, la línea 3 o 4 de 9 de primera y 4 o 5 de
+// 9 entre las tres primeras; desde el frente, un sedán y un hatchback son
+// iguales (el
+// baúl está atrás). Por eso esto es una SUGERENCIA que la persona confirma
+// con un toque, nunca el dato final. Lo que la foto sí da con certeza es el
+// color (color-foto.js).
 //
 // El modelo de visión pesa 89 MB y se descarga de Hugging Face la primera
 // vez; el navegador lo guarda y las siguientes veces abre sin internet. El
@@ -89,6 +91,8 @@ export function prepararReconocedor(alAvanzar = () => {}) {
 
 // Devuelve { carrocerias: [{tipo, p}], lineas: [{marca, linea, carroceria, p}],
 // marcas: [{marca, p}], milisegundos }, todo ordenado de más a menos probable.
+// `linea` es la FAMILIA del catálogo (Logan, Hilux): catalogo.js la
+// convierte en una entrada concreta con mejorDeFamilia.
 export async function reconocerCarro(archivo, alAvanzar) {
   const { procesador, vision, etiquetas } = await prepararReconocedor(alAvanzar);
   const inicio = performance.now();
@@ -103,15 +107,18 @@ export async function reconocerCarro(archivo, alAvanzar) {
   const pTipos = softmax(tipos.map((t) => ESCALA * punto(vector, etiquetas.carrocerias[t])));
   const pLineas = softmax(etiquetas.lineas.map((l) => ESCALA * punto(vector, l.e)));
 
-  // La carrocería final mezcla lo que CLIP ve directamente con lo que votan
-  // las líneas más parecidas (si la foto se parece a un Logan, eso es un
-  // voto por sedán aunque desde el frente CLIP diga hatchback).
+  // La carrocería final mezcla lo que CLIP ve directamente (30 %) con lo
+  // que votan las líneas más parecidas (70 %): si la foto se parece a un
+  // Logan, eso es un voto por sedán aunque desde el frente CLIP diga
+  // hatchback. Los pesos salen de medir con nueve fotos reales (15-oct-2026):
+  // a partes iguales acertaba 4 de 9 carrocerías; así, 6 de 9.
+  const PESO_DIRECTO = 0.3;
   const mezcla = {};
-  tipos.forEach((t, i) => (mezcla[t] = 0.5 * pTipos[i]));
+  tipos.forEach((t, i) => (mezcla[t] = PESO_DIRECTO * pTipos[i]));
   const marcas = {};
   const lineas = etiquetas.lineas.map((l, i) => {
     const tipo = normalizarCarroceria(l.carroceria);
-    mezcla[tipo] = (mezcla[tipo] || 0) + 0.5 * pLineas[i];
+    mezcla[tipo] = (mezcla[tipo] || 0) + (1 - PESO_DIRECTO) * pLineas[i];
     marcas[l.marca] = (marcas[l.marca] || 0) + pLineas[i];
     return { marca: l.marca, linea: l.linea, carroceria: tipo, p: pLineas[i] };
   });

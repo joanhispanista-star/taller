@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AutoTokenizer, CLIPTextModelWithProjection, env } from '@huggingface/transformers';
 import { CATALOGO } from '../js/catalogo-carros.js';
-import { CARROCERIAS } from '../js/carrocerias.js';
+import { familiaDe } from '../js/catalogo.js';
 
 export const MODELO = 'Xenova/clip-vit-base-patch32';
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -61,14 +61,42 @@ const salida = { modelo: MODELO, dim: 512, carrocerias: {}, lineas: [] };
 for (const [tipo, frases] of Object.entries(FRASES_CARROCERIA)) {
   salida.carrocerias[tipo] = aBase64(await vectorDe(frases));
 }
-let n = 0;
+
+// Al reconocedor van FAMILIAS (Logan, Hilux, Kona), no cada generación:
+// medido el 15-oct-2026, con 604 líneas sueltas las generaciones de un
+// mismo carro se repartían el voto y ganaba cualquier otro. Solo las
+// familias con algún miembro común: con mil candidatos CLIP se confunde
+// más, y un carro raro igual se escoge a mano en la lista. Las aclaraciones
+// del catálogo ("2ª generación", "AN120") no le dicen nada a CLIP, que
+// aprendió con pies de foto en inglés: la familia ya viene sin ellas.
+const PESO = { 'muy comun': 0, comun: 1, 'poco comun': 2 };
+const familias = new Map();
 for (const entrada of CATALOGO) {
-  const nombre = entrada.marca + ' ' + entrada.linea;
-  const tipo = EN_INGLES[entrada.carroceria] || 'car';
+  const familia = familiaDe(entrada);
+  const clave = (entrada.marca + ' ' + familia).toLowerCase();
+  const previa = familias.get(clave);
+  if (!previa) {
+    familias.set(clave, { marca: entrada.marca, familia, carrocerias: {}, presencia: entrada.presencia });
+  } else if (PESO[entrada.presencia] < PESO[previa.presencia]) {
+    previa.presencia = entrada.presencia;
+  }
+  const f = familias.get(clave);
+  // La carrocería de la familia: la de sus miembros más comunes.
+  f.carrocerias[entrada.carroceria] = (f.carrocerias[entrada.carroceria] || 0) + (3 - PESO[entrada.presencia]);
+}
+
+// Solo las familias "muy común" (89 el 15-oct-2026): con las 400 que tienen
+// algún miembro común, la línea acertaba 3 de 9 fotos; con 89, 4 de 9 y la
+// carrocería 6 de 9. Un carro raro se escoge a mano en la lista.
+let n = 0;
+for (const f of [...familias.values()].filter((f) => f.presencia === 'muy comun')) {
+  const nombre = f.marca + ' ' + f.familia;
+  const carroceria = Object.entries(f.carrocerias).sort((a, b) => b[1] - a[1])[0][0];
+  const tipo = EN_INGLES[carroceria] || 'car';
   const vector = await vectorDe(['a photo of a ' + nombre, 'a photo of a ' + nombre + ' ' + tipo, 'a ' + nombre + ' car parked on the street']);
-  salida.lineas.push({ marca: entrada.marca, linea: entrada.linea, carroceria: entrada.carroceria, e: aBase64(vector) });
+  salida.lineas.push({ marca: f.marca, linea: f.familia, carroceria, presencia: f.presencia, e: aBase64(vector) });
   n += 1;
-  if (n % 50 === 0) console.log(n + ' líneas...');
+  if (n % 50 === 0) console.log(n + ' familias...');
 }
 const destino = path.join(RAIZ, 'js', 'etiquetas-clip.json');
 fs.writeFileSync(destino, JSON.stringify(salida));
