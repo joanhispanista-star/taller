@@ -153,10 +153,15 @@ ui.lienzo.addEventListener('webglcontextrestored', () => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') pedirCuadro();
 });
-escena.add(new THREE.HemisphereLight(0xffffff, 0x3a4048, 0.45));
+escena.add(new THREE.HemisphereLight(0xffffff, 0x3a4048, 0.6));
 const sol = new THREE.DirectionalLight(0xffffff, 1.1);
 sol.position.set(3, 6, -4);
 escena.add(sol);
+// Una luz de relleno baja y desde atrás: dentro de un vano abierto o detrás
+// de una puerta, el sol de arriba no entra y el interior salía negro.
+const relleno = new THREE.DirectionalLight(0xffffff, 0.4);
+relleno.position.set(-4, 1.5, 5);
+escena.add(relleno);
 
 const camara = new THREE.PerspectiveCamera(38, 1, 0.1, 60);
 
@@ -177,10 +182,13 @@ controles.enableDamping = true;
 controles.dampingFactor = 0.08;
 controles.enablePan = false;
 controles.minDistance = 3.2;
-controles.maxDistance = 11;
+controles.maxDistance = 16;
 controles.minPolarAngle = 0.15;
 controles.maxPolarAngle = Math.PI / 2 - 0.05; // nunca por debajo del piso
-controles.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+// En el celular, UN dedo es para las piezas (tocar marca, arrastrar abre) y
+// DOS dedos para el carro: girar, y pellizcar para acercar o alejar. Con el
+// mouse del computador el arrastre sigue girando.
+controles.touches = { ONE: -1, TWO: THREE.TOUCH.DOLLY_ROTATE };
 controles.update();
 
 escena.add(...crearPiso());
@@ -393,13 +401,14 @@ function direccionDeApertura(art) {
   return { x: dx / distancia, y: dy / distancia, distancia };
 }
 
-let animacionBisagra = 0;
+// Cada bisagra lleva su propio contador de animación: con uno solo para
+// todas, abrir el capó y una puerta a la vez cancelaba la primera.
 function animarArticulacion(art, destino) {
   const desde = art.angulo;
   const inicio = performance.now();
-  const id = ++animacionBisagra;
+  const id = (art.animacion = (art.animacion || 0) + 1);
   function cuadro(ahora) {
-    if (id !== animacionBisagra) return;
+    if (id !== art.animacion) return;
     const k = Math.min(1, (ahora - inicio) / 180);
     art.fijar(desde + (destino - desde) * k * (2 - k));
     pedirCuadro();
@@ -430,7 +439,10 @@ ui.lienzo.addEventListener(
     const art = id && modelo.articulaciones.get(id);
     if (!art) return;
     gesto = { art, x0: e.clientX, y0: e.clientY, angulo0: art.angulo, direccion: direccionDeApertura(art), arrastro: false };
-    controles.enabled = false;
+    // Con un dedo los controles ya no giran (touches.ONE), así que solo
+    // hay que apagarlos para el mouse; y así, si llega un segundo dedo,
+    // OrbitControls ya tiene el primero y el pellizco funciona.
+    if (e.pointerType === 'mouse') controles.enabled = false;
   },
   true,
 );

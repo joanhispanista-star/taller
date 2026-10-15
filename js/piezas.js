@@ -37,7 +37,21 @@ export const PIEZAS = [
   { id: 'marco-der', nombre: 'Marco de puertas derecho', lado: 'der' },
   { id: 'vano-motor', nombre: 'Vano del motor', lado: null },
   { id: 'vano-baul', nombre: 'Vano del baúl', lado: null },
+  // La cara interior de lo que se abre es otra pieza: el capó por fuera y
+  // el capó por dentro se cotizan y se pintan aparte.
+  { id: 'capo-int', nombre: 'Capó por dentro', lado: null },
+  { id: 'baul-int', nombre: 'Baúl por dentro', lado: null },
+  { id: 'puerta-del-izq-int', nombre: 'Puerta delantera izquierda por dentro', lado: 'izq' },
+  { id: 'puerta-del-der-int', nombre: 'Puerta delantera derecha por dentro', lado: 'der' },
+  { id: 'puerta-tras-izq-int', nombre: 'Puerta trasera izquierda por dentro', lado: 'izq' },
+  { id: 'puerta-tras-der-int', nombre: 'Puerta trasera derecha por dentro', lado: 'der' },
 ];
+
+// Las piezas que solo se ven con algo abierto: se pintan de un tono más
+// claro y mate para distinguirlas de la chapa de afuera.
+export function esInterior(id) {
+  return id.endsWith('-int') || id.startsWith('vano-') || id.startsWith('marco-');
+}
 
 export const PIEZAS_POR_ID = new Map(PIEZAS.map((p) => [p.id, p]));
 

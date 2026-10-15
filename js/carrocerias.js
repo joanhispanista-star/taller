@@ -91,10 +91,11 @@ export function medidasParaDibujar(carroceria, medidas = {}) {
 // cambia lo que ve la persona: en un hatchback el pintor pinta la
 // compuerta, no el baúl; en una camioneta, los costados son los del platón.
 const NOMBRES = {
-  hatchback: { baul: 'Compuerta trasera', 'vano-baul': 'Vano de la compuerta' },
-  suv: { baul: 'Compuerta trasera', 'vano-baul': 'Vano de la compuerta' },
+  hatchback: { baul: 'Compuerta trasera', 'baul-int': 'Compuerta trasera por dentro', 'vano-baul': 'Vano de la compuerta' },
+  suv: { baul: 'Compuerta trasera', 'baul-int': 'Compuerta trasera por dentro', 'vano-baul': 'Vano de la compuerta' },
   camioneta: {
     baul: 'Compuerta del platón',
+    'baul-int': 'Compuerta del platón por dentro',
     'costado-izq': 'Costado del platón izquierdo',
     'costado-der': 'Costado del platón derecho',
     'vano-baul': 'Piso del platón',

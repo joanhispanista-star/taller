@@ -211,6 +211,29 @@ test('las piezas de interior existen, comparten material con sus paredes y queda
   }
 });
 
+test('las caras interiores son piezas aparte, más claras, y viajan con su pieza al abrirla', () => {
+  for (const tipo of TIPOS) {
+    const carro = construirCarro({ carroceria: tipo, colorBase: 0x3f332b });
+    for (const id of ['capo-int', 'baul-int', 'puerta-del-izq-int', 'puerta-tras-der-int']) {
+      const interior = carro.porId.get(id);
+      assert.ok(interior, tipo + ' ' + id);
+      const exterior = carro.porId.get(id.replace('-int', ''));
+      const lum = (m) => m.material.color.r + m.material.color.g + m.material.color.b;
+      assert.ok(lum(interior) > lum(exterior) + 0.3, tipo + ': ' + id + ' es más claro que su cara exterior');
+      assert.ok(interior.userData.colorBase.equals(interior.material.color), 'guarda su propio tono base');
+    }
+    // La cara interior del capó sube con el capó; la de la puerta sale con la puerta.
+    const capoInt = carro.porId.get('capo-int');
+    const antes = caja(capoInt).max.y;
+    carro.articulaciones.get('capo').fijar(0.8);
+    assert.ok(caja(capoInt).max.y > antes + 0.4, tipo + ': el capó por dentro sube con el capó');
+    const puertaInt = carro.porId.get('puerta-del-izq-int');
+    const antesX = caja(puertaInt).min.x;
+    carro.articulaciones.get('puerta-del-izq').fijar(1.0);
+    assert.ok(caja(puertaInt).min.x < antesX - 0.4, tipo + ': la puerta por dentro sale con la puerta');
+  }
+});
+
 test('los adornos no se pintan ni se tocan: están marcados como decorativos', () => {
   const carro = construirCarro({ carroceria: 'suv' });
   let decorativos = 0;
@@ -231,9 +254,9 @@ test('la SUV es más alta que el hatchback con el mismo dibujo', () => {
   assert.ok(suv.piso > hatch.piso && suv.cintura > hatch.cintura && suv.techo > hatch.techo && suv.radioRueda > hatch.radioRueda);
 });
 
-test('piezasDe devuelve las 21 piezas en el orden del catálogo con los nombres de la carrocería', () => {
+test('piezasDe devuelve las 27 piezas en el orden del catálogo con los nombres de la carrocería', () => {
   const lista = piezasDe('camioneta');
-  assert.equal(lista.length, 21);
+  assert.equal(lista.length, 27);
   assert.equal(lista.find((p) => p.id === 'vano-baul').nombre, 'Piso del platón');
   assert.equal(piezasDe('suv').find((p) => p.id === 'vano-baul').nombre, 'Vano de la compuerta');
   assert.deepEqual(

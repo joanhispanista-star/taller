@@ -86,8 +86,10 @@ carro".
   capó y techo abombados, las puntas afinadas vistas desde arriba, rines de
   cinco rayos, moldura en la cintura, manijas cromadas, pasarruedas y
   faldón negro en SUV y camioneta, barras de techo en la SUV, alerón en
-  hatchback y SUV, barra cromada en la parrilla y exploradores. Nada de eso
-  se toca: el dedo lo atraviesa y marca la pieza de debajo.
+  hatchback y SUV, faros con tira LED y farol principal, parrilla grande
+  con barra cromada, toma de aire baja y protector cromado, barra de luz
+  entre los stops (hatchback y SUV) y el canal oscuro del "techo flotante".
+  Nada de eso se toca: el dedo lo atraviesa y marca la pieza de debajo.
 - **Catálogo de carros de Colombia** (`js/catalogo-carros.js`): marcas y
   líneas que se venden o que todavía ruedan (el parque tiene 13 años de
   edad promedio), con carrocería, medidas, años y qué tan comunes son:
@@ -111,19 +113,24 @@ carro".
 - **La placa pintada en el 3D**: las dos placas del carro llevan el número
   del registro ("JRX 248"), dibujado en un canvas amarillo.
 - **Puertas, capó y compuerta que se abren con el dedo**: arrastrar una de
-  esas piezas la abre siguiendo el dedo y arrastrarla de vuelta la cierra;
-  al soltar queda abierta o cerrada, lo que esté más cerca. Un toque sin
-  arrastre la marca, como siempre; arrastrar en otra parte gira el carro.
+  esas piezas con UN dedo la abre siguiendo el dedo y arrastrarla de vuelta
+  la cierra; al soltar queda abierta o cerrada, lo que esté más cerca. Un
+  toque sin arrastre la marca, como siempre. El carro se gira con DOS
+  dedos, y con dos dedos pellizcando se acerca o se aleja (en el computador
+  el mouse sigue girando).
   Cada ventana viaja con su puerta (el vidrio ya no es un bloque: es un
   panel por ventana), el espejo con la puerta delantera, y el vidrio
   trasero, la placa y el alerón con la compuerta. El baúl del sedán abre
   por su borde delantero y la compuerta del platón cae hacia atrás.
-- **Piezas de interior** (21 en total ahora): con algo abierto aparecen el
+- **Piezas de interior** (27 en total ahora): con algo abierto aparecen el
   **vano del motor** (la bandeja y las paredes bajo el capó, con el motor en
   negro), el **marco de puertas** de cada lado (el umbral y los pilares por
-  dentro) y el **vano del baúl** (el piso del baúl, de la compuerta o del
-  platón). Se marcan y se pintan como las demás; la puerta abierta deja ver
-  su cara interior, que es la misma pieza.
+  dentro), el **vano del baúl** (el piso del baúl, de la compuerta o del
+  platón) y la **cara interior** de cada pieza que se abre: capó por
+  dentro, baúl o compuerta por dentro y cada puerta por dentro, que son
+  piezas aparte de la exterior (se cotizan y se pintan aparte). Las de
+  interior se pintan del mismo color pero más claro y mate, y hay una luz
+  de relleno baja, para que no se pierdan en la sombra.
 - Cada pieza marcada tiene **estado**: pendiente (naranja), en proceso
   (amarillo) o terminada (verde). La chapa en 3D y el chip de la lista van
   del mismo color. Se cambia tocando el nombre en el chip: sale un menú con

@@ -21,7 +21,7 @@
 // Este módulo no toca el DOM: se construye igual en el navegador y en las
 // pruebas de Node.
 import * as THREE from 'three';
-import { PIEZAS_POR_ID } from './piezas.js';
+import { PIEZAS_POR_ID, esInterior } from './piezas.js';
 import { medidasParaDibujar, normalizarCarroceria } from './carrocerias.js';
 
 const CHAPA = 0.08; // grosor de un panel lateral
@@ -134,6 +134,14 @@ function yCapo(d, s) {
 
 export function materialPintura(color) {
   return new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.3 });
+}
+
+// Las piezas de interior: el mismo color pero más claro y mate. Dentro de
+// un vano o detrás de una puerta llega poca luz, y con la pintura oscura
+// de afuera no se distinguían del hueco.
+export function materialInterior(color) {
+  const claro = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.35);
+  return new THREE.MeshStandardMaterial({ color: claro, metalness: 0.2, roughness: 0.6 });
 }
 
 function materialNegro() {
@@ -335,6 +343,22 @@ function perfilCapo(d) {
     f.quadraticCurveTo(medio, (y0 + y1) / 2 + 2 * COMBA, d.capoTras, y1);
     f.lineTo(d.capoTras, y1 - 0.07);
     f.quadraticCurveTo(medio, (y0 + y1) / 2 + 2 * COMBA - 0.07, d.capoDel, y0 - 0.07);
+    f.closePath();
+  };
+}
+
+// La cara interior del capó: una lámina de 12 mm pegada por debajo, con la
+// misma comba, que viaja con él y se pinta aparte.
+function perfilCapoInterior(d) {
+  return (f) => {
+    const a = d.capoDel + 0.05;
+    const b = d.capoTras - 0.04;
+    const medio = (a + b) / 2;
+    const comba = 2 * COMBA;
+    f.moveTo(a, yCapo(d, a) - 0.073);
+    f.quadraticCurveTo(medio, yCapo(d, medio) - 0.073 + comba, b, yCapo(d, b) - 0.073);
+    f.lineTo(b, yCapo(d, b) - 0.085);
+    f.quadraticCurveTo(medio, yCapo(d, medio) - 0.085 + comba, a, yCapo(d, a) - 0.085);
     f.closePath();
   };
 }
@@ -694,12 +718,15 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
   const articulaciones = new Map();
 
   // Cada pieza pintable lleva su propio material: así se tiñe una sin
-  // teñir a las demás.
+  // teñir a las demás. Las de interior nacen con su tono claro y mate; el
+  // color base que guarda cada pieza es el de su propio material, para que
+  // al quitarle la marca vuelva a su tono y no al de la chapa.
   function registrar(id, malla) {
     if (!PIEZAS_POR_ID.has(id)) throw new Error('Pieza fuera del catálogo: ' + id);
+    if (esInterior(id)) malla.material = materialInterior(base);
     malla.name = id;
     malla.userData.piezaId = id;
-    malla.userData.colorBase = base.clone();
+    malla.userData.colorBase = malla.material.color.clone();
     seleccionables.push(malla);
     porId.set(id, malla);
     grupo.add(malla);
@@ -802,7 +829,19 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
     // con las puertas abiertas. Una pared pintada detrás de las puertas.
     registrar(
       'marco-' + lado,
-      caja(0.02, d.cintura - d.estriboAlto - 0.02, d.puertaTras - d.puertaDel - 0.02, materialPintura(base), signo * (d.medio - 0.1), (d.cintura + d.estriboAlto) / 2, (d.puertaDel + d.puertaTras) / 2),
+      caja(0.02, d.cintura - d.estriboAlto - 0.02, d.puertaTras - d.puertaDel - 0.02, materialPintura(base), signo * (d.medio - 0.13), (d.cintura + d.estriboAlto) / 2, (d.puertaDel + d.puertaTras) / 2),
+    );
+
+    // La cara interior de cada puerta: una lámina pegada por dentro del
+    // panel, que gira con él y se pinta aparte.
+    const xInterior = signo * (d.medio - CHAPA - 0.008);
+    const puertaDelInt = registrar(
+      'puerta-del-' + lado + '-int',
+      caja(0.012, d.cintura - d.estriboAlto - 0.07, d.puertaMedia - d.puertaDel - 0.08, materialPintura(base), xInterior, (d.cintura + d.estriboAlto) / 2 - 0.005, (d.puertaDel + d.puertaMedia) / 2),
+    );
+    const puertaTrasInt = registrar(
+      'puerta-tras-' + lado + '-int',
+      caja(0.012, d.cintura - d.estriboAlto - 0.07, d.puertaTras - d.puertaMedia - 0.08, materialPintura(base), xInterior, (d.cintura + d.estriboAlto) / 2 - 0.005, (d.puertaMedia + d.puertaTras) / 2),
     );
 
     // Detalles del costado: la moldura negra en la cintura (donde la chapa
@@ -827,10 +866,26 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
 
     puertas[lado] = {
       signo,
-      delantera: [puertaDel, ventanaDel, espejoMalla, baseEspejo, molduraDel, manijaDel],
-      trasera: [puertaTras, ventanaTras, molduraTras, manijaTras],
+      delantera: [puertaDel, puertaDelInt, ventanaDel, espejoMalla, baseEspejo, molduraDel, manijaDel],
+      trasera: [puertaTras, puertaTrasInt, ventanaTras, molduraTras, manijaTras],
     };
   }
+
+  // Las caras interiores del capó y de la pieza trasera.
+  const capoInt = registrar(
+    'capo-int',
+    extruirPerfil(perfilCapoInterior(d), { xDesde: (d.ancho - 0.16) / 2, grosor: d.ancho - 0.16, bisel: 0, material: materialPintura(base) }),
+  );
+  afinarDel.push(capoInt);
+  let baulInt;
+  if (d.tipo === 'sedan') {
+    baulInt = registrar('baul-int', caja(d.ancho - 0.3, 0.012, d.baulTras - d.baulDel - 0.06, materialPintura(base), 0, d.piso + 0.51, (d.baulDel + d.baulTras) / 2));
+  } else if (d.tipo === 'camioneta') {
+    baulInt = registrar('baul-int', caja(d.ancho - 0.3, d.cintura - 0.01 - (d.piso + 0.2) - 0.06, 0.012, materialPintura(base), 0, (d.cintura - 0.01 + d.piso + 0.2) / 2, d.compuertaZ - 0.088));
+  } else {
+    baulInt = registrar('baul-int', caja(d.ancho - 0.3, d.compuertaArriba - (d.piso + 0.5) - 0.06, 0.012, materialPintura(base), 0, (d.compuertaArriba + d.piso + 0.5) / 2, d.compuertaZ - 0.075));
+  }
+  afinarTras.push(baulInt);
 
   // Parabrisas, vidrio trasero y el forro oscuro bajo el techo.
   grupo.add(vidrioPlano(d.capoTras, d.cintura, d.parabrisasAlto, d.techo, d.anchoVidrio - 0.02));
@@ -915,24 +970,41 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
   // Luces, parrilla y placas, acostadas sobre la cara del bómper que las
   // lleva. Las de adelante van sobre caras inclinadas (30° la de los faros,
   // 27° la de la placa); las de atrás sobre caras casi verticales.
+  // El frente de un carro de hoy: faros con una tira LED fina arriba y el
+  // farol principal debajo, una parrilla grande con su barra cromada, una
+  // toma de aire baja detrás de la placa, exploradores a los lados y un
+  // protector cromado en el filo del bómper.
   const xLuz = d.ancho * 0.326;
   const inclinacionFaro = Math.atan2(0.08, 0.14);
-  luces.push(luz(-xLuz, d.piso + 0.425, d.punta + 0.035, 0.42, 0.11, 0xfff1cc, inclinacionFaro));
-  luces.push(luz(xLuz, d.piso + 0.425, d.punta + 0.035, 0.42, 0.11, 0xfff1cc, inclinacionFaro));
-  const parrilla = caja(0.72, 0.18, 0.04, materialNegro(), 0, d.piso + 0.22, d.punta - 0.015);
+  for (const signo of [-1, 1]) {
+    luces.push(luz(signo * xLuz, d.piso + 0.48, d.punta + 0.03, 0.4, 0.035, 0xf4f8ff, inclinacionFaro));
+    luces.push(luz(signo * xLuz, d.piso + 0.405, d.punta + 0.036, 0.26, 0.1, 0xfff1cc, inclinacionFaro));
+    luces.push(decorativo(caja(0.16, 0.09, 0.03, materialPlastico(), signo * d.ancho * 0.36, d.piso + 0.2, d.punta - 0.005)));
+  }
+  const parrilla = caja(0.9, 0.2, 0.04, materialNegro(), 0, d.piso + 0.24, d.punta - 0.015);
   parrilla.name = 'parrilla';
   grupo.add(parrilla);
   afinarDel.push(parrilla);
-  // La barra cromada sobre la parrilla y los exploradores en el bómper: lo
-  // poco que hace que un frente se vea de carro y no de caja.
-  const barra = decorativo(caja(0.8, 0.03, 0.03, materialCromo(), 0, d.piso + 0.325, d.punta - 0.012));
+  const barra = decorativo(caja(0.96, 0.03, 0.03, materialCromo(), 0, d.piso + 0.355, d.punta - 0.012));
   grupo.add(barra);
   afinarDel.push(barra);
+  const tomaDeAire = decorativo(caja(1.0, 0.11, 0.03, materialPlastico(), 0, d.piso + 0.1, d.punta + 0.002));
+  grupo.add(tomaDeAire);
+  afinarDel.push(tomaDeAire);
+  const protector = decorativo(caja(1.0, 0.035, 0.03, materialCromo(), 0, d.piso + 0.025, d.punta - 0.008));
+  grupo.add(protector);
+  afinarDel.push(protector);
+
+  // El "techo flotante": un canal oscuro a lo largo del borde del techo, por
+  // encima de las puertas, que separa el techo de la chapa como en las SUV
+  // de ahora.
+  const finTecho = d.tipo === 'camioneta' ? d.techoTras : d.techoTras;
   for (const signo of [-1, 1]) {
-    luces.push(decorativo(caja(0.16, 0.09, 0.03, materialPlastico(), signo * d.ancho * 0.36, d.piso + 0.2, d.punta - 0.005)));
+    grupo.add(decorativo(caja(0.03, 0.03, finTecho - d.parabrisasAlto - 0.04, materialPlastico(), signo * (d.anchoTecho / 2 + 0.005), d.techo + 0.02, (d.parabrisasAlto + finTecho) / 2)));
   }
   grupo.add(placa(0, d.piso + 0.1, d.punta - 0.005, -Math.atan2(0.05, 0.1), numeroPlaca, -1));
   let placaTrasera;
+  let barraLuz = null;
   if (d.tipo === 'sedan') {
     luces.push(luz(-xLuz, d.piso + 0.59, d.cola - 0.195, 0.38, 0.09, 0xe0262e));
     luces.push(luz(xLuz, d.piso + 0.59, d.cola - 0.195, 0.38, 0.09, 0xe0262e));
@@ -945,6 +1017,11 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
   } else {
     luces.push(luz(-xLuz, d.piso + 0.62, d.compuertaZ + 0.03, 0.34, 0.1, 0xe0262e));
     luces.push(luz(xLuz, d.piso + 0.62, d.compuertaZ + 0.03, 0.34, 0.1, 0xe0262e));
+    // La barra de luz que une los dos stops, en la compuerta, de un lado a
+    // otro: un sello de las SUV recientes. Viaja con la compuerta.
+    barraLuz = luz(0, d.piso + 0.66, d.compuertaZ + 0.028, d.ancho - 0.9, 0.025, 0xa8151c);
+    grupo.add(barraLuz);
+    afinarTras.push(barraLuz);
     placaTrasera = placa(0, d.piso + 0.82, d.compuertaZ + 0.03, 0, numeroPlaca, 1);
   }
   grupo.add(placaTrasera);
@@ -993,7 +1070,7 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
     signo: 1,
     max: 0.8,
     referencia: [0, 0, -(d.capoTras - d.capoDel)],
-    mallas: [porId.get('capo')],
+    mallas: [porId.get('capo'), capoInt],
   });
   if (d.tipo === 'sedan') {
     articular(grupo, articulaciones, 'baul', {
@@ -1002,7 +1079,7 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
       signo: -1,
       max: 1.0,
       referencia: [0, 0, d.baulTras - d.baulDel],
-      mallas: [porId.get('baul')],
+      mallas: [porId.get('baul'), baulInt],
     });
   } else if (d.tipo === 'camioneta') {
     articular(grupo, articulaciones, 'baul', {
@@ -1011,7 +1088,7 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
       signo: 1,
       max: 1.5,
       referencia: [0, d.cintura - 0.01 - (d.piso + 0.2), 0],
-      mallas: [porId.get('baul'), placaTrasera],
+      mallas: [porId.get('baul'), baulInt, placaTrasera],
     });
   } else {
     articular(grupo, articulaciones, 'baul', {
@@ -1020,7 +1097,7 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
       signo: -1,
       max: 1.2,
       referencia: [0, -(d.techo - (d.piso + 0.5)), d.compuertaZ - d.techoTras],
-      mallas: [porId.get('baul'), vidrioTrasero, placaTrasera, aleron],
+      mallas: [porId.get('baul'), baulInt, vidrioTrasero, placaTrasera, aleron, barraLuz],
     });
   }
 
