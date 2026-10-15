@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1e24">
+  <title>Taller de Pintura · Garaje</title>
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body class="pagina-garaje">
+  <header class="barra">
+    <div class="marca-app">Taller de Pintura</div>
+    <span class="subtitulo">Garaje</span>
+  </header>
+
+  <main class="garaje">
+    <!-- Sin `required`: el aviso del navegador tapa el campo en el celular;
+         el código enfoca la placa si falta. -->
+    <form id="registro" class="registro" autocomplete="off">
+      <label class="campo">
+        <span>Placa</span>
+        <input id="placa" type="text" inputmode="text" autocapitalize="characters" placeholder="ABC123">
+      </label>
+      <label class="campo">
+        <span>Marca</span>
+        <input id="marca" type="text" maxlength="40" placeholder="Chevrolet Onix">
+      </label>
+      <button type="submit" class="primario">Abrir</button>
+    </form>
+    <p class="ayuda">Si la placa ya está en el Garaje se abre ese carro; si no, se crea.</p>
+    <p id="aviso" class="aviso" hidden></p>
+    <p id="borrador" class="borrador" hidden><span></span> <a href="index.html">Abrirlo</a></p>
+    <p id="vacio" class="vacio" hidden>Todavía no hay carros. Escribe la placa del primero.</p>
+    <ul id="carros" class="carros"></ul>
+  </main>
+
+  <script type="module" src="js/garaje-pantalla.js"></script>
+</body>
+</html>

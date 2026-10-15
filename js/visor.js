@@ -1,23 +1,45 @@
 // El visor: dibuja el carro, lo deja girar con el dedo y marca piezas al tocarlas.
+//
+// Desde el registro (semana del 19 de octubre) el carro que se ve es uno del
+// Garaje: llega por la URL (?placa=ABC123) o es el último que se abrió. Las
+// piezas marcadas, el estado de cada una y sus fotos se guardan en el
+// teléfono con garaje.js; la hoja de abajo la pinta hoja.js. Aquí queda la
+// escena y el pegamento entre las dos.
 import * as THREE from 'three';
 import { OrbitControls } from './vendor/OrbitControls.js';
 import { RoomEnvironment } from './vendor/RoomEnvironment.js';
 import { construirCarro, resaltar } from './carro.js';
 import { piezaTocada } from './toque.js';
+import { CLAVE_GUARDADO, normalizarPlaca, textoParaAsistente } from './estado.js';
 import {
-  CLAVE_GUARDADO,
+  abrirAlmacen,
   alternarPieza,
-  cambiarPlaca,
-  crearEstado,
-  deserializar,
-  limpiarSeleccion,
-  piezasSeleccionadas,
-  serializar,
-  textoParaAsistente,
-} from './estado.js';
+  crearCarro,
+  deserializarCarro,
+  estadoParaOrden,
+  fijarEstado,
+  piezasDelCarro,
+  quitarTodas,
+  serializarCarro,
+} from './garaje.js';
+import { crearHoja } from './hoja.js';
+import { reducirFoto } from './fotos.js';
 
 const COLOR_BASE = 0xcfd4da;
-const ACENTO = 0xff7a1a;
+
+// Un color por estado de pieza, leído de las variables de css/estilos.css:
+// la chapa en 3D y el chip de la lista salen del mismo tono sin tener el
+// número escrito dos veces. Si una variable faltara, queda el de aquí.
+const COLOR_ESTADO = leerColoresDeEstado({ pendiente: 0xff7a1a, 'en-proceso': 0xffd23f, terminada: 0x3ddc84 });
+function leerColoresDeEstado(siFaltan) {
+  const estilos = getComputedStyle(document.documentElement);
+  const colores = {};
+  for (const [estado, color] of Object.entries(siFaltan)) {
+    const valor = estilos.getPropertyValue('--estado-' + estado).trim();
+    colores[estado] = valor ? new THREE.Color(valor).getHex() : color;
+  }
+  return colores;
+}
 
 // Posiciones de cámara de los botones de vista. "Izquierdo" es el lado del
 // conductor (-X). "Arriba" no está en la vertical exacta porque OrbitControls
@@ -38,30 +60,44 @@ const ui = {
   error: document.getElementById('error'),
   placa: document.getElementById('placa'),
   marca: document.getElementById('marca'),
-  contador: document.getElementById('contador'),
-  lista: document.getElementById('lista'),
   limpiar: document.getElementById('limpiar'),
   enviar: document.getElementById('enviar'),
   vistas: document.querySelectorAll('[data-vista]'),
 };
 
-let estado = cargar();
+// ---------- El carro del registro ----------
 
-function cargar() {
+// El borrador en localStorage es lo que reabre el mismo carro al recargar y
+// lo que guarda un carro que todavía no tiene placa. En cuanto hay placa,
+// manda el registro (IndexedDB, garaje.js): ahí están la historia y las
+// fotos. El borrador se sigue escribiendo como espejo, por si el registro
+// no abre (entonces el visor funciona como antes de que existiera).
+let carro = cargarBorrador();
+let fotos = [];
+let almacen = null; // null hasta que abra; si no abre, se sigue con el borrador
+
+function cargarBorrador() {
   try {
-    const guardado = localStorage.getItem(CLAVE_GUARDADO);
-    return guardado ? deserializar(guardado) : crearEstado();
+    return deserializarCarro(localStorage.getItem(CLAVE_GUARDADO));
   } catch {
-    return crearEstado();
+    return crearCarro();
   }
 }
 
-function guardar() {
+function guardarBorrador() {
   try {
-    localStorage.setItem(CLAVE_GUARDADO, serializar(estado));
+    localStorage.setItem(CLAVE_GUARDADO, serializarCarro(carro));
   } catch {
     // Sin almacenamiento (modo incógnito, cuota llena) el visor sigue
     // funcionando; solo pierde la selección al recargar.
+  }
+}
+
+function persistir() {
+  carro.actualizado = new Date().toISOString();
+  guardarBorrador();
+  if (carro.placa && almacen) {
+    almacen.guardar(carro).catch((e) => hoja.avisar('No se pudo guardar en el teléfono: ' + e.message));
   }
 }
 
@@ -128,8 +164,10 @@ controles.maxPolarAngle = Math.PI / 2 - 0.05; // nunca por debajo del piso
 controles.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
 controles.update();
 
-const carro = construirCarro({ colorBase: COLOR_BASE });
-escena.add(carro.grupo, ...crearPiso());
+// `modelo` es el sedán en 3D; `carro` (arriba) es el registro: placa, marca
+// y el estado de cada pieza. Dos cosas distintas con dos nombres.
+const modelo = construirCarro({ colorBase: COLOR_BASE });
+escena.add(modelo.grupo, ...crearPiso());
 
 function crearPiso() {
   const piso = new THREE.Mesh(
@@ -200,7 +238,7 @@ function piezaBajo(xPantalla, yPantalla) {
   const r = ui.lienzo.getBoundingClientRect();
   return piezaTocada({
     camara,
-    grupo: carro.grupo,
+    grupo: modelo.grupo,
     x: xPantalla - r.left,
     y: yPantalla - r.top,
     ancho: r.width,
@@ -255,57 +293,87 @@ function alTocar(x, y) {
   ui.pista.hidden = true;
 }
 
-function alternar(id) {
-  const malla = carro.porId.get(id);
+function tenir(id) {
+  const malla = modelo.porId.get(id);
   if (!malla) return;
-  const marcada = alternarPieza(estado, id);
-  resaltar(malla, marcada ? ACENTO : null);
+  const pieza = carro.piezas[id];
+  resaltar(malla, pieza ? COLOR_ESTADO[pieza.estado] : null);
+}
+
+function alternar(id) {
+  if (!modelo.porId.has(id)) return;
+  alternarPieza(carro, id);
+  tenir(id);
   pedirCuadro();
-  guardar();
-  pintarLista();
+  persistir();
+  pintarHoja();
+}
+
+function fijar(id, estado) {
+  if (!modelo.porId.has(id) || !fijarEstado(carro, id, estado)) return;
+  tenir(id);
+  pedirCuadro();
+  persistir();
+  pintarHoja();
 }
 
 function aplicarSeleccion() {
-  for (const malla of carro.seleccionables) {
-    resaltar(malla, estado.seleccion.has(malla.userData.piezaId) ? ACENTO : null);
-  }
+  for (const malla of modelo.seleccionables) tenir(malla.userData.piezaId);
   pedirCuadro();
 }
 
 // ---------- Panel de abajo ----------
 
-function pintarLista() {
-  const piezas = piezasSeleccionadas(estado);
-  ui.contador.textContent =
-    piezas.length === 0
-      ? 'Toca las piezas que necesitan pintura.'
-      : piezas.length === 1
-        ? '1 pieza marcada'
-        : piezas.length + ' piezas marcadas';
-  ui.lista.replaceChildren(
-    ...piezas.map((p) => {
-      const item = document.createElement('li');
-      const nombre = document.createElement('span');
-      nombre.textContent = p.nombre;
-      const quitar = document.createElement('button');
-      quitar.type = 'button';
-      quitar.textContent = '×';
-      quitar.setAttribute('aria-label', 'Quitar ' + p.nombre);
-      quitar.addEventListener('click', () => alternar(p.id));
-      item.append(nombre, quitar);
-      return item;
-    }),
-  );
-  ui.enviar.disabled = piezas.length === 0;
-  ui.limpiar.disabled = piezas.length === 0;
+const hoja = crearHoja({
+  alAlternar: alternar,
+  alFijarEstado: fijar,
+  alAgregarFoto: agregarFoto,
+  alBorrarFoto: borrarFoto,
+});
+
+function pintarHoja() {
+  hoja.pintar({ carro, fotos, conRegistro: Boolean(carro.placa && almacen) });
+  const hayPiezas = Object.keys(carro.piezas).length > 0;
+  ui.enviar.disabled = !hayPiezas;
+  ui.limpiar.disabled = !hayPiezas;
 }
 
 ui.limpiar.addEventListener('click', () => {
-  limpiarSeleccion(estado);
+  quitarTodas(carro);
   aplicarSeleccion();
-  guardar();
-  pintarLista();
+  persistir();
+  pintarHoja();
 });
+
+async function agregarFoto(id, archivo) {
+  if (!carro.placa || !almacen) {
+    hoja.avisar('Ponle placa al carro para guardarle fotos.');
+    return;
+  }
+  const placa = carro.placa;
+  hoja.avisar('Guardando la foto…');
+  try {
+    const reducida = await reducirFoto(archivo);
+    await almacen.guardarFoto({ placa, pieza: id, ...reducida });
+    if (carro.placa !== placa) return; // cambió de carro mientras se guardaba
+    fotos = await almacen.listarFotos(placa);
+    hoja.avisar('');
+    pintarHoja();
+  } catch (e) {
+    hoja.avisar('No se pudo guardar la foto: ' + e.message);
+  }
+}
+
+async function borrarFoto(idFoto) {
+  if (!almacen) return;
+  try {
+    await almacen.borrarFoto(idFoto);
+    fotos = await almacen.listarFotos(carro.placa);
+    pintarHoja();
+  } catch (e) {
+    hoja.avisar('No se pudo borrar la foto: ' + e.message);
+  }
+}
 
 // Sin cuenta ni servidor todavía, el canal que ya tiene el asistente es
 // WhatsApp. La hoja de compartir del teléfono (navigator.share) solo existe
@@ -314,7 +382,7 @@ ui.limpiar.addEventListener('click', () => {
 // directo a WhatsApp por wa.me. Las dos llevan la misma orden. Cuando haya
 // registro en la nube, esto será además un aviso dentro de la app.
 ui.enviar.addEventListener('click', async () => {
-  const texto = textoParaAsistente(estado);
+  const texto = textoParaAsistente(estadoParaOrden(carro));
   if (navigator.share) {
     try {
       await navigator.share({ text: texto });
@@ -326,25 +394,83 @@ ui.enviar.addEventListener('click', async () => {
   window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank', 'noopener');
 });
 
-ui.placa.value = estado.placa;
+// ---------- Placa y marca ----------
+
+// Pone en el visor el carro con esa placa. Si está en el registro, manda el
+// registro: tiene la historia y las fotos. Si no está, se crea a partir de
+// `base`. Cuando `base` es un borrador sin placa (el dueño marcó primero y
+// escribió la placa después), sus piezas se conservan: si el carro ya
+// existía se le suman como pendientes, y si no, son las del carro nuevo.
+async function abrirCarro(placa, base) {
+  const esBorrador = base.placa === '';
+  let cambio = false;
+  if (!almacen) {
+    carro = crearCarro({ ...base, placa });
+    fotos = [];
+    guardarBorrador();
+    return;
+  }
+  const existente = await almacen.obtener(placa);
+  if (existente) {
+    if (esBorrador) {
+      for (const [id, pieza] of Object.entries(base.piezas)) {
+        if (!existente.piezas[id]) {
+          existente.piezas[id] = pieza;
+          cambio = true;
+        }
+      }
+      if (!existente.marca && base.marca) {
+        existente.marca = base.marca;
+        cambio = true;
+      }
+    }
+    carro = existente;
+  } else {
+    carro = crearCarro({ ...base, placa });
+    cambio = true;
+  }
+  if (cambio) await almacen.guardar(carro);
+  guardarBorrador();
+  fotos = await almacen.listarFotos(placa);
+}
+
+function refrescar() {
+  ui.placa.value = carro.placa;
+  ui.marca.value = carro.marca;
+  aplicarSeleccion();
+  pintarHoja();
+  // La URL dice qué carro está abierto: recargar o volver atrás trae el
+  // mismo, y no el que decía la URL antes de cambiar la placa.
+  const buscado = carro.placa ? '?placa=' + carro.placa : '';
+  if (location.search !== buscado) history.replaceState(null, '', location.pathname + buscado);
+}
+
+ui.placa.value = carro.placa;
 // La placa se toma al salir del campo (change), no en cada tecla:
 // reescribir el campo mientras la persona escribe manda el cursor al final
 // y en Android duplica letras. El CSS ya la muestra en mayúsculas mientras
 // tanto, y al tocar cualquier botón el campo pierde el foco primero.
-ui.placa.addEventListener('change', () => {
-  const eraOtroCarro = cambiarPlaca(estado, ui.placa.value);
-  ui.placa.value = estado.placa;
-  if (eraOtroCarro) {
-    ui.marca.value = estado.marca;
-    aplicarSeleccion();
-    pintarLista();
+ui.placa.addEventListener('change', async () => {
+  const nueva = normalizarPlaca(ui.placa.value);
+  ui.placa.value = nueva;
+  if (nueva === carro.placa) return;
+  if (nueva === '') {
+    // Borrarle la placa no borra el carro del registro: es empezar otro
+    // carro, sin placa, como antes de que existiera el Garaje.
+    carro = crearCarro();
+    fotos = [];
+    guardarBorrador();
+  } else {
+    // De "sin placa" a una placa: el mismo carro, que ahora tiene nombre.
+    // De una placa a otra: otro carro (las marcas eran del anterior).
+    await abrirCarro(nueva, carro.placa === '' ? carro : crearCarro());
   }
-  guardar();
+  refrescar();
 });
-ui.marca.value = estado.marca;
+ui.marca.value = carro.marca;
 ui.marca.addEventListener('input', () => {
-  estado.marca = ui.marca.value.slice(0, 40);
-  guardar();
+  carro.marca = ui.marca.value.slice(0, 40);
+  persistir();
 });
 
 // ---------- Botones de vista ----------
@@ -408,16 +534,46 @@ for (const boton of ui.vistas) {
 
 // ---------- Arranque ----------
 
+// Primero el borrador, que está a mano: el carro aparece teñido al instante.
+// Luego el registro, que tarda unos milisegundos en abrir; si la URL trae
+// otra placa, o la placa del borrador tiene historia guardada, se refresca.
 aplicarSeleccion();
-pintarLista();
+pintarHoja();
 
-// Gancho para las pruebas automáticas: deja marcar piezas y mover la cámara
-// sin simular dedos sobre la pantalla.
+async function arrancar() {
+  try {
+    almacen = await abrirAlmacen();
+  } catch (e) {
+    hoja.avisar('Este navegador no guarda el registro (' + e.message + '). El carro queda solo como borrador.');
+  }
+  const placaURL = normalizarPlaca(new URL(location.href).searchParams.get('placa') || '');
+  if (placaURL && placaURL !== carro.placa) {
+    await abrirCarro(placaURL, crearCarro());
+  } else if (carro.placa) {
+    await abrirCarro(carro.placa, carro);
+  }
+  refrescar();
+}
+
+// Gancho para las pruebas automáticas: deja marcar piezas, cambiar estados,
+// meter fotos y mover la cámara sin simular dedos sobre la pantalla.
 window.__visor = {
-  estado,
-  carro,
+  get carro() {
+    return carro;
+  },
+  get fotos() {
+    return fotos;
+  },
+  get almacen() {
+    return almacen;
+  },
+  modelo,
   alternar,
+  fijar,
+  agregarFoto,
+  borrarFoto,
   irA,
   piezaBajo,
-  marcadas: () => piezasSeleccionadas(estado).map((p) => p.id),
+  listo: arrancar(),
+  marcadas: () => piezasDelCarro(carro).map((p) => p.id),
 };

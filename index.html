@@ -14,7 +14,9 @@
 </head>
 <body>
   <header class="barra">
-    <div class="marca-app">Taller de Pintura</div>
+    <!-- El nombre de la app cede su sitio al camino de vuelta: en 360 px no
+         caben los dos y el Garaje es la pantalla de entrada. -->
+    <a class="marca-app" href="garaje.html">‹ Garaje</a>
     <label class="campo">
       <span>Placa</span>
       <!-- Sin maxlength: una placa pegada como "ABC-123" se cortaría a
@@ -44,11 +46,30 @@
   <section class="hoja" aria-live="polite">
     <p id="contador">Toca las piezas que necesitan pintura.</p>
     <ul id="lista"></ul>
+    <div id="fotos" class="fotos" hidden></div>
+    <p id="aviso" class="aviso" hidden></p>
     <div class="acciones">
       <button type="button" id="limpiar" disabled>Limpiar</button>
       <button type="button" id="enviar" class="primario" disabled>Enviar al asistente</button>
     </div>
   </section>
+
+  <!-- El menú de estado de una pieza; hoja.js lo llena y lo coloca sobre el chip. -->
+  <div id="menu-estado" class="menu-estado" role="menu" aria-label="Estado de la pieza" hidden></div>
+
+  <!-- Una sola cámara para todos los chips: hoja.js apunta data-pieza antes
+       de abrirla. `capture` abre la cámara directa en el celular; en el
+       computador abre el selector de archivos, que para probar sirve igual. -->
+  <input id="camara" type="file" accept="image/*" capture="environment" hidden>
+
+  <dialog id="foto-grande" class="foto-grande" aria-label="Foto de la pieza">
+    <img alt="">
+    <p></p>
+    <div class="acciones">
+      <button type="button" data-accion="borrar">Borrar foto</button>
+      <button type="button" data-accion="cerrar" class="primario">Cerrar</button>
+    </div>
+  </dialog>
 
   <script type="module" src="js/visor.js"></script>
 </body>
