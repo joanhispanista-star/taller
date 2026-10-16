@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "node herramientas/servidor.js 8310",
     "celular": "node herramientas/servidor.js 8310 --red",
-    "test": "node --test pruebas/*.test.js"
+    "test": "node --test pruebas/*.test.js",
+    "sellar": "node herramientas/sellar-version.mjs",
+    "iconos": "node herramientas/generar-iconos.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.1",

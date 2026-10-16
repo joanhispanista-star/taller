@@ -978,3 +978,21 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 }
 
 .boton-entregar.entregado { border-color: var(--borde); color: var(--texto-suave); }
+
+/* ---------- Lo instalable ---------- */
+
+/* El aviso de versión nueva en el Garaje: una franja del color de acento,
+   ancha para el dedo. Solo existe cuando la versión ya está en el teléfono
+   (instalable.js lo enciende); el texto dice exactamente lo que hace. */
+.actualizar {
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--acento);
+  color: var(--acento-texto);
+  font-weight: 600;
+  text-align: left;
+}
+
+.actualizar:disabled { opacity: 0.7; cursor: default; }

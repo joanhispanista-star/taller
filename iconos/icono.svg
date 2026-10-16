@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" fill="#1a1e24"/>
+  <!-- la gota de pintura, cayendo sobre el techo -->
+  <path fill="#ffd23f" d="M300 86 C300 86 272 126 272 146 A28 28 0 0 0 328 146 C328 126 300 86 300 86 Z"/>
+  <!-- la carrocería: capó bajo adelante (izquierda), cabina, baúl atrás -->
+  <path fill="#ff7a1a" d="M96 330 L96 288 Q96 266 120 260 L184 248 L224 200 Q234 188 250 188 L326 188 Q344 188 356 202 L392 250 L410 256 Q430 262 430 288 L430 330 Q430 344 416 344 L110 344 Q96 344 96 330 Z"/>
+  <!-- vidrios -->
+  <path fill="#1a1e24" d="M238 204 L316 204 L316 246 L206 246 Z"/>
+  <path fill="#1a1e24" d="M330 204 L348 204 L380 248 L330 248 Z"/>
+  <!-- la línea de la puerta y la manija: la app marca piezas -->
+  <rect x="254" y="254" width="5" height="76" fill="#1a1e24"/>
+  <rect x="264" y="270" width="22" height="7" rx="3" fill="#1a1e24"/>
+  <!-- faros -->
+  <rect x="98" y="276" width="20" height="12" rx="4" fill="#ffd23f"/>
+  <rect x="408" y="276" width="20" height="12" rx="4" fill="#ff3b30"/>
+  <!-- ruedas: el pasarruedas oscuro, la llanta clara y el rin -->
+  <circle cx="176" cy="338" r="42" fill="#1a1e24"/>
+  <circle cx="176" cy="338" r="29" fill="#eef1f4"/>
+  <circle cx="176" cy="338" r="13" fill="#1a1e24"/>
+  <circle cx="350" cy="338" r="42" fill="#1a1e24"/>
+  <circle cx="350" cy="338" r="29" fill="#eef1f4"/>
+  <circle cx="350" cy="338" r="13" fill="#1a1e24"/>
+</svg>

@@ -5,7 +5,9 @@ marca en un carro 3D las piezas que hay que pintar, el asistente recibe la
 orden, cada carro queda registrado por placa, y al final de la semana se sabe
 qué pintor pintó qué pieza para pagarle (90.000 pesos por pieza).
 
-Estado al **15 de octubre de 2026**: el visor; adelantada la semana del 19,
+Estado al **16 de octubre de 2026**: **instalable en el celular** como una
+app (PWA, adelantada de la semana del 2-nov: el Garaje, el 3D y el tablero
+abren sin internet; ver "Instalarla en el celular"); el visor; adelantada la semana del 19,
 el registro (Garaje por placa, estado por pieza y fotos por pieza, todo
 guardado en el teléfono); y adelantada la del 2 de noviembre, **el carro
 desde una foto**: la app reconoce en el teléfono el tipo de carrocería y el
@@ -249,9 +251,42 @@ WhatsApp no lleva número). Dos cosas que hay que saber:
   otro hasta la nube de la semana del 26. Y el Garaje de `github.io` es
   distinto del de `192.168.x.x`: origen distinto, datos distintos.
 - Por **https** la hoja de compartir del teléfono sí funciona (WhatsApp y lo
-  demás), y lo instalable (PWA) ya es posible. El reconocedor sigue bajando
+  demás), y lo instalable (PWA) existe desde el 16-oct (siguiente
+  apartado). El reconocedor sigue bajando
   89 MB de Hugging Face la primera vez; GitHub Pages no manda las cabeceras
   COOP/COEP, así que corre en un solo hilo (igual que en el PC: ya era así).
+
+### Instalarla en el celular (app instalable, desde el 16-oct)
+
+La dirección pública es una **app instalable** (PWA: `manifest.webmanifest`
+más el service worker `sw.js`): el celular la pone con su icono junto a las
+demás apps, abre a pantalla completa sin la barra del navegador, y **el
+Garaje, el 3D y el tablero abren sin internet**. Lo único que sigue
+pidiendo señal es el reconocedor la primera vez (los 89 MB del modelo
+vienen de Hugging Face, y los 27 MB del motor se guardan en el teléfono la
+primera vez que se usa); después, tampoco.
+
+- **Android (Chrome):** abrir
+  <https://joanhispanista-star.github.io/taller/garaje.html>, menú ⋮ →
+  **Instalar aplicación** (o "Añadir a pantalla de inicio"; Chrome a veces
+  lo ofrece solo como una barra abajo, es lo mismo). La app instalada
+  comparte los carros con Chrome: es el mismo origen y la misma IndexedDB.
+- **iPhone (Safari):** abrir la misma dirección, botón **Compartir** (el
+  cuadrado con la flecha) → **Añadir a pantalla de inicio** → Añadir. Es la
+  única forma en iPhone (Chrome de iPhone no instala). Ojo: la app de la
+  pantalla de inicio guarda sus datos **aparte** de Safari; un carro
+  registrado en Safari no aparece en la app instalada ni al revés.
+- La app instalada abre en el Garaje (`start_url`).
+
+Cuando se publica una versión nueva, la app la baja sola la próxima vez que
+se abre con internet y el Garaje muestra la franja naranja **"Hay una
+versión nueva, toca para actualizar"**: tocarla recarga con la nueva. Hasta
+que se toque sigue la anterior, así nunca cambia debajo de alguien a mitad
+de un carro. Cómo se publica una versión (hay un paso más que `git push`)
+está en "Trampas conocidas". Probado el 16-oct en el panel del navegador:
+registro, precarga de los 36 archivos, las tres pantallas abiertas con el
+servidor apagado y el aviso de versión nueva de punta a punta; **falta
+verlo instalado en el teléfono de Joan**.
 
 ### En la red del PC (desarrollo)
 
@@ -274,7 +309,7 @@ Claude, la entrada `taller-pintura-celular` de `.claude/launch.json` arranca
 el servidor abierto a la red. El reconocedor de fotos sí necesita internet
 en el teléfono la primera vez (89 MB desde Hugging Face); lo demás no.
 
-Pruebas (80, en Node, sin navegador; el registro se prueba contra
+Pruebas (121, en Node, sin navegador; el registro se prueba contra
 `fake-indexeddb`, una IndexedDB de mentira que se instala con `npm install`):
 
 ```bash
@@ -288,6 +323,12 @@ npm test
 | `index.html` | El visor: barra con el enlace al Garaje, placa y marca; el lienzo 3D con la ficha del carro; botones de vista; la hoja con los chips, la tira de fotos y los dos botones; el menú de estado, la cámara (`input type=file capture`) y el diálogo de la foto grande. |
 | `garaje.html` | El Garaje: las pestañas de la app, el botón "Nuevo carro con foto" y su ficha (foto, color, sugerencias, marca y línea, carrocería, placa), el formulario por placa, la lista de carros y el bloque de la demostración. |
 | `tablero.html` | Las otras tres pestañas: Empleados (la nómina de la semana y la lista de empleados), Historial (entregados y cobrado) e Indicadores (todo junto, con dos gráficas). `?p=` dice cuál se abre. |
+| `manifest.webmanifest` | Lo que el celular lee para instalar la app: nombre, `start_url` y `scope` relativos (la app vive en `/taller/`, no en la raíz del dominio), `display: standalone`, colores e iconos (192 y 512, normales y maskable). |
+| `sw.js` | El service worker: al instalar precarga lo propio (36 archivos, 2,5 MB: páginas, CSS, módulos, Three.js, etiquetas, el bundle de Transformers.js, manifest e iconos) y desde ahí lo sirve de la caché; el motor ONNX (`ort-*`, 39 MB) se guarda al primer uso en su propia caché; Hugging Face no se toca. La versión del nombre de la caché la escribe `npm run sellar`. En el PC va primero a la red. |
+| `js/instalable.js` | Registra el service worker con ruta relativa (solo https o localhost) y enciende en el Garaje el botón "Hay una versión nueva, toca para actualizar" cuando hay una esperando; tocarlo la activa y recarga. Lo cargan las tres páginas. |
+| `iconos/` | Los iconos de la app (dibujo propio: carro naranja de perfil con la línea de la puerta y una gota de pintura): 192 y 512 normales y maskable, 180 para iPhone, y el `icono.svg` original. Se regeneran con `npm run iconos`. |
+| `herramientas/generar-iconos.mjs` | Dibuja el SVG y lo convierte a PNG con `sharp`, que ya está en `node_modules` porque lo trae Transformers.js (no es una dependencia nueva). |
+| `herramientas/sellar-version.mjs` | `npm run sellar`: escribe en `sw.js` la lista de archivos a precargar y una huella SHA-256 de su contenido (y otra del motor). Sin eso el navegador no ve que hay versión nueva. Exporta lo que usa la prueba. |
 | `js/tablero.js` | Los números: la semana del taller (lunes a domingo), `pagoDePieza`, `nominaSemanal`, `historial`, `indicadores` (con serie por semana) y `pesos`. Funciones puras, sin DOM, probadas en Node. |
 | `js/tablero-pantalla.js` | La pantalla del tablero: pinta las tres pestañas con lo que calcula `tablero.js`, agrega y retira empleados, y carga o quita la demostración. |
 | `js/demo.js` | Los 5 carros y 3 empleados de demostración (fechas relativas a hoy, todo con `demo: true`), `cargarDemo` (no pisa un carro real) y `estadoDemo`. |
@@ -314,7 +355,7 @@ npm test
 | `herramientas/servidor.js` | Servidor estático sin dependencias; los módulos de JavaScript no cargan desde `file://`. Sirve `.wasm` con su tipo para que el motor compile en streaming. |
 | `herramientas/generar-catalogo.mjs` | Del JSON de la investigación al catálogo: una entrada por marca y línea, medidas limpias, fuente conservada. |
 | `herramientas/calcular-etiquetas.mjs` | Calcula en el PC los vectores de texto de CLIP (modelo de texto, 60 MB que el teléfono así no necesita) y escribe `js/etiquetas-clip.json`. |
-| `pruebas/` | `estado.test.js` (la orden, las 29 piezas), `carro.test.js` (piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio, la base de puertas, la placa), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `tablero.test.js` (semanas, pesos, pago por pieza, pintor y entrega, nómina, historial, indicadores, la demostración, los empleados en el almacén y la subida de versión de la base sin perder carros), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras) y `catalogo.test.js` (el catálogo y su buscador). 104 pruebas. `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
+| `pruebas/` | `estado.test.js` (la orden, las 29 piezas), `carro.test.js` (piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio, la base de puertas, la placa), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `tablero.test.js` (semanas, pesos, pago por pieza, pintor y entrega, nómina, historial, indicadores, la demostración, los empleados en el almacén y la subida de versión de la base sin perder carros), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras), `catalogo.test.js` (el catálogo y su buscador) e `instalable.test.js` (el manifest y sus iconos, los enlaces de las tres páginas, el sello de `sw.js` contra la carpeta real, y el service worker corriendo en un `vm` con navegador de mentira: qué toca, qué no, y que Hugging Face nunca). 121 pruebas. `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
 
 Decisiones que conviene conocer:
 
@@ -402,7 +443,7 @@ el lunes 19.
 | **Jueves 15-oct** (hecho) | Visor: sedán por piezas, girar, tocar, enviar por WhatsApp. | Mandar una orden de pintura desde el celular. |
 | **Lunes 19 a viernes 23-oct** (hecho el jueves 15) | Registro por placa y marca; pantalla **Garaje** con todos los carros; fotos por pieza (cámara del celular, guardadas en el teléfono); estados por pieza: pendiente, en proceso, terminada. | Ver cualquier carro, abrir su 3D y saber qué se trabajó y qué está en curso. |
 | **Lunes 26 a viernes 30-oct** (empleados, nómina, historial e indicadores hechos el jueves 15; queda la nube) | Empleados: asignar pintor a cada pieza y marcarla terminada; resumen semanal por pintor con piezas × 90.000. La nube (Supabase, con RLS) para que el dueño y el asistente vean lo mismo desde dos teléfonos. | Pagar la semana con la lista en la mano; el asistente ve la orden en la app, no solo en WhatsApp. |
-| **Lunes 2 a viernes 6-nov** (carrocerías y foto hechas el jueves 15; queda lo instalable) | Otras carrocerías (hatchback, SUV, camioneta/pick-up: cambia el baúl por la compuerta y el largo); instalable en el celular (PWA primero; APK por enlace como Tu Garantía si hace falta). | Usarla con los carros que de verdad llegan al taller, como una app más. |
+| **Lunes 2 a viernes 6-nov** (carrocerías y foto hechas el jueves 15; lo instalable, el viernes 16) | Otras carrocerías (hatchback, SUV, camioneta/pick-up: cambia el baúl por la compuerta y el largo); instalable en el celular (PWA primero; APK por enlace como Tu Garantía si hace falta). | Usarla con los carros que de verdad llegan al taller, como una app más. |
 
 Lo que NO está en el plan y no se va a prometer: escaneo del carro real
 (arriba está el porqué), presupuestos al cliente, facturación.
@@ -445,6 +486,39 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
 
 ## Trampas conocidas
 
+- **Publicar una versión nueva son tres pasos, no uno.** El service worker
+  guarda la app en el teléfono y la sirve de ahí sin mirar la red; el
+  navegador solo se entera de que hay versión nueva cuando cambia `sw.js`.
+  Por eso, antes de cada `git push`: `npm test` en verde, **`npm run
+  sellar`** (reescribe en `sw.js` la lista de archivos y la huella de su
+  contenido) y commit. Si se olvida el sello, los teléfonos se quedan con la
+  versión vieja para siempre y nadie se entera; la prueba
+  `instalable.test.js` falla para que no se olvide. La versión llega al
+  teléfono la próxima vez que abre la app con internet (GitHub Pages tarda
+  hasta 10 minutos en servir lo nuevo) y se aplica cuando la persona toca la
+  franja naranja del Garaje.
+- En el PC (`127.0.0.1`) el service worker va **primero a la red** y usa su
+  caché solo si el servidor está apagado; en la dirección pública es al
+  revés (caché primero). Si fuera caché primero también en el PC, editar un
+  archivo no se vería al recargar. El panel de Claude conserva el service
+  worker entre sesiones: si una pantalla sale vieja con el servidor apagado,
+  es la caché, no el código. En `http://192.168.x.x` no hay service worker
+  (http plano no es contexto seguro) y la app abre igual, sin instalar.
+- El motor ONNX (`ort-*.wasm/.mjs`, 39 MB) **no se precarga**: el Garaje y
+  el 3D no lo necesitan. Se guarda en su propia caché (`taller-motor-*`) la
+  primera vez que alguien toca "Nuevo carro con foto" con internet, y una
+  versión nueva de la app no lo vuelve a bajar. El modelo de 89 MB lo guarda
+  Transformers.js en la suya (`transformers-cache`) y el service worker no se
+  mete con Hugging Face ni con esa caché: lo que no es de la app pasa de largo.
+- `display: standalone` quita la barra del navegador, y en iPhone también el
+  botón de atrás: toda pantalla tiene que tener su camino de vuelta en la
+  propia página (hoy lo tienen: "‹ Garaje" y las pestañas). Y en iPhone la
+  app de la pantalla de inicio tiene su propio almacén, aparte de Safari.
+- Las rutas de lo instalable son **relativas** (`manifest.webmanifest`,
+  `iconos/...`, `new URL('../sw.js', import.meta.url)`): en GitHub Pages la
+  app vive bajo `/taller/`, y un `/sw.js` o `/manifest.webmanifest`
+  apuntaría a la raíz del dominio, donde no hay nada. La prueba revisa que
+  ninguna página tenga `href="/` ni `src="/`.
 - Con el panel del navegador de Claude **oculto**, la página deja de dibujar
   (el navegador pausa los cuadros) y las capturas fallan; no es un defecto
   de la app. Las pruebas por JavaScript sí corren.

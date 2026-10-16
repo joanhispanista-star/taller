@@ -6,6 +6,16 @@
   <meta name="theme-color" content="#1a1e24">
   <title>Taller de Pintura · Garaje</title>
   <link rel="stylesheet" href="css/estilos.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="iconos/icono-192.png">
+  <!-- iPhone no lee los iconos ni el "standalone" del manifest: lo suyo son
+       estas etiquetas. Las rutas son relativas porque en GitHub Pages la app
+       vive en /taller/, no en la raíz del dominio. -->
+  <link rel="apple-touch-icon" href="iconos/icono-180.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Taller">
 </head>
 <body class="pagina-garaje">
   <header class="barra">
@@ -23,6 +33,10 @@
   </nav>
 
   <main class="garaje">
+    <!-- Solo se ve cuando el service worker ya bajó una versión nueva y la
+         tiene esperando (instalable.js lo enciende). Tocarlo la activa y
+         recarga. No aparece antes de tener la versión en el teléfono. -->
+    <button type="button" id="actualizar" class="actualizar" hidden>Hay una versión nueva, toca para actualizar</button>
     <!-- La puerta grande: una foto del carro y la app propone qué carro es,
          de qué color y qué carrocería; la persona confirma. -->
     <div class="acciones-garaje">
@@ -107,5 +121,7 @@
   </dialog>
 
   <script type="module" src="js/garaje-pantalla.js"></script>
+  <!-- Lo instalable: registra el service worker (solo bajo https o localhost). -->
+  <script type="module" src="js/instalable.js"></script>
 </body>
 </html>
