@@ -48,13 +48,19 @@ export function archivosApp(raiz = RAIZ) {
     ...listar(raiz, 'js', (n) => n.endsWith('.js') || n.endsWith('.json')),
     ...listar(raiz, 'js/vendor', (n) => n.endsWith('.js')),
     ...listar(raiz, 'js/vendor/transformers', (n) => n === 'transformers.min.js'),
+    // El cargador del lector de placas (50 KB); el modelo va con el motor.
+    ...listar(raiz, 'js/vendor/placa', (n) => n.endsWith('.mjs')),
     ...listar(raiz, 'iconos', (n) => n.endsWith('.png')),
   ].sort();
 }
 
-// El motor ONNX: se guarda al primer uso, no al instalar (ver sw.js).
+// El motor ONNX y el modelo del lector de placas (3,3 MB): se guardan al
+// primer uso, no al instalar (ver sw.js).
 export function archivosMotor(raiz = RAIZ) {
-  return listar(raiz, 'js/vendor/transformers', (n) => n.startsWith('ort-') && /\.(wasm|mjs)$/.test(n)).sort();
+  return [
+    ...listar(raiz, 'js/vendor/transformers', (n) => n.startsWith('ort-') && /\.(wasm|mjs)$/.test(n)),
+    ...listar(raiz, 'js/vendor/placa', (n) => n.endsWith('.onnx')),
+  ].sort();
 }
 
 export function rutaEnDisco(archivo) {

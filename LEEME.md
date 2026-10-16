@@ -113,6 +113,33 @@ carro".
   quedarse con el recorte más seguro no mejora y lo segundo produce
   "seguros" equivocados, así que el algoritmo se quedó como estaba. La foto
   en la ficha pasó de 220 a 300 px de alto para que el dedo caiga mejor.
+- **La placa se lee de la foto, y el logo se busca solo encima de ella**
+  (16-oct, noche; Joan pidió más certeza con UNA foto y que no le pidieran
+  la placa que se ve). La placa colombiana es amarilla: `js/placa-foto.js`
+  la encuentra por color sin ninguna IA (máscara de amarillo, cierre
+  morfológico para que las letras no la partan, y una regla que la separa
+  de rayas y números pintados en el piso: las letras son huecos encerrados
+  por amarillo; un "243" pintado en el parqueadero de Joan engañaba todo
+  lo demás), saca sus cuatro esquinas y la **endereza** con una homografía
+  a 660 × 320. Con eso: (1) el **emblema va encima de la placa**, así que
+  el reconocedor recorta esa zona (hasta 15 puntos, unas 10 pasadas de
+  CLIP: 1 s en el PC, unos 5 en el teléfono) y pone la marca sin que nadie
+  toque nada, con el anillo donde lo encontró; en la foto de la Captiva da
+  Chevrolet al 40 % y segura. Sin placa a la vista (foto de lado), queda el
+  toque o la foto de cerca. (2) La placa enderezada se lee con
+  **fast-plate-ocr** (`js/vendor/placa/cct_xs_v2_global.onnx`, MIT, 3,3
+  MB, de Ankandrew; corre con el mismo ONNX Runtime del reconocedor): con
+  60 placas colombianas de ejemplo lee bien 56 (las que falla cambian una
+  letra: 6 por 8, M por W), en 8 ms cada una en el PC. La de la Captiva,
+  de tres cuartos a 30°, la lee JRK248 (la X en ángulo le parece K; a
+  Tesseract también). Por eso el campo se llena con lo leído y una nota
+  dice "Placa leída de la foto: revísala"; lo que la persona escriba manda.
+  Tesseract.js se probó y se descartó (23 MB en la carpeta y peor). Los
+  **prototipos de imagen** para CLIP (el vector promedio de fotos reales
+  del emblema, del dataset CC BY de General Blockchain, 34 marcas) también
+  se midieron y NO ayudan: subían la probabilidad media pero bajaban los
+  aciertos de 8 a 5-6 de 10 (los óvalos cromados atraen recortes ajenos);
+  quedan apagados con la herramienta y el resultado anotados.
 - **Cuatro carrocerías a la medida**: sedán, hatchback, SUV y camioneta de
   platón, dibujadas por código con las mismas 17 piezas (en el hatchback la
   pieza trasera se llama compuerta; en la camioneta, compuerta y costados
@@ -360,6 +387,14 @@ npm test
 | `js/etiquetas-clip.json` | GENERADO por `herramientas/calcular-etiquetas.mjs`: un vector por carrocería, por logo de marca (70) y por familia del catálogo (784, con su presencia; el carro entero se compara solo con las "muy común"). Int8 en base64, unos 600 KB. Hay que regenerarlo cuando cambie el catálogo o `logo.js`. |
 | `herramientas/medir-logo.mjs` | Mide en el PC la marca por el logo con las fotos de `pruebas/fotos-reconocer/` (coordenadas del logo a ojo): por escala, promedio, con y sin prior, y con `--auto` el barrido sin toque. Es lo que dio los números del LEEME. |
 | `herramientas/medir-logo-variantes.mjs` | Lo mismo en condiciones de teléfono: foto reducida (1600 y 1000 px), dedo corrido un 3 %, cuatro escalas, el recorte más seguro y la búsqueda alrededor del toque. Dijo que el algoritmo actual ya aguanta y que las variantes no mejoran. |
+| `js/placa-foto.js` | Encontrar la placa amarilla en los píxeles (máscara, cierre, componentes, huecos encerrados), sus esquinas, enderezarla (homografía), dejarla en blanco y negro (Otsu), convertir el texto del OCR en placa colombiana (corrigiendo O/0, I/1, B/8 por posición; carros ABC123 y motos ABC12D) y la zona donde buscar el logo encima. Todo puro, probado en Node. |
+| `js/placa-ocr.js` | El lector de placas en el navegador: ubica (640 px), endereza desde la foto a 2000 px y lee con el modelo ONNX (128 × 64 en color, diez huecos). Devuelve la placa como propuesta. |
+| `js/vendor/placa/` | `cct_xs_v2_global.onnx` (fast-plate-ocr, MIT, 3,3 MB; se guarda al primer uso como el motor) y `ort.wasm.min.mjs` (el cargador de ONNX Runtime Web, 50 KB, de la misma versión que el motor ya vendorizado). |
+| `herramientas/medir-placa.mjs` | Mide si la placa amarilla se encuentra en las fotos de prueba (solo la Captiva es colombiana; las demás sirven como "no debe encontrar nada") y guarda los recortes de la placa y de la zona del logo. |
+| `herramientas/medir-placa-onnx.mjs` | Mide el lector de placas en el PC con la Captiva enderezada y con las 60 placas colombianas de ejemplo de fast-plate-ocr (`pruebas/datos-externos/`, fuera del repo). |
+| `herramientas/calcular-prototipos.mjs` | Calcula prototipos de imagen de los logos (CLIP sobre el dataset CC BY de General Blockchain) con su sesgo; escribe `herramientas/prototipos-logos.json` (25 KB). Apagados en las etiquetas: medidos, no ayudan. |
+| `herramientas/medir-prototipos.mjs` | La medición que lo dijo: aciertos, "seguros" y probabilidad de la marca correcta con las frases solas y con prototipos a varios pesos. |
+| `herramientas/bajar-fotos-commons.mjs` | Baja fotos libres de carros en Colombia de Wikimedia Commons para medir (con autor y licencia en un CSV). El 16-oct Commons respondió 429 (demasiadas peticiones) y no se pudo usar; queda para cuando se levante el límite. |
 | `js/hoja.js` | La hoja de abajo del visor: chips con estado, trabajo (latonería), pintor y cámara; menú de estado, trabajo y pintor; tira de fotos y foto grande, con los nombres de la carrocería. DOM puro, sin Three.js. |
 | `js/ficha-carro.js` | La ficha "Datos del carro" del visor: marca, línea con el catálogo, versión, carrocería, color, cobro al cliente y entrega. DOM puro. |
 | `js/garaje-pantalla.js` | La pantalla Garaje: lista con portada y color (con "entregado" y lo cobrado, y la insignia «demo»), abrir o crear por placa, borrar, la ficha del carro nuevo con foto (color, reconocedor, catálogo, confirmación) y la demostración. |
@@ -612,6 +647,33 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
 - La demostración se ofrece siempre que no esté cargada, no solo con el
   Garaje vacío: Joan ya tiene su Captiva y aun así quiere ver los carros
   demo al lado.
+- La placa de la Captiva de Joan, en su foto de tres cuartos, sale **más
+  alta que ancha** (0,56): una placa vista en ángulo no tiene proporción
+  de placa. Por eso el filtro de proporción va de 0,45 a 3,8 y la forma la
+  decide otra cosa: los huecos encerrados (las letras).
+- A 360 px de ancho las letras de una placa chica no se resuelven y los
+  huecos no existen; a 640 sí, y sigue tardando 70 ms.
+- **Tesseract no lee texto inclinado**: con la placa a 30° devolvía basura
+  o nada. Enderezada por sus esquinas (homografía) lee. El lector ONNX
+  tampoco: siempre se endereza antes.
+- Ni Tesseract ni fast-plate-ocr distinguen la X de la K en esa placa en
+  ángulo (los dos leen JRK248). Con la foto de frente no pasa (56 de 60 en
+  placas colombianas de ejemplo). El campo queda como propuesta.
+- `RawImage.toBlob()` de Transformers.js no existe en Node: para pasar una
+  imagen a otro programa en el PC hay que guardarla con `save()`.
+- Wikimedia Commons devuelve **429** si se le pide rápido (las búsquedas de
+  los agentes de investigación más un barrido de categorías lo dispararon):
+  una petición por segundo, User-Agent que diga quién es, y esperar si dice
+  que no. El 16-oct no alcanzó: queda para otro día.
+- Los **prototipos de imagen** de un dataset ajeno no se parecen a las
+  fotos del taller: el dataset trae emblemas cromados de cerca y el
+  prototipo de Mercedes/Hyundai/Honda se lleva recortes de otras marcas.
+  Más certeza no es lo mismo que más aciertos: con prototipos la
+  probabilidad media subía y los aciertos bajaban. Medir siempre las dos.
+- Son dos instancias de ONNX Runtime en la página (la de Transformers.js y
+  la del lector de placas, misma versión, mismo `.wasm`): el navegador baja
+  el wasm una vez pero lo instancia dos veces en memoria. Si en un teléfono
+  flojo faltara memoria, el lector de placas es el que se puede apagar.
 - GitHub **bloqueó el primer push** ("Push cannot contain secrets"): dentro
   de `transformers.min.js` hay una cadena que su detector toma por una
   clave de Mistral. Es el paquete de npm byte a byte (se comparó con

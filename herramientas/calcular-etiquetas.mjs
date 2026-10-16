@@ -65,12 +65,27 @@ for (const [tipo, frases] of Object.entries(FRASES_CARROCERIA)) {
 
 // Un vector por LOGO de marca (15-oct-2026): con un recorte alrededor del
 // emblema que la persona toca, CLIP reconoce la marca; las frases y el
-// agrupamiento viven en js/logo.js, que también usa el teléfono.
+// agrupamiento viven en js/logo.js, que también usa el teléfono. Con
+// `--con-prototipos`, y si existe herramientas/prototipos-logos.json
+// (calcular-prototipos.mjs), la marca lleva también el prototipo de imagen
+// (`ep`). Apagado por defecto: medido el 16-oct-2026, los prototipos del
+// dataset disponible bajaban los aciertos (ver clasificarLogo en logo.js).
+const rutaPrototipos = path.join(RAIZ, 'herramientas', 'prototipos-logos.json');
+const usarPrototipos = process.argv.includes('--con-prototipos') && fs.existsSync(rutaPrototipos);
+const prototipos = usarPrototipos ? new Map(JSON.parse(fs.readFileSync(rutaPrototipos, 'utf8')).marcas.map((m) => [m.nombre, m])) : new Map();
+let conPrototipo = 0;
 for (const m of marcasConLogo(CATALOGO)) {
   const vector = await vectorDe(frasesDeLogo(m.nombre));
-  salida.marcas.push({ nombre: m.nombre, marcas: m.marcas, prior: m.prior, e: aBase64(vector) });
+  const etiqueta = { nombre: m.nombre, marcas: m.marcas, prior: m.prior, e: aBase64(vector) };
+  const p = prototipos.get(m.nombre);
+  if (p) {
+    etiqueta.ep = p.e; // ya viene en Int8 base64
+    etiqueta.sesgo = p.sesgo || 0;
+    conPrototipo += 1;
+  }
+  salida.marcas.push(etiqueta);
 }
-console.log(salida.marcas.length + ' logos de marca');
+console.log(salida.marcas.length + ' logos de marca, ' + conPrototipo + ' con prototipo de imagen');
 
 // Al reconocedor van FAMILIAS (Logan, Hilux, Kona), no cada generación:
 // medido el 15-oct-2026, con 604 líneas sueltas las generaciones de un

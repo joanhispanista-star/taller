@@ -15,6 +15,7 @@ import { reducirFoto } from './fotos.js';
 import { cargarDemo, estadoDemo } from './demo.js';
 import { pesos } from './tablero.js';
 import { puntoEnFoto } from './logo.js';
+import { zonaDelLogo } from './placa-foto.js';
 
 const ui = {
   demo: document.getElementById('demo'),
@@ -40,6 +41,7 @@ const ui = {
     fotoLogo: document.getElementById('ficha-foto-logo'),
     archivoLogo: document.getElementById('foto-logo'),
     ayuda: document.getElementById('ficha-ayuda'),
+    placaNota: document.getElementById('ficha-placa-nota'),
     progreso: document.getElementById('ficha-progreso'),
     estado: document.getElementById('ficha-estado'),
     placa: document.getElementById('ficha-placa'),
@@ -523,6 +525,104 @@ async function aplicarLogo(r, sesion) {
   return sesion === ficha;
 }
 
+// ---- La placa, y el logo encima de ella, sin que la persona haga nada ----
+
+// Pone el anillo sobre un punto de la foto (fracciones), descontando las
+// franjas de object-fit: contain.
+function anilloEn(punto) {
+  const foto = ui.ficha.foto;
+  if (!foto.naturalWidth) return;
+  const rc = foto.getBoundingClientRect();
+  const escala = Math.min(rc.width / foto.naturalWidth, rc.height / foto.naturalHeight);
+  const w = foto.naturalWidth * escala;
+  const h = foto.naturalHeight * escala;
+  ui.ficha.toque.style.left = (rc.width - w) / 2 + punto.x * w + 'px';
+  ui.ficha.toque.style.top = (rc.height - h) / 2 + punto.y * h + 'px';
+  ui.ficha.toque.hidden = false;
+}
+
+function pintarPlacaLeida() {
+  const p = ficha.placaFoto;
+  const nota = ui.ficha.placaNota;
+  if (!p) {
+    nota.hidden = true;
+    return;
+  }
+  nota.hidden = false;
+  if (p.estado === 'leyendo') nota.textContent = 'Vi la placa en la foto; la estoy leyendo…';
+  else if (p.estado === 'error') nota.textContent = 'Vi la placa en la foto pero no pude leerla: escríbela.';
+  else if (!p.leida) nota.textContent = 'Vi la placa en la foto pero no entendí el número' + (p.crudo ? ' (leí "' + p.crudo + '")' : '') + ': escríbela.';
+  else if (ficha.placaPor === 'mano' && ui.ficha.placa.value.trim().toUpperCase() !== p.leida) nota.textContent = 'La foto decía ' + p.leida + '; queda la que escribiste.';
+  else nota.textContent = 'Placa leída de la foto: ' + p.leida + '. Revísala: el lector se equivoca en una letra de vez en cuando.';
+}
+
+// La placa amarilla se ubica por color en un instante. Con ella: el
+// emblema va encima (en la parrilla), así que se busca ahí sin que nadie
+// toque nada; y la placa se endereza y se lee. Si la persona ya tocó el
+// logo o eligió marca mientras tanto, lo suyo manda y lo automático no lo
+// pisa. Sin placa a la vista (foto de lado), queda el toque de siempre.
+async function leerPlacaYLogo(archivo) {
+  const sesion = ficha;
+  let ubicacion = null;
+  try {
+    const { ubicarPlaca } = await import('./placa-ocr.js');
+    ubicacion = await ubicarPlaca(archivo);
+  } catch (e) {
+    console.warn('No se pudo buscar la placa:', e);
+  }
+  if (ficha !== sesion) return;
+  if (!ubicacion) {
+    ficha.placaFoto = null;
+    pintarPlacaLeida();
+    return;
+  }
+  ficha.placaFoto = { ubicacion, leida: '', crudo: '', estado: 'leyendo' };
+  pintarPlacaLeida();
+
+  // 1. El logo encima de la placa.
+  if (!ficha.marcasLineas.length && !ficha.logo && ficha.toqueN === 0) {
+    try {
+      ui.ficha.pistaLogo.textContent = 'Buscando el logo encima de la placa…';
+      const { reconocerMarcaCercaDePlaca } = await cargarReconocedor();
+      const r = await reconocerMarcaCercaDePlaca(archivo, zonaDelLogo(ubicacion.placa), (texto, pct) => estadoFicha(texto, 10 + pct * 0.8));
+      if (ficha !== sesion) return;
+      if (r && ficha.toqueN === 0 && !ficha.marcasLineas.length) {
+        anilloEn(r.punto);
+        await aplicarLogo(r, sesion);
+        if (!r.seguro) ui.ficha.pistaLogo.textContent = 'El logo encima de la placa no se ve claro · tócalo tú';
+      } else if (!r) {
+        ui.ficha.pistaLogo.textContent = 'Toca el logo de la marca';
+      }
+    } catch (e) {
+      if (ficha !== sesion) return;
+      console.warn('No se pudo buscar el logo encima de la placa:', e);
+      ui.ficha.pistaLogo.textContent = 'Toca el logo de la marca';
+    }
+  }
+
+  // 2. Leer la placa.
+  try {
+    const { leerPlacaDeFoto } = await import('./placa-ocr.js');
+    // El avance de la lectura va en la nota de la placa, no en la línea de
+    // estado general (que es la del reconocedor del carro).
+    const lectura = await leerPlacaDeFoto(archivo, ubicacion, (texto) => {
+      if (ficha === sesion) ui.ficha.placaNota.textContent = texto;
+    });
+    if (ficha !== sesion) return;
+    ficha.placaFoto = { ubicacion, leida: (lectura && lectura.placa) || '', crudo: (lectura && lectura.crudo) || '', estado: 'leida' };
+    if (ficha.placaFoto.leida && ficha.placaPor !== 'mano') {
+      ui.ficha.placa.value = ficha.placaFoto.leida;
+      ficha.placaPor = 'foto';
+    }
+    pintarPlacaLeida();
+  } catch (e) {
+    if (ficha !== sesion) return;
+    console.warn('No se pudo leer la placa:', e);
+    ficha.placaFoto = { ...ficha.placaFoto, estado: 'error' };
+    pintarPlacaLeida();
+  }
+}
+
 // Una foto tomada de cerca al emblema: el camino más seguro, porque el
 // logo llena la imagen y no depende de dónde cayó el dedo.
 async function fotoDelLogo(archivo) {
@@ -662,6 +762,8 @@ async function abrirFicha(archivo) {
     carroceriaVotada: '',
     toqueN: 0,
     ultimoTexto: '',
+    placaFoto: null, // { ubicacion, leida, crudo, estado }
+    placaPor: '', // 'foto' (la leyó la app) o 'mano' (la escribió la persona)
   };
   ui.ficha.foto.src = urlFicha;
   ui.ficha.toque.hidden = true;
@@ -678,8 +780,12 @@ async function abrirFicha(archivo) {
   pintarSugerencias();
   pintarMarcaTexto();
   pintarMarcas();
+  pintarPlacaLeida();
   estadoFicha('Mirando el color…', 5);
   ui.ficha.dialogo.showModal();
+
+  // La placa y el logo encima, en paralelo con el color y el carro entero.
+  leerPlacaYLogo(archivo);
 
   try {
     const color = await colorDeFoto(archivo);
@@ -722,6 +828,12 @@ ui.fotoCarro.addEventListener('change', () => {
   if (archivo) abrirFicha(archivo);
 });
 ui.ficha.foto.addEventListener('click', tocarLogo);
+// Lo que la persona escriba en la placa manda sobre lo leído.
+ui.ficha.placa.addEventListener('input', () => {
+  if (!ficha) return;
+  ficha.placaPor = 'mano';
+  pintarPlacaLeida();
+});
 ui.ficha.fotoLogo.addEventListener('click', () => ui.ficha.archivoLogo.click());
 ui.ficha.archivoLogo.addEventListener('change', () => {
   const archivo = ui.ficha.archivoLogo.files && ui.ficha.archivoLogo.files[0];

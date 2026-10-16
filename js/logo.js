@@ -135,11 +135,33 @@ function punto(a, b) {
 // recorte, probabilidades contra cada logo (temperatura 100, la de CLIP),
 // por el prior de presencia; luego el promedio de los recortes. Devuelve
 // [{ nombre, marcas, p }] de más a menos probable.
-export function clasificarLogo(vectoresRecortes, etiquetasMarcas, { escala = 100, conPrior = true } = {}) {
+//
+// Si una marca trae PROTOTIPO DE IMAGEN (`ep`: el vector promedio de fotos
+// reales de su emblema; herramientas/calcular-prototipos.mjs), su logit
+// suma `pesoImagen` veces el parecido con ese prototipo, centrado en el
+// parecido medio con todos los prototipos (así una marca sin prototipo
+// queda en cero, ni favorecida ni castigada). MEDIDO el 16-oct-2026 con el
+// dataset de General Blockchain (34 marcas, 16 recortes cada una): no
+// ayuda. Con peso 0,5 subía la probabilidad media de la marca correcta de
+// 36 a 44-47 %, pero bajaba los aciertos de 8 a 5-6 de 10 y aparecían
+// "seguros" equivocados (un Logan como Mercedes al 58 %): los óvalos
+// cromados (Mercedes, Hyundai, Honda) atraen recortes ajenos, con y sin
+// corregir el sesgo. Por eso el peso por defecto es 0 y las etiquetas no
+// llevan prototipos; el código queda para medir con un dataset mejor.
+export function clasificarLogo(vectoresRecortes, etiquetasMarcas, { escala = 100, conPrior = true, pesoImagen = 0 } = {}) {
   if (vectoresRecortes.length === 0 || etiquetasMarcas.length === 0) return [];
   const suma = new Array(etiquetasMarcas.length).fill(0);
+  const conPrototipo = etiquetasMarcas.filter((m) => m.ep);
   for (const vector of vectoresRecortes) {
-    let p = softmax(etiquetasMarcas.map((m) => escala * punto(vector, m.e)));
+    let extra = () => 0;
+    if (pesoImagen > 0 && conPrototipo.length > 0) {
+      // Menos el sesgo del prototipo (cuánto se parece a cualquier logo):
+      // sin eso, un óvalo cromado se lleva recortes ajenos.
+      const parecidos = new Map(conPrototipo.map((m) => [m, punto(vector, m.ep) - (m.sesgo || 0)]));
+      const media = [...parecidos.values()].reduce((s, x) => s + x, 0) / parecidos.size;
+      extra = (m) => (parecidos.has(m) ? pesoImagen * escala * (parecidos.get(m) - media) : 0);
+    }
+    let p = softmax(etiquetasMarcas.map((m) => escala * punto(vector, m.e) + extra(m)));
     if (conPrior) {
       p = p.map((x, i) => x * (etiquetasMarcas[i].prior || 1));
       const total = p.reduce((a, b) => a + b, 0);

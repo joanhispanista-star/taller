@@ -200,6 +200,37 @@ export async function reconocerMarcaPorLogo(archivo, { x, y }, alAvanzar) {
   return { marcas: marcas.slice(0, 5), seguro: logoSeguro(marcas), milisegundos: Math.round(performance.now() - inicio) };
 }
 
+// La marca SOLA, sin toque: sabiendo dónde está la placa (placa-foto.js la
+// ubica por su amarillo), el emblema va encima, en la parrilla. Se
+// recortan los puntos de la zona encima de la placa a la escala chica, se
+// queda el punto donde algún logo gana con más fuerza, y ahí se promedian
+// las tres escalas como en el toque. Unas 10 inferencias: en el PC un
+// segundo, en el teléfono unos cinco. Devuelve lo mismo que
+// reconocerMarcaPorLogo más `punto` (dónde encontró el logo), o null si la
+// zona no cabe en la foto.
+export async function reconocerMarcaCercaDePlaca(archivo, zona, alAvanzar) {
+  const { procesador, vision, etiquetas } = await prepararReconocedor(alAvanzar);
+  const inicio = performance.now();
+  if (etiquetas.marcas.length === 0) throw new Error('etiquetas-clip.json no trae logos: hay que regenerarlo');
+  if (!zona || zona.puntos.length === 0) return null;
+  const imagen = await leerFoto(archivo);
+  const escalaChica = Math.max(0.06, Math.min(0.12, zona.escala * 0.7));
+  let mejor = null;
+  for (const punto of zona.puntos) {
+    const r = recorteAlrededor(imagen.width, imagen.height, punto.x, punto.y, escalaChica);
+    const vector = await vectorDeImagen(procesador, vision, await imagen.crop([r.x1, r.y1, r.x2, r.y2]));
+    const lista = clasificarLogo([vector], etiquetas.marcas, { escala: ESCALA });
+    if (!mejor || lista[0].p > mejor.p) mejor = { punto, p: lista[0].p, vector };
+  }
+  const vectores = [mejor.vector];
+  for (const escala of [escalaChica * 1.6, escalaChica * 2.5]) {
+    const r = recorteAlrededor(imagen.width, imagen.height, mejor.punto.x, mejor.punto.y, Math.min(0.3, escala));
+    vectores.push(await vectorDeImagen(procesador, vision, await imagen.crop([r.x1, r.y1, r.x2, r.y2])));
+  }
+  const marcas = clasificarLogo(vectores, etiquetas.marcas, { escala: ESCALA });
+  return { marcas: marcas.slice(0, 5), seguro: logoSeguro(marcas), punto: mejor.punto, milisegundos: Math.round(performance.now() - inicio) };
+}
+
 // La marca con una foto tomada DE CERCA al emblema (la cámara apuntando al
 // logo): se mira la foto entera y dos recortes del centro (70 % y 45 %),
 // por si la persona dejó aire alrededor. Es el camino más seguro: el logo

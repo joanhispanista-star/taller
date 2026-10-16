@@ -31,8 +31,8 @@
 // navegador seguiría mostrando el viejo y nadie entendería por qué.
 
 /* SELLO-INICIO: lo escribe `npm run sellar` (herramientas/sellar-version.mjs). No editar a mano. */
-const VERSION = '332a2c26ebc3';
-const VERSION_MOTOR = 'b71e0ae6148f';
+const VERSION = 'fae59b0ac32e';
+const VERSION_MOTOR = 'a4950633eb87';
 const ARCHIVOS = [
   "./",
   "css/estilos.css",
@@ -59,12 +59,15 @@ const ARCHIVOS = [
   "js/instalable.js",
   "js/logo.js",
   "js/piezas.js",
+  "js/placa-foto.js",
+  "js/placa-ocr.js",
   "js/reconocer.js",
   "js/tablero-pantalla.js",
   "js/tablero.js",
   "js/toque.js",
   "js/vendor/OrbitControls.js",
   "js/vendor/RoomEnvironment.js",
+  "js/vendor/placa/ort.wasm.min.mjs",
   "js/vendor/three.module.min.js",
   "js/vendor/transformers/transformers.min.js",
   "js/visor.js",
@@ -123,7 +126,8 @@ function decidir(peticion) {
   if (url.origin !== RAIZ.origin || !url.pathname.startsWith(RAIZ.pathname)) return 'red';
   const relativa = url.pathname.slice(RAIZ.pathname.length) || './';
   if (ARCHIVOS.includes(relativa)) return 'app';
-  if (relativa.startsWith(CARPETA_MOTOR)) return 'motor';
+  // El motor ONNX, y el modelo del lector de placas (3,3 MB): al primer uso.
+  if (relativa.startsWith(CARPETA_MOTOR) || relativa.endsWith('.onnx')) return 'motor';
   return 'red';
 }
 
