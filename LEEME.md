@@ -140,6 +140,22 @@ carro".
   se midieron y NO ayudan: subían la probabilidad media pero bajaban los
   aciertos de 8 a 5-6 de 10 (los óvalos cromados atraen recortes ajenos);
   quedan apagados con la herramienta y el resultado anotados.
+  **Medido con 36 fotos libres de carros en Colombia** (Wikimedia Commons,
+  `herramientas/medir-cadena.mjs`; frentes y traseras de Fiat, Renault,
+  Kia, Volkswagen, Toyota, Honda, Audi, BYD, Chery, Citroën, Chevrolet):
+  la placa se encuentra en 24, todas de verdad (las otras 12 no tienen
+  placa a la vista o la tienen tapada; las hojas al sol que al principio
+  pasaban por placa las sacan dos reglas: nada en el 12 % de arriba de la
+  foto, nada con más de la mitad oscura); de esas 24, la marca sale sola
+  de primera en 16, con 13 "seguras" acertadas y 1 "segura" equivocada (un
+  Kwid por detrás como Kia); la placa sale con formato en 22 (KXS776 del
+  Fiat Pulse y FBP129 de un Audi, correctas a ojo). Lo que más subió los aciertos
+  (de 12 a 16) fue describir los logos NUEVOS de Renault (2021, dos
+  chevrones) y Kia (2021, letras sin óvalo): con solo el logo viejo, un
+  Kwid salía Chevrolet y un K3 Volkswagen. Buscar en más filas o refinar
+  las tres mejores posiciones no mejoró. Los frentes de Kia siguen fallando
+  (el logo nuevo, plano y negro sobre negro, CLIP no lo ve): ahí la persona
+  toca el logo o elige Kia entre las diez marcas.
 - **Cuatro carrocerías a la medida**: sedán, hatchback, SUV y camioneta de
   platón, dibujadas por código con las mismas 17 piezas (en el hatchback la
   pieza trasera se llama compuerta; en la camioneta, compuerta y costados

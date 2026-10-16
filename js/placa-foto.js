@@ -25,7 +25,10 @@ export function esAmarilloDePlaca(r, g, b) {
   else if (max === g) tono = 60 * ((b - r) / (max - min) + 2);
   else tono = 60 * ((r - g) / (max - min) + 4);
   if (tono < 0) tono += 360;
-  return tono >= 32 && tono <= 66;
+  // Medido en fotos reales: el amarillo de placa va de 37° (en sombra) a
+  // 46° (al sol). Hasta 66° entraban hojas al sol (amarillo verdoso) y en
+  // una foto de Commons un árbol pasó por placa.
+  return tono >= 30 && tono <= 56;
 }
 
 // Máscara binaria (Uint8Array) de píxeles amarillos. `canales` es 4 para
@@ -216,6 +219,14 @@ export function diagnosticarManchas(mascara, ancho, alto, pixeles = null, canale
     else if (fraccion < 0.0012 || fraccion > 0.12) motivo = 'tamaño';
     else if (huecos < 0.02) motivo = 'sin letras encerradas';
     else if (oscuros !== null && oscuros < 0.04) motivo = 'sin nada oscuro';
+    // Hojas al sol: amarillo de placa, con sombras encerradas, pero en lo
+    // alto de la foto y con más de la mitad oscura. Una placa va en el
+    // bómper (en una foto de carro nunca queda en el 12 % de arriba) y sus
+    // letras ocupan como un tercio (la Captiva 0,33; unos Audi de noche
+    // con marco, 0,48; las hojas, 0,46 a 0,56: el tope va en 0,52 y las
+    // hojas que quedan las saca la altura).
+    else if (cy < 0.12 || c.y1 / alto < 0.05) motivo = 'muy arriba en la foto';
+    else if (oscuros !== null && oscuros > 0.52) motivo = 'demasiado oscuro para ser placa';
     salida.push({
       x: c.x1 / ancho,
       y: c.y1 / alto,
@@ -267,9 +278,9 @@ export function recorteDePlaca(placa, margen = 0.35) {
 // Devuelve puntos (fracciones) para recortar alrededor, de centro hacia
 // afuera, y la escala de recorte sugerida (el logo mide como la mitad del
 // ancho de la placa).
-export function zonaDelLogo(placa) {
+export function zonaDelLogo(placa, { filas: alturas = [1.0, 1.9, 2.8] } = {}) {
   const cx = placa.x + placa.w / 2;
-  const filas = [1.0, 1.9, 2.8].map((k) => placa.y - k * placa.h);
+  const filas = alturas.map((k) => placa.y - k * placa.h);
   const columnas = [0, -0.7, 0.7, -1.4, 1.4].map((k) => cx + k * placa.w);
   const puntos = [];
   for (const y of filas) {

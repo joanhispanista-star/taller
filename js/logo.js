@@ -33,9 +33,13 @@ export const PLANTILLAS_LOGO = [
 // carro entero, no a emblema); describir la forma es lo que los separa.
 export const DESCRIPCION_LOGO = {
   Chevrolet: ['the gold Chevrolet bowtie emblem', 'a golden bowtie-shaped car badge, the Chevrolet logo'],
-  Renault: ['the Renault diamond logo', 'a silver rhombus-shaped car badge, the Renault logo'],
+  // Renault y Kia cambiaron de logo en 2021: el rombo pasó a dos chevrones
+  // enfrentados en línea, y el óvalo KIA a letras estilizadas sin óvalo.
+  // Medido el 16-oct-2026 con fotos de Commons: con solo el logo viejo, un
+  // Kwid 2023 salía Chevrolet y un K3 2024 salía Volkswagen.
+  Renault: ['the Renault diamond logo', 'a silver rhombus-shaped car badge, the Renault logo', 'the new Renault logo, two interlocking chevrons forming a diamond outline'],
   Mazda: ['the Mazda winged M logo inside a circle', 'the chrome Mazda emblem with stylized wings'],
-  Kia: ['the KIA letters logo', 'the Kia badge with the letters KIA in an oval'],
+  Kia: ['the KIA letters logo', 'the Kia badge with the letters KIA in an oval', 'the new Kia logo, stylized angular KIA lettering without an oval'],
   Hyundai: ['the Hyundai slanted H logo inside an oval', 'the chrome Hyundai H emblem'],
   Toyota: ['the Toyota logo of three overlapping ellipses', 'the chrome Toyota emblem'],
   Nissan: ['the Nissan logo, a circle with a horizontal bar and the word NISSAN', 'the chrome Nissan emblem'],
@@ -47,12 +51,12 @@ export const DESCRIPCION_LOGO = {
   BMW: ['the BMW blue and white roundel logo', 'the BMW propeller badge'],
   Audi: ['the Audi four rings logo', 'the four interlocking rings of Audi'],
   Peugeot: ['the Peugeot lion logo', 'the Peugeot lion head emblem'],
-  Citroën: ['the Citroën double chevron logo', 'the two chevrons emblem of Citroën'],
-  Fiat: ['the Fiat logo, red badge with the letters FIAT', 'the Fiat emblem'],
+  Citroën: ['the Citroën double chevron logo', 'the two chevrons emblem of Citroën', 'the new Citroën logo, two stacked chevrons inside an oval'],
+  Fiat: ['the Fiat logo, red badge with the letters FIAT', 'the Fiat emblem', 'the FIAT lettering badge, chrome letters F I A T on the grille'],
   Jeep: ['the Jeep logo, the word JEEP', 'the Jeep lettering badge'],
   Mitsubishi: ['the Mitsubishi three diamonds logo', 'the three red diamonds emblem of Mitsubishi'],
   Subaru: ['the Subaru six stars logo', 'the Subaru emblem with stars in a blue oval'],
-  Chery: ['the Chery logo', 'the Chery emblem, a circle with a stylized C and A'],
+  Chery: ['the Chery logo', 'the Chery emblem, a circle with a stylized C and A', 'the CHERY lettering badge'],
   JAC: ['the JAC Motors logo', 'the JAC emblem, a circle with a stylized star'],
   BYD: ['the BYD logo, the letters BYD in an oval', 'the BYD emblem'],
   'Land Rover': ['the Land Rover green oval logo', 'the Land Rover badge'],
