@@ -235,7 +235,11 @@ https://joanhispanista-star.github.io/taller/garaje.html
 
 Publicar es `git push` (repo `joanhispanista-star/taller`, que Joan creó
 con ese nombre el 15-oct; rama `master`, carpeta raíz; `.nojekyll` evita
-que GitHub procese los archivos).
+que GitHub procese los archivos). **Probado en el teléfono de Joan el
+15-oct por la noche**: abrió el enlace, le tomó la foto a su Captiva, tocó
+el logo y salió Chevrolet con las líneas de Chevrolet. Es la primera
+confirmación en un celular real; queda sin probar ahí el pellizco y el giro
+con dos dedos del 3D, y cuánto tarda la primera descarga de 89 MB.
 GitHub Pages solo es gratis con repo público: el código se ve, y no hay
 nada que esconder (sin claves, sin números de teléfono; el enlace de
 WhatsApp no lleva número). Dos cosas que hay que saber:
