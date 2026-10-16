@@ -581,7 +581,9 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 .ficha-nueva img {
   display: block;
   width: 100%;
-  height: 220px;
+  /* Alta: a 220 px el emblema medía 4 px en el celular y el dedo no caía
+     encima; a 300 px la foto sigue cabiendo con la ficha debajo. */
+  height: 300px;
   /* Entera, no recortada: la persona tiene que poder tocar el logo esté
      donde esté, y el toque se convierte a un punto de la foto real. */
   object-fit: contain;
@@ -996,3 +998,22 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 }
 
 .actualizar:disabled { opacity: 0.7; cursor: default; }
+
+/* ---------- La marca primero: foto del logo de cerca ---------- */
+
+.marca-fila { display: flex; align-items: flex-start; gap: 8px; }
+.marca-fila .ayuda { flex: 1; }
+
+.boton-foto-logo {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--acento);
+  background: var(--panel-2);
+  color: var(--texto);
+  font-size: 12px;
+  white-space: nowrap;
+}

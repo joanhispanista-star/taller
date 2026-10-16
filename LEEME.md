@@ -99,6 +99,20 @@ carro".
   una, o tocar el logo más de cerca. "Otra marca" quita el filtro. Sin
   toque, barrer la foto a ciegas acertaba 4 de 10: por eso se pide el toque
   (un segundo de la persona, no treinta del teléfono).
+  **La marca va primero y la foto entera no la afirma** (16-oct): Joan vio
+  en el celular "parece Hyundai" con el corbatín a la vista y la app quedó
+  como equivocada; la marca por la foto entera se equivoca seguido y ya no
+  se muestra ni se proponen líneas hasta saber la marca. Antes del toque, la
+  ficha ofrece las diez marcas que más ruedan en Colombia para tocar una, y
+  el botón **"Foto del logo de cerca"** abre la cámara para fotografiar el
+  emblema: la foto entera y dos recortes del centro van al reconocedor; es
+  el camino más seguro porque el logo llena la imagen y no depende de dónde
+  cayó el dedo. Medido con `herramientas/medir-logo-variantes.mjs`: el toque
+  aguanta un dedo corrido un 3 % del ancho y la foto reducida a 1000 px
+  (8 de 10 igual, ningún "seguro" equivocado); buscar alrededor del toque o
+  quedarse con el recorte más seguro no mejora y lo segundo produce
+  "seguros" equivocados, así que el algoritmo se quedó como estaba. La foto
+  en la ficha pasó de 220 a 300 px de alto para que el dedo caiga mejor.
 - **Cuatro carrocerías a la medida**: sedán, hatchback, SUV y camioneta de
   platón, dibujadas por código con las mismas 17 piezas (en el hatchback la
   pieza trasera se llama compuerta; en la camioneta, compuerta y costados
@@ -345,6 +359,7 @@ npm test
 | `js/logo.js` | La parte pura de la marca por el logo: nombres de marca como los conoce CLIP, frases con la forma de cada logo, recorte alrededor del toque, clasificación de los recortes, cuándo un logo es "seguro", y del toque en pantalla al punto de la foto. Sin modelo ni DOM; probado en Node. |
 | `js/etiquetas-clip.json` | GENERADO por `herramientas/calcular-etiquetas.mjs`: un vector por carrocería, por logo de marca (70) y por familia del catálogo (784, con su presencia; el carro entero se compara solo con las "muy común"). Int8 en base64, unos 600 KB. Hay que regenerarlo cuando cambie el catálogo o `logo.js`. |
 | `herramientas/medir-logo.mjs` | Mide en el PC la marca por el logo con las fotos de `pruebas/fotos-reconocer/` (coordenadas del logo a ojo): por escala, promedio, con y sin prior, y con `--auto` el barrido sin toque. Es lo que dio los números del LEEME. |
+| `herramientas/medir-logo-variantes.mjs` | Lo mismo en condiciones de teléfono: foto reducida (1600 y 1000 px), dedo corrido un 3 %, cuatro escalas, el recorte más seguro y la búsqueda alrededor del toque. Dijo que el algoritmo actual ya aguanta y que las variantes no mejoran. |
 | `js/hoja.js` | La hoja de abajo del visor: chips con estado, trabajo (latonería), pintor y cámara; menú de estado, trabajo y pintor; tira de fotos y foto grande, con los nombres de la carrocería. DOM puro, sin Three.js. |
 | `js/ficha-carro.js` | La ficha "Datos del carro" del visor: marca, línea con el catálogo, versión, carrocería, color, cobro al cliente y entrega. DOM puro. |
 | `js/garaje-pantalla.js` | La pantalla Garaje: lista con portada y color (con "entregado" y lo cobrado, y la insignia «demo»), abrir o crear por placa, borrar, la ficha del carro nuevo con foto (color, reconocedor, catálogo, confirmación) y la demostración. |

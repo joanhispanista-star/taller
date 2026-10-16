@@ -200,6 +200,24 @@ export async function reconocerMarcaPorLogo(archivo, { x, y }, alAvanzar) {
   return { marcas: marcas.slice(0, 5), seguro: logoSeguro(marcas), milisegundos: Math.round(performance.now() - inicio) };
 }
 
+// La marca con una foto tomada DE CERCA al emblema (la cámara apuntando al
+// logo): se mira la foto entera y dos recortes del centro (70 % y 45 %),
+// por si la persona dejó aire alrededor. Es el camino más seguro: el logo
+// llena la imagen y no depende de dónde cayó el dedo.
+export async function reconocerMarcaEnFotoDeCerca(archivo, alAvanzar) {
+  const { procesador, vision, etiquetas } = await prepararReconocedor(alAvanzar);
+  const inicio = performance.now();
+  if (etiquetas.marcas.length === 0) throw new Error('etiquetas-clip.json no trae logos: hay que regenerarlo');
+  const imagen = await leerFoto(archivo);
+  const vectores = [await vectorDeImagen(procesador, vision, imagen)];
+  for (const escala of [0.7, 0.45]) {
+    const r = recorteAlrededor(imagen.width, imagen.height, 0.5, 0.5, escala);
+    vectores.push(await vectorDeImagen(procesador, vision, await imagen.crop([r.x1, r.y1, r.x2, r.y2])));
+  }
+  const marcas = clasificarLogo(vectores, etiquetas.marcas, { escala: ESCALA });
+  return { marcas: marcas.slice(0, 5), seguro: logoSeguro(marcas), milisegundos: Math.round(performance.now() - inicio) };
+}
+
 // Las líneas de UNA marca (o varias que comparten logo), ordenadas por lo
 // que se parece la foto entera a cada familia, con un empujón a las de la
 // carrocería que la foto votó. Aquí sí entran todas las familias de la

@@ -89,7 +89,17 @@
     <div class="ficha-cuerpo">
       <div class="progreso" aria-hidden="true"><b id="ficha-progreso"></b></div>
       <p id="ficha-estado" class="aviso" hidden></p>
-      <p class="ayuda" id="ficha-marca-texto">Toca el logo en la foto y la app te dice la marca.</p>
+      <!-- La marca primero: por el logo (tocándolo en la foto, o con una
+           foto de cerca del emblema) o a mano. La foto entera NO sirve para
+           la marca y la app ya no lo afirma. -->
+      <div class="marca-fila">
+        <p class="ayuda" id="ficha-marca-texto">Marca: toca el logo en la foto, o elige abajo.</p>
+        <button type="button" id="ficha-foto-logo" class="boton-foto-logo">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9zm3 5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>
+          Foto del logo de cerca
+        </button>
+      </div>
+      <input id="foto-logo" type="file" accept="image/*" capture="environment" hidden>
       <div id="ficha-marcas" class="sugerencias" aria-label="Marca"></div>
       <div class="ficha-campos">
         <label class="campo">
@@ -101,7 +111,7 @@
           <span class="color-elegido"><input id="ficha-color" type="color" value="#cfd4da"><b id="ficha-color-nombre">plateado</b></span>
         </label>
       </div>
-      <p class="ayuda" id="ficha-ayuda">La app propone; tú confirmas con un toque.</p>
+      <p class="ayuda" id="ficha-ayuda">Las líneas salen cuando se sepa la marca.</p>
       <div id="ficha-sugerencias" class="sugerencias" aria-label="Líneas parecidas"></div>
       <label class="campo">
         <span>Marca y línea</span>
