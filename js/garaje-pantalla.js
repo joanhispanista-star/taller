@@ -656,6 +656,8 @@ async function leerPlacaYLogo(archivo) {
         if (!r.seguro) ui.ficha.pistaLogo.textContent = 'El logo encima de la placa no se ve claro · tócalo tú';
       } else if (!r) {
         ui.ficha.pistaLogo.textContent = 'Toca el logo de la marca';
+      } else {
+        soltarPistaDeBusqueda(); // la persona eligió mientras se miraba
       }
     } catch (e) {
       if (ficha !== sesion) return;
@@ -702,13 +704,25 @@ function puntoComoTexto(p) {
   return 'x ' + Math.round(p.x * 100) + ' %, y ' + Math.round(p.y * 100) + ' %';
 }
 
+// La pista sobre la foto no puede quedarse prometiendo una búsqueda que
+// ya no corre (la persona eligió marca, escribió, o tocó "Otra marca"
+// mientras la app miraba). Solo se cambia si sigue siendo el texto de la
+// búsqueda automática: si la persona tocó el logo, la pista es la de su
+// toque y no se pisa (revisión del 17-oct).
+function soltarPistaDeBusqueda() {
+  if (/^(Buscando el logo|Mirando de cerca el logo)/.test(ui.ficha.pistaLogo.textContent)) ui.ficha.pistaLogo.textContent = 'Toca el logo de la marca';
+}
+
 // El logo sin placa que diga dónde está: barrer la foto (reconocer.js,
 // reconocerMarcaBarriendo). Tarda, así que avisa cuánto va y se aborta si
 // la persona ya tocó el logo o eligió marca. Lo que sale compite con lo
 // que ya hubiera (el logo encima de la placa, no claro): se queda el que
 // gane con más fuerza.
 async function buscarLogoSinPlaca(archivo, sesion, vigente) {
-  if (!vigente()) return;
+  if (!vigente()) {
+    soltarPistaDeBusqueda();
+    return;
+  }
   try {
     ui.ficha.pistaLogo.textContent = 'Buscando el logo en la foto…';
     const { reconocerMarcaBarriendo } = await cargarReconocedor();
@@ -721,14 +735,15 @@ async function buscarLogoSinPlaca(archivo, sesion, vigente) {
     if (ficha !== sesion) return;
     if (!r) {
       anotar('Barrido de la foto: cancelado (ya tocaste el logo o elegiste marca)');
-      // El avance del barrido no puede quedarse en pantalla prometiendo una
-      // búsqueda que ya no corre. Solo se cambia si sigue siendo el texto
-      // del barrido: si la persona tocó el logo, la pista es la de su toque.
-      if (/^(Buscando el logo en la foto|Mirando de cerca el logo)/.test(ui.ficha.pistaLogo.textContent)) ui.ficha.pistaLogo.textContent = 'Toca el logo de la marca';
+      soltarPistaDeBusqueda();
       return;
     }
     anotar('Logo barriendo la foto: ' + votosDeLogo(r) + ' en ' + puntoComoTexto(r.punto));
-    if (!vigente()) return;
+    if (!vigente()) {
+      // Se canceló durante la última pasada: el resultado llegó, pero ya no manda.
+      soltarPistaDeBusqueda();
+      return;
+    }
     const anterior = ficha.logo ? { marcas: ficha.logo, seguro: ficha.logoSeguro } : null;
     if (logoQueQueda(anterior, r) !== r) {
       ui.ficha.pistaLogo.textContent = 'No encontré el logo claro · tócalo tú o tómale foto de cerca';

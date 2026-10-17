@@ -189,7 +189,12 @@ carro".
   las fotos sin emblema a la vista. Antes de la revisión daba 30, 23 y 2:
   el prior de presencia inflaba el "fondo" de los recortes de marcas poco
   comunes, y al corregirlo el Kwid de frente dejó de salir "Chevrolet
-  seguro" (y se perdió un Prado al 7 % que nunca fue seguro). Cuánto
+  seguro" (y se perdió un Prado al 7 % que nunca fue seguro). Con las
+  fotos reducidas a 1280 px, como llegan reenviadas por WhatsApp
+  (`--reducir=1280`), la cadena casi no pierde: 28, 23 y 2. Pero una foto
+  suelta sí puede: el Fiat Pulse de frente da Fiat seguro a 1920 px y nada
+  claro a 1280 (el logo encima de la placa queda muy chico); mejor la foto
+  tomada desde la app, que llega entera. Cuánto
   cuesta: en el PC el barrido tarda 11-12 s con 4 hilos; en un teléfono se
   estima entre 30 s y un minuto (**sin medir todavía en el celular de
   Joan**). Se midieron también rejillas más baratas (franja del 35 al 75 %,

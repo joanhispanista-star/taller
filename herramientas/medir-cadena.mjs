@@ -13,6 +13,7 @@
 //   node herramientas/medir-cadena.mjs             → todo, foto por foto
 //   node herramientas/medir-cadena.mjs --resumen   → solo los totales
 //   node herramientas/medir-cadena.mjs --sin-barrido → como antes del 17-oct
+//   node herramientas/medir-cadena.mjs --reducir=1280 → fotos como las de WhatsApp
 //
 // Imprime por foto: dónde se encontró la placa (o no), la marca que quedó,
 // por qué camino (encima de la placa o barriendo), si es "segura", y la
@@ -31,6 +32,10 @@ env.cacheDir = path.join(RAIZ, 'node_modules', '.cache', 'transformers');
 const ESCALA = 100;
 const SOLO_RESUMEN = process.argv.includes('--resumen');
 const SIN_BARRIDO = process.argv.includes('--sin-barrido');
+// --reducir=1280: cada foto se achica primero a ese lado mayor, como llega
+// una foto reenviada por WhatsApp (17-oct: con la miniatura de 1280 px del
+// Fiat Pulse el logo encima de la placa ya no se ve; con la de 1920, sí).
+const REDUCIR = Number((process.argv.find((a) => a.startsWith('--reducir=')) || '').slice(10)) || 0;
 
 // Las etiquetas que viajan con la app (frases por logo y de fondo, Int8 en base64).
 function desdeBase64(texto) {
@@ -163,7 +168,11 @@ async function leerPlana(plana) {
 const totales = { fotos: 0, conMarcaReal: 0, conPlaca: 0, bien: 0, seguraBien: 0, seguraMal: 0, porPlaca: 0, porBarrido: 0, placaLeida: 0, pasadasPorFoto: [] };
 const t0 = Date.now();
 for (const foto of fotos) {
-  const original = await RawImage.read(foto.ruta);
+  let original = await RawImage.read(foto.ruta);
+  if (REDUCIR && Math.max(original.width, original.height) > REDUCIR) {
+    const k = REDUCIR / Math.max(original.width, original.height);
+    original = await original.resize(Math.round(original.width * k), Math.round(original.height * k));
+  }
   // Como en el teléfono: 1600 px para el logo (leerFoto), 2000 para leer la placa.
   const factor = Math.min(1, 1600 / Math.max(original.width, original.height));
   const imagen = factor < 1 ? await original.resize(Math.round(original.width * factor), Math.round(original.height * factor)) : original;
@@ -200,7 +209,7 @@ for (const foto of fotos) {
   }
 }
 const pasadas = totales.pasadasPorFoto.sort((a, b) => a - b);
-console.log('\n' + totales.fotos + ' fotos (sin interiores), ' + Math.round((Date.now() - t0) / 1000) + ' s' + (SIN_BARRIDO ? ', SIN barrido' : ''));
+console.log('\n' + totales.fotos + ' fotos (sin interiores), ' + Math.round((Date.now() - t0) / 1000) + ' s' + (SIN_BARRIDO ? ', SIN barrido' : '') + (REDUCIR ? ', fotos reducidas a ' + REDUCIR + ' px' : ''));
 console.log('  placa encontrada: ' + totales.conPlaca);
 console.log('  marca bien de primera: ' + totales.bien + ' de ' + totales.conMarcaReal + '; segura y bien: ' + totales.seguraBien + '; segura y MAL: ' + totales.seguraMal);
 console.log('  seguras por el logo encima de la placa: ' + totales.porPlaca + '; por el barrido: ' + totales.porBarrido);
