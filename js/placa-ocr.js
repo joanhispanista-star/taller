@@ -13,7 +13,7 @@
 // foto: revísala") y nunca se guarda sin que la persona la vea.
 import { binarizarPlaca, buscarPlaca, cerrarMascara, esquinasDePlaca, mascaraAmarilla, rectificarPlaca, textoAPlaca } from './placa-foto.js';
 
-const LADO_BUSQUEDA = 640; // para ubicar la placa sobra; más es más lento
+const LADOS_BUSQUEDA = [640, 960]; // para ubicar la placa: 640 sobra; 960 solo si a 640 no sale (placa chica)
 const LADO_LECTURA = 2000; // para leerla, cuanta más nitidez mejor
 // Lo que espera el modelo (su plate_config.yaml): 128 × 64 en color, y
 // diez huecos con este alfabeto; '_' es relleno.
@@ -32,6 +32,8 @@ async function prepararLector(alAvanzar = () => {}) {
       // El motor wasm es el que ya viaja con el reconocedor; un solo hilo
       // por lo mismo que allá (sin cabeceras COOP/COEP).
       ort.env.wasm.wasmPaths = new URL('./vendor/transformers/', import.meta.url).href;
+      // El modelo es chico (3 MB, 8 ms): con un hilo basta y no compite
+      // con el reconocedor del carro, que sí usa varios.
       ort.env.wasm.numThreads = 1;
       const sesion = await ort.InferenceSession.create(new URL('./vendor/placa/cct_xs_v2_global.onnx', import.meta.url).href, { executionProviders: ['wasm'] });
       return { ort, sesion };
@@ -102,18 +104,37 @@ async function leerPlana(pixeles, ancho, alto, { ort, sesion }) {
 // Ubica la placa en la foto (rápido, sin modelo). Devuelve { placa,
 // esquinas } con todo en fracciones del ancho y del alto, o null si no hay
 // placa amarilla. Sirve también para buscar el logo encima.
+//
+// Tres pasadas, de la más estricta a la más abierta, y se queda con la
+// primera que encuentra algo: el amarillo normal a 640 px; el amarillo
+// relajado (placa en sombra o bajo techo) a 640; y las dos otra vez a 960
+// px para una placa chica (el carro salió lejos). `pasada` dice cuál fue,
+// para el detalle de la ficha.
 export async function ubicarPlaca(archivo) {
-  const { datos, ancho, alto } = await pixelesDe(archivo, LADO_BUSQUEDA);
-  const placa = buscarPlaca(datos, ancho, alto, 4);
-  if (!placa) return null;
-  const mascara = cerrarMascara(mascaraAmarilla(datos, ancho, alto, 4), ancho, alto, 2);
-  const caja = {
-    x1: Math.round(placa.x * ancho),
-    y1: Math.round(placa.y * alto),
-    x2: Math.round((placa.x + placa.w) * ancho) - 1,
-    y2: Math.round((placa.y + placa.h) * alto) - 1,
-  };
-  return { placa, esquinas: esquinasDePlaca(mascara, ancho, alto, caja) };
+  let anterior = 0;
+  for (const lado of LADOS_BUSQUEDA) {
+    const { datos, ancho, alto } = await pixelesDe(archivo, lado);
+    // Una foto chica da los mismos píxeles a 640 que "a 960": no se repite.
+    const mayor = Math.max(ancho, alto);
+    if (mayor <= anterior) break;
+    anterior = mayor;
+    for (const relajado of [false, true]) {
+      // A 960 solo se buscan placas chicas (el carro lejos): lo grande ya
+      // se habría visto a 640, y lo que aparece nuevo y grande no es placa.
+      const placa = buscarPlaca(datos, ancho, alto, 4, { relajado, soloChicas: lado !== LADOS_BUSQUEDA[0] });
+      if (!placa) continue;
+      const mascara = cerrarMascara(mascaraAmarilla(datos, ancho, alto, 4, relajado), ancho, alto, 2);
+      const caja = {
+        x1: Math.round(placa.x * ancho),
+        y1: Math.round(placa.y * alto),
+        x2: Math.round((placa.x + placa.w) * ancho) - 1,
+        y2: Math.round((placa.y + placa.h) * alto) - 1,
+      };
+      const pasada = (relajado ? 'amarillo en sombra' : 'amarillo normal') + (lado !== LADOS_BUSQUEDA[0] ? ', a ' + mayor + ' px' : '');
+      return { placa, esquinas: esquinasDePlaca(mascara, ancho, alto, caja), pasada };
+    }
+  }
+  return null;
 }
 
 // Lee la placa: endereza por las esquinas desde la foto a buena

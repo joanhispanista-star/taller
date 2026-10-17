@@ -4,7 +4,7 @@
 // herramientas/medir-placa.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { binarizarPlaca, buscarPlaca, candidatasAPlaca, cerrarMascara, esAmarilloDePlaca, esquinasDePlaca, mascaraAmarilla, recorteDePlaca, rectificarPlaca, textoAPlaca, zonaDelLogo } from '../js/placa-foto.js';
+import { binarizarPlaca, buscarPlaca, candidatasAPlaca, cerrarMascara, diagnosticarManchas, esAmarilloDePlaca, esquinasDePlaca, mascaraAmarilla, recorteDePlaca, rectificarPlaca, textoAPlaca, zonaDelLogo } from '../js/placa-foto.js';
 
 function lienzo(ancho, alto, fondo = [60, 70, 80]) {
   const p = new Uint8ClampedArray(ancho * alto * 4);
@@ -181,4 +181,50 @@ test('esquinasDePlaca encuentra las cuatro esquinas de una placa inclinada y rec
   assert.ok(pix(110, 50)[0] < 80, 'la letra está en el centro');
   assert.ok(esAmarilloDePlaca(...pix(70, 50)) && esAmarilloDePlaca(...pix(150, 50)));
   assert.ok(pix(110, 30)[0] < 80 && pix(110, 70)[0] < 80, 'la barra sigue vertical');
+});
+
+test('el amarillo relajado admite la placa en sombra o bajo techo, pero no el beige ni el verde', () => {
+  // Amarillo de placa con poca luz y menos saturado: la pasada normal no
+  // lo toma, la relajada sí.
+  assert.equal(esAmarilloDePlaca(80, 70, 40), false, 'normal: muy oscuro');
+  assert.equal(esAmarilloDePlaca(80, 70, 40, true), true, 'relajado: placa en sombra');
+  assert.equal(esAmarilloDePlaca(150, 135, 100), false, 'normal: poco saturado');
+  assert.equal(esAmarilloDePlaca(150, 135, 100, true), true, 'relajado: placa sin sol');
+  assert.equal(esAmarilloDePlaca(200, 190, 150, true), false, 'beige sigue fuera');
+  assert.equal(esAmarilloDePlaca(46, 125, 79, true), false, 'verde sigue fuera');
+  assert.equal(esAmarilloDePlaca(40, 32, 5, true), false, 'casi negro sigue fuera');
+  // buscarPlaca dice con qué amarillo la encontró.
+  const W = 160, H = 100;
+  const p = lienzo(W, H);
+  pintar(p, W, 40, 60, 60, 28, [80, 70, 40]); // placa en sombra (max 80 < 90), con "letras"
+  for (let x = 46; x < 96; x += 10) pintar(p, W, x, 68, 4, 12, [20, 20, 20]);
+  assert.equal(buscarPlaca(p, W, H), null, 'con el amarillo normal no se ve');
+  const placa = buscarPlaca(p, W, H, 4, { relajado: true });
+  assert.ok(placa, 'con el amarillo relajado sí');
+  assert.equal(placa.modo, 'relajado');
+});
+
+test('una mancha pegada al borde izquierdo o derecho no es placa, y a 960 solo valen las chicas', () => {
+  const W = 200, H = 120;
+  const p = lienzo(W, H);
+  // Placa de verdad, chica (6 % del ancho), en el centro.
+  pintar(p, W, 94, 70, 12, 6, AMARILLO);
+  pintar(p, W, 97, 72, 2, 2, [20, 20, 20]);
+  pintar(p, W, 101, 72, 2, 2, [20, 20, 20]);
+  // Un pedazo de carretera amarillo pegado al borde izquierdo, grande.
+  pintar(p, W, 0, 60, 40, 20, AMARILLO);
+  for (let x = 6; x < 36; x += 8) pintar(p, W, x, 66, 3, 8, [20, 20, 20]);
+  const diag = diagnosticarManchas(mascaraAmarilla(p, W, H), W, H, p, 4);
+  const pegada = diag.find((m) => m.x < 0.05); // el cierre recorta un píxel del borde
+  assert.ok(pegada, 'la mancha del borde existe');
+  assert.equal(pegada.motivo, 'pegada al borde');
+  const chica = buscarPlaca(p, W, H, 4, { soloChicas: true });
+  assert.ok(chica && chica.w < 0.08, 'la placa chica del centro es la que queda');
+  // La misma placa chica no pasa si se exige algo grande... y una grande
+  // en el centro no pasa con soloChicas.
+  const q = lienzo(W, H);
+  pintar(q, W, 60, 50, 60, 28, AMARILLO);
+  for (let x = 66; x < 116; x += 10) pintar(q, W, x, 58, 4, 12, [20, 20, 20]);
+  assert.ok(buscarPlaca(q, W, H), 'la grande del centro es placa en la pasada normal');
+  assert.equal(buscarPlaca(q, W, H, 4, { soloChicas: true }), null, 'pero no en la pasada de placas chicas');
 });

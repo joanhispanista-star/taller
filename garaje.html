@@ -126,6 +126,13 @@
         <input id="ficha-version" type="text" maxlength="40" autocomplete="off" placeholder="5 puestos, 2023">
       </label>
       <div id="ficha-carrocerias" class="carrocerias" aria-label="Carrocería"></div>
+      <!-- Lo que la app vio en la foto, en texto, para copiarlo y mandarlo
+           cuando no reconoce: sin esto, "no reconoció" no dice qué falló. -->
+      <details class="detalle-foto" id="ficha-detalle">
+        <summary>Qué vio la app en la foto</summary>
+        <pre id="ficha-detalle-texto"></pre>
+        <button type="button" id="ficha-copiar-detalle">Copiar el detalle</button>
+      </details>
       <div class="acciones">
         <button type="button" data-accion="cancelar">Cancelar</button>
         <button type="button" data-accion="abrir" class="primario">Abrir en 3D</button>

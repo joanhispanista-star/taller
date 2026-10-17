@@ -50,6 +50,12 @@ http
       respuesta.end();
       return;
     }
+    // /como-github/...: lo mismo, pero como lo sirve GitHub Pages: bajo una
+    // carpeta (allá es /taller/) y SIN las cabeceras de aislamiento, que
+    // ahí tiene que poner sw.js. Sirve para probar el service worker y los
+    // hilos del motor antes de publicar.
+    const comoGithub = ruta.startsWith('/como-github/');
+    if (comoGithub) ruta = '/' + ruta.slice('/como-github/'.length);
     if (ruta.endsWith('/')) ruta += 'index.html';
     const archivo = path.join(RAIZ, path.normalize(ruta));
     if (!archivo.startsWith(RAIZ)) {
@@ -67,6 +73,11 @@ http
         'Content-Type': TIPOS[path.extname(archivo).toLowerCase()] || 'application/octet-stream',
         // Sin caché: cada recarga trae el archivo recién editado.
         'Cache-Control': 'no-store',
+        // Aislamiento de origen: con estas dos cabeceras el navegador deja
+        // usar SharedArrayBuffer y el motor del reconocedor corre con
+        // varios hilos (sin ellas, uno solo). En GitHub Pages, que no
+        // manda cabeceras, las pone el service worker (sw.js).
+        ...(comoGithub ? {} : { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' }),
       });
       respuesta.end(datos);
     });

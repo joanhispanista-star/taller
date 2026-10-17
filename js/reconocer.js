@@ -21,7 +21,7 @@
 // motor (ONNX Runtime, en js/vendor/transformers) sí viaja con la app.
 import { env, AutoProcessor, CLIPVisionModelWithProjection, RawImage } from './vendor/transformers/transformers.min.js';
 import { normalizarCarroceria } from './carrocerias.js';
-import { ESCALAS_RECORTE, clasificarLogo, logoSeguro, recorteAlrededor } from './logo.js';
+import { CRITERIO_BARRIDO, CRITERIO_ZONA, ESCALAS_RECORTE, FONDO_AL_DECIDIR, REJILLA_BARRIDO as REJILLA, clasificarLogo, decidirBarrido, logoSeguro, recorteAlrededor, rejillaDeBarrido } from './logo.js';
 
 export const MODELO = 'Xenova/clip-vit-base-patch32';
 const ESCALA = 100; // la "temperatura" de CLIP: convierte parecidos en probabilidades
@@ -29,11 +29,56 @@ const ESCALA = 100; // la "temperatura" de CLIP: convierte parecidos en probabil
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 env.backends.onnx.wasm.wasmPaths = new URL('./vendor/transformers/', import.meta.url).href;
-// Un solo hilo: los hilos exigen cabeceras COOP/COEP que el servidor del
-// taller no manda, y ONNX igual caería a uno solo, pero avisando en consola.
-env.backends.onnx.wasm.numThreads = 1;
+// Varios hilos solo si la página está aislada (cabeceras COOP/COEP, que en
+// GitHub Pages pone sw.js desde la segunda visita): sin aislamiento no hay
+// SharedArrayBuffer y ONNX caería a uno solo, pero avisando en consola.
+// Hasta 4: en un teléfono más hilos no rinden más y sí calientan. Nunca en
+// iPhone ni iPad: Safari ha fallado al reservar la memoria compartida que
+// pide el motor con hilos, y ahí un hilo lento es mejor que nada. Y si el
+// motor con hilos falla en un teléfono, se anota (UN_HILO) y desde la
+// siguiente carga usa uno solo: ONNX no se puede reiniciar sin recargar.
+const UN_HILO = 'taller-motor-un-hilo';
+function esIOS() {
+  return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+// El recuerdo vence a la semana: si fue un tropiezo de ese día, el
+// teléfono vuelve a probar con hilos.
+const VENCE_EN = 7 * 24 * 3600 * 1000;
+function hilosRecordadosComoMalos() {
+  try {
+    const cuando = Number(localStorage.getItem(UN_HILO));
+    return cuando > 0 && Date.now() - cuando < VENCE_EN;
+  } catch {
+    return false;
+  }
+}
+// Un fallo de la red (sin internet bajando los 89 MB del modelo, Hugging
+// Face caído o diciendo 429/5xx) no es culpa de los hilos y no se anota.
+// Las frases son las que lanzan fetch y Transformers.js ("Error (429)
+// occurred while trying to load file", "Could not locate file"...). Ojo:
+// "Aborted()" es el fallo típico de un wasm con hilos que no arranca, y
+// ese sí cuenta. Además solo se culpa a los hilos si el modelo ya había
+// bajado entero (ver prepararReconocedor).
+function esDeLaRed(error) {
+  const texto = String((error && error.message) || error);
+  return (typeof navigator !== 'undefined' && navigator.onLine === false) || /failed to fetch|networkerror|network error|load failed|err_internet|err_network|could not (load|fetch|locate file)|occurred while trying to load file|access to file|http (error|status)|status:? ?[45]\d\d|timed? ?out/i.test(texto);
+}
+
+// Los hilos que de verdad usa el motor en esta carga (para el detalle de
+// la ficha): lo que se le dijo a ONNX al importar, no lo que diría
+// hilosDelMotor ahora.
+export function hilosEnUso() {
+  return env.backends.onnx.wasm.numThreads;
+}
+export function hilosDelMotor() {
+  const aislada = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
+  if (!aislada || esIOS() || hilosRecordadosComoMalos()) return 1;
+  return Math.max(1, Math.min(4, navigator.hardwareConcurrency || 1));
+}
+env.backends.onnx.wasm.numThreads = hilosDelMotor();
 
 let preparando = null;
+let modeloBajado = false; // el .onnx del modelo terminó de bajar (o ya estaba en caché)
 
 function desdeBase64(texto) {
   const binario = atob(texto);
@@ -74,8 +119,11 @@ export function prepararReconocedor(alAvanzar = () => {}) {
         // cuando ya se sabe la marca.
         lineas: crudo.lineas.map((l) => ({ ...l, e: desdeBase64(l.e) })),
         marcas: (crudo.marcas || []).map((m) => ({ ...m, e: desdeBase64(m.e) })),
+        // Lo que no es logo, para buscar el emblema sin toque (logo.js).
+        fondo: (crudo.fondo || []).map((f) => ({ ...f, e: desdeBase64(f.e) })),
       };
       const progreso = (p) => {
+        if (p.status === 'done' && p.file && p.file.endsWith('.onnx')) modeloBajado = true;
         if (p.status === 'progress' && p.file && p.file.endsWith('.onnx')) {
           alAvanzar('Descargando el reconocedor (' + Math.round(p.progress || 0) + ' %)…', p.progress || 0);
         } else if (p.status === 'ready') {
@@ -88,6 +136,18 @@ export function prepararReconocedor(alAvanzar = () => {}) {
       return { procesador, vision, etiquetas };
     })().catch((e) => {
       preparando = null; // la próxima vez se vuelve a intentar
+      // Con varios hilos, el fallo puede ser del motor en este teléfono:
+      // se recuerda y se pide volver a abrir (la próxima carga usa un hilo).
+      // Solo si el modelo ya había bajado entero: los hilos fallan al crear
+      // la sesión, después de la descarga; antes es la red o Hugging Face.
+      if (env.backends.onnx.wasm.numThreads > 1 && modeloBajado && !esDeLaRed(e)) {
+        try {
+          localStorage.setItem(UN_HILO, String(Date.now()));
+        } catch {
+          // Sin almacenamiento no hay cómo recordarlo; queda el mensaje.
+        }
+        throw new Error('el motor con varios hilos falló en este teléfono; cierra la app y vuelve a abrirla (o recarga la página) y usará uno solo (' + e.message + ')');
+      }
       throw e;
     });
   }
@@ -124,8 +184,23 @@ async function leerFoto(archivo) {
   return pendiente;
 }
 
-// El vector (normalizado) de una imagen ya leída.
+// Devolverle el turno al navegador entre pasada y pasada de CLIP. Sin
+// esto, una serie de pasadas encadenadas (las 79 del barrido) corre de un
+// tirón: medido el 17-oct-2026 en el panel, en 11 s la página no pintó el
+// avance ni atendió un solo toque, y en el teléfono serían 40 s de pantalla
+// congelada en los que la persona no puede tocar el logo para cortarlo.
+// Con un setTimeout entre pasadas el navegador pinta, atiende toques y
+// corre sus temporizadores. NO scheduler.yield(): en Chrome su
+// continuación pasa por delante de los temporizadores y, medido en el
+// panel, ningún setTimeout de la página corrió durante el barrido.
+function cederTurno() {
+  return new Promise((resolver) => setTimeout(resolver, 0));
+}
+
+// El vector (normalizado) de una imagen ya leída. Cede el turno antes de
+// cada pasada (ver cederTurno).
 async function vectorDeImagen(procesador, vision, imagen) {
+  await cederTurno();
   const entradas = await procesador(imagen);
   const { image_embeds } = await vision(entradas);
   const vector = Float32Array.from(image_embeds.data);
@@ -219,16 +294,81 @@ export async function reconocerMarcaCercaDePlaca(archivo, zona, alAvanzar) {
   for (const punto of zona.puntos) {
     const r = recorteAlrededor(imagen.width, imagen.height, punto.x, punto.y, escalaChica);
     const vector = await vectorDeImagen(procesador, vision, await imagen.crop([r.x1, r.y1, r.x2, r.y2]));
-    const lista = clasificarLogo([vector], etiquetas.marcas, { escala: ESCALA });
-    if (!mejor || lista[0].p > mejor.p) mejor = { punto, p: lista[0].p, vector };
+    const puntaje = puntajeDeLogo(vector, etiquetas, CRITERIO_ZONA);
+    if (!mejor || puntaje > mejor.puntaje) mejor = { punto, puntaje, vector };
   }
   const vectores = [mejor.vector];
   for (const escala of [escalaChica * 1.6, escalaChica * 2.5]) {
     const r = recorteAlrededor(imagen.width, imagen.height, mejor.punto.x, mejor.punto.y, Math.min(0.3, escala));
     vectores.push(await vectorDeImagen(procesador, vision, await imagen.crop([r.x1, r.y1, r.x2, r.y2])));
   }
-  const marcas = clasificarLogo(vectores, etiquetas.marcas, { escala: ESCALA });
-  return { marcas: marcas.slice(0, 5), seguro: logoSeguro(marcas), punto: mejor.punto, milisegundos: Math.round(performance.now() - inicio) };
+  const marcas = clasificarLogo(vectores, etiquetas.marcas, { escala: ESCALA, fondo: FONDO_AL_DECIDIR ? etiquetas.fondo : [] });
+  return { marcas: marcas.slice(0, 5), seguro: logoSeguro(marcas), fondo: marcas.fondo, punto: mejor.punto, milisegundos: Math.round(performance.now() - inicio) };
+}
+
+// Cuánto parece "un logo" un recorte, para elegir entre varios: 'top1' es
+// la probabilidad del mejor logo entre logos; 'logo' es 1 menos la
+// probabilidad de fondo (parrilla, faro, placa...) cuando el fondo compite
+// en la misma softmax (clasificarLogo con `fondo`). Cuál se usa dónde lo
+// decidió la medición del 16-oct-2026 (herramientas/medir-barrido.mjs).
+function puntajeDeLogo(vector, etiquetas, criterio) {
+  if (criterio === 'logo' && etiquetas.fondo.length) {
+    return 1 - clasificarLogo([vector], etiquetas.marcas, { escala: ESCALA, fondo: etiquetas.fondo }).fondo;
+  }
+  return clasificarLogo([vector], etiquetas.marcas, { escala: ESCALA })[0].p;
+}
+
+// La marca SOLA y SIN placa (foto de lado, placa tapada o en sombra): se
+// barre la franja de la foto donde puede haber un emblema con una rejilla
+// de recortes, se eligen los que más parecen logo (y menos parecen
+// parrilla, faro o pared) y en esos se decide a las tres escalas del
+// toque. Antes (15-oct) barrer a ciegas acertaba 4 de 10 y se descartó;
+// lo que lo hizo servir fue el fondo: sin él, el recorte que "más parece
+// un logo" era a menudo una llanta. Cuesta 76 pasadas (70 de la rejilla y
+// 6 nuevas del refinado; la escala del medio repite la de la rejilla):
+// `alAvanzar` cuenta, y `sigueVigente` (una función) deja abortar si la
+// persona ya tocó el logo o eligió marca mientras tanto (devuelve null).
+// Devuelve lo mismo que reconocerMarcaCercaDePlaca.
+export async function reconocerMarcaBarriendo(archivo, { alAvanzar = () => {}, sigueVigente = () => true } = {}) {
+  const { procesador, vision, etiquetas } = await prepararReconocedor(alAvanzar);
+  const inicio = performance.now();
+  if (etiquetas.marcas.length === 0) throw new Error('etiquetas-clip.json no trae logos: hay que regenerarlo');
+  const imagen = await leerFoto(archivo);
+  const puntos = rejillaDeBarrido(REJILLA);
+  const total = puntos.length + REJILLA.refinar * ESCALAS_RECORTE.length;
+  // Los vectores ya calculados, por recorte: el refinado a la escala de la
+  // rejilla (0,16) es el mismo recorte, y no se paga dos veces.
+  const yaVistos = new Map();
+  const vectorDe = async (r) => {
+    const clave = r.x1 + ',' + r.y1 + ',' + r.lado;
+    if (!yaVistos.has(clave)) yaVistos.set(clave, await vectorDeImagen(procesador, vision, await imagen.crop([r.x1, r.y1, r.x2, r.y2])));
+    return yaVistos.get(clave);
+  };
+  const candidatos = [];
+  for (let i = 0; i < puntos.length; i++) {
+    if (!sigueVigente()) return null;
+    alAvanzar('Buscando el logo en la foto (' + (i + 1) + ' de ' + total + ')…', ((i + 1) / total) * 100);
+    const vector = await vectorDe(recorteAlrededor(imagen.width, imagen.height, puntos[i].x, puntos[i].y, REJILLA.escala));
+    candidatos.push({ punto: puntos[i], puntaje: puntajeDeLogo(vector, etiquetas, CRITERIO_BARRIDO) });
+  }
+  candidatos.sort((a, b) => b.puntaje - a.puntaje);
+  const elegidos = candidatos.slice(0, REJILLA.refinar);
+  const refinados = [];
+  let hechos = puntos.length;
+  for (const c of elegidos) {
+    const vectores = [];
+    for (const escala of ESCALAS_RECORTE) {
+      if (!sigueVigente()) return null;
+      hechos += 1;
+      alAvanzar('Mirando de cerca el logo (' + hechos + ' de ' + total + ')…', (hechos / total) * 100);
+      vectores.push(await vectorDe(recorteAlrededor(imagen.width, imagen.height, c.punto.x, c.punto.y, escala)));
+    }
+    refinados.push(clasificarLogo(vectores, etiquetas.marcas, { escala: ESCALA, fondo: FONDO_AL_DECIDIR ? etiquetas.fondo : [] }));
+  }
+  // El ganador y si es seguro: con la regla de los 2 de 3 (decidirBarrido).
+  const decision = decidirBarrido(refinados);
+  if (!decision) return null;
+  return { marcas: decision.marcas.slice(0, 5), seguro: decision.seguro, fondo: decision.marcas.fondo, punto: elegidos[decision.indice].punto, milisegundos: Math.round(performance.now() - inicio) };
 }
 
 // La marca con una foto tomada DE CERCA al emblema (la cámara apuntando al

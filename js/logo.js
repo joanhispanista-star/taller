@@ -152,9 +152,17 @@ function punto(a, b) {
 // cromados (Mercedes, Hyundai, Honda) atraen recortes ajenos, con y sin
 // corregir el sesgo. Por eso el peso por defecto es 0 y las etiquetas no
 // llevan prototipos; el código queda para medir con un dataset mejor.
-export function clasificarLogo(vectoresRecortes, etiquetasMarcas, { escala = 100, conPrior = true, pesoImagen = 0 } = {}) {
+//
+// Con `fondo` ([{ nombre, e }], los vectores de FRASES_FONDO), lo que no
+// es logo compite en la misma softmax: la lista que sale sigue siendo solo
+// de marcas, pero sus probabilidades ya no suman 1; lo que falta es la
+// probabilidad de que el recorte no tenga ningún logo, y viene en la
+// propiedad `fondo` de la lista. Así un recorte de parrilla no le regala
+// un 9 % a una marca cualquiera.
+export function clasificarLogo(vectoresRecortes, etiquetasMarcas, { escala = 100, conPrior = true, pesoImagen = 0, fondo = [] } = {}) {
   if (vectoresRecortes.length === 0 || etiquetasMarcas.length === 0) return [];
   const suma = new Array(etiquetasMarcas.length).fill(0);
+  let sumaFondo = 0;
   const conPrototipo = etiquetasMarcas.filter((m) => m.ep);
   for (const vector of vectoresRecortes) {
     let extra = () => 0;
@@ -165,17 +173,28 @@ export function clasificarLogo(vectoresRecortes, etiquetasMarcas, { escala = 100
       const media = [...parecidos.values()].reduce((s, x) => s + x, 0) / parecidos.size;
       extra = (m) => (parecidos.has(m) ? pesoImagen * escala * (parecidos.get(m) - media) : 0);
     }
-    let p = softmax(etiquetasMarcas.map((m) => escala * punto(vector, m.e) + extra(m)));
+    let p = softmax([...etiquetasMarcas.map((m) => escala * punto(vector, m.e) + extra(m)), ...fondo.map((f) => escala * punto(vector, f.e))]);
     if (conPrior) {
-      p = p.map((x, i) => x * (etiquetasMarcas[i].prior || 1));
-      const total = p.reduce((a, b) => a + b, 0);
-      p = p.map((x) => x / total);
+      // El prior dice qué marca es más probable ENTRE MARCAS, no si hay logo
+      // o no: se reparte solo la parte de las marcas y el fondo queda como
+      // salió. Antes se renormalizaba todo junto y, como el prior es menor
+      // que 1, el fondo crecía más en los recortes de marcas poco comunes
+      // (BYD, Chery): el barrido los descartaba por "parecer fondo"
+      // (revisión del 17-oct).
+      const n = etiquetasMarcas.length;
+      const parteMarcas = p.slice(0, n).reduce((a, b) => a + b, 0);
+      const conPeso = p.slice(0, n).map((x, i) => x * (etiquetasMarcas[i].prior || 1));
+      const totalPeso = conPeso.reduce((a, b) => a + b, 0);
+      p = [...conPeso.map((x) => (totalPeso > 0 ? (x / totalPeso) * parteMarcas : 0)), ...p.slice(n)];
     }
-    for (let i = 0; i < p.length; i++) suma[i] += p[i] / vectoresRecortes.length;
+    for (let i = 0; i < etiquetasMarcas.length; i++) suma[i] += p[i] / vectoresRecortes.length;
+    for (let i = etiquetasMarcas.length; i < p.length; i++) sumaFondo += p[i] / vectoresRecortes.length;
   }
-  return etiquetasMarcas
+  const lista = etiquetasMarcas
     .map((m, i) => ({ nombre: m.nombre, marcas: m.marcas, p: suma[i] }))
     .sort((a, b) => b.p - a.p);
+  lista.fondo = sumaFondo;
+  return lista;
 }
 
 // Un logo "reconocido" es uno que gana con claridad: probabilidad alta y
@@ -208,4 +227,102 @@ export function puntoEnFoto(cx, cy, caja, natural) {
   const y = (cy - arriba) / altoVisto;
   if (x < 0 || x > 1 || y < 0 || y > 1) return null;
   return { x, y };
+}
+
+// ---- Encontrar el logo sin que nadie lo toque ----
+
+// Lo que NO es un logo pero sale en los recortes de una foto de carro:
+// parrilla, faro, placa, chapa, llanta, vidrio, el entorno y las letras
+// del modelo. Entran en la misma softmax que los logos (ver clasificarLogo
+// con `fondo`): un recorte de parrilla reparte su probabilidad entre
+// setenta logos y parece que "algo" gana con un 9 %; con el fondo en la
+// lista, esa misma parrilla se va al fondo y el recorte queda en nada,
+// que es lo que es. Sirve para elegir, entre muchos recortes, el que de
+// verdad tiene un emblema. Un vector por grupo (calcular-etiquetas.mjs).
+export const FRASES_FONDO = {
+  parrilla: ['a close-up photo of a car radiator grille', 'the black mesh grille of a car', 'a photo of a car front grille with horizontal slats'],
+  faro: ['a close-up photo of a car headlight', 'a photo of a car tail light', 'a photo of a fog lamp on a car bumper'],
+  placa: ['a close-up photo of a yellow license plate with black letters', 'a photo of a car number plate', 'a license plate'],
+  chapa: ['a close-up photo of a painted car body panel', 'a photo of a car bumper', 'a photo of a car door', 'a photo of a car hood'],
+  llanta: ['a photo of a car wheel and tire', 'a close-up photo of a tire', 'a photo of a wheel rim'],
+  vidrio: ['a photo of a car windshield', 'a photo of a car window reflecting the sky', 'a photo of the side mirror of a car'],
+  entorno: ['a photo of a brick wall', 'a photo of asphalt pavement', 'a photo of trees and leaves', 'a photo of a building', 'a photo of the sky', 'a photo of a parking lot'],
+  letras: ['a photo of a model name badge with chrome letters on a car', 'chrome lettering on the back of a car'],
+  borroso: ['a blurry photo', 'a dark photo of nothing in particular'],
+};
+
+// Los puntos de una rejilla para barrer la foto buscando el logo cuando no
+// hay placa que diga dónde está. Solo la franja donde puede haber un
+// emblema (ni el cielo ni el piso): de `y1` a `y2` del alto y de `x1` a
+// `x2` del ancho, cada `paso`. Devuelve puntos en fracciones, del centro
+// hacia afuera, para que el avance en pantalla empiece por lo probable.
+export function rejillaDeBarrido({ paso = 0.12, x1 = 0.1, x2 = 0.9, y1 = 0.3, y2 = 0.8 } = {}) {
+  const eje = (a, b) => {
+    const n = Math.max(1, Math.round((b - a) / paso));
+    const real = (b - a) / n;
+    return Array.from({ length: n + 1 }, (_, i) => a + i * real);
+  };
+  const puntos = [];
+  for (const y of eje(y1, y2)) for (const x of eje(x1, x2)) puntos.push({ x, y });
+  const cx = (x1 + x2) / 2;
+  const cy = (y1 + y2) / 2;
+  return puntos.sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy));
+}
+
+// Cómo busca la app el logo sola (reconocer.js) y cómo lo mide el PC
+// (herramientas/medir-cadena.mjs): las dos usan estas constantes, para que
+// lo medido sea lo que corre en el teléfono.
+// Medido el 16-oct-2026 con 46 fotos (las 10 de Joan y de la web, y 36 de
+// Commons en Colombia; herramientas/medir-barrido.mjs y -fino.mjs):
+//  - Encima de la placa manda 'top1': elegir por "menos fondo" bajaba los
+//    aciertos de 17 a 14 de 29.
+//  - En el barrido manda 'logo': con 'top1' una llanta o un faro se llevan
+//    un 20 % de "BMW" o "Ford" y salían 6 a 9 "seguros" equivocados; con
+//    'logo', 2.
+//  - Que el fondo compita también al DECIDIR la marca no sirve: los
+//    seguros equivocados tienen tan poco fondo (8-10 %) como los buenos.
+export const CRITERIO_ZONA = 'top1';
+export const CRITERIO_BARRIDO = 'logo';
+export const FONDO_AL_DECIDIR = false;
+// La rejilla del barrido sin placa (ver rejillaDeBarrido): recortes del
+// 16 % del lado mayor cada 9 %, en la franja del 30 al 80 % del alto y del
+// 10 al 90 % del ancho (70 puntos), y los 3 que más parecen logo se miran
+// a las tres escalas del toque (9 más): 79 pasadas de CLIP. Medido: 27 de
+// 46 bien, 22 seguras y bien, 2 seguras y mal. Más barato se pierde:
+// franja del 35 al 75 %, 23 de 46 y 4 seguras mal; paso de 10 %, 21 de 46;
+// recortes del 20 % cada 12 %, 17 de 46. En el teléfono son decenas de
+// segundos: corre de fondo, avisa cuánto va y se aborta si la persona toca.
+export const REJILLA_BARRIDO = { escala: 0.16, paso: 0.09, x1: 0.1, x2: 0.9, y1: 0.3, y2: 0.8, refinar: 3 };
+
+// Entre el logo que ya se tenía (el de encima de la placa, que no quedó
+// seguro) y el del barrido, cuál se muestra: el barrido si salió seguro,
+// o si su mejor marca tiene más probabilidad; si no, se queda el anterior
+// (la zona encima de la placa es donde casi siempre está el emblema).
+// Cada uno es { marcas: [{ nombre, p }], seguro } o null.
+export function logoQueQueda(anterior, barrido) {
+  if (!barrido) return anterior || null;
+  if (!anterior || barrido.seguro) return barrido;
+  if (anterior.seguro) return anterior;
+  return barrido.marcas[0].p > anterior.marcas[0].p ? barrido : anterior;
+}
+
+// Si el barrido puede decir la marca "segura": el punto ganador (el de más
+// probabilidad entre los refinados) tiene que ser seguro por sí mismo Y su
+// marca tiene que salir primera en al menos 2 de los puntos refinados. Un
+// emblema de verdad se ve desde recortes vecinos (se solapan: recorte del
+// 16 %, paso del 9 %); una textura que engaña a CLIP (la llanta del Onix de
+// lado que salía Daihatsu al 36 %) sale en uno solo. Medido el 17-oct-2026
+// con 46 fotos (herramientas/medir-barrido-acuerdo.mjs): seguras y mal en
+// el barrido de 3 a 1, seguras y bien de 21 a 18; mínimo de 20 % en vez de
+// esto: 2 mal y 18 bien. `refinados` es [[{ nombre, p }, ...], ...], una
+// lista ordenada por punto. Devuelve { marcas, seguro, indice }.
+export function decidirBarrido(refinados) {
+  if (!refinados.length) return null;
+  let indice = 0;
+  refinados.forEach((lista, i) => {
+    if (lista[0].p > refinados[indice][0].p) indice = i;
+  });
+  const marcas = refinados[indice];
+  const votos = refinados.filter((lista) => lista[0].nombre === marcas[0].nombre).length;
+  return { marcas, seguro: logoSeguro(marcas) && votos >= 2, indice };
 }

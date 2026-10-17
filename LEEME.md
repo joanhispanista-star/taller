@@ -125,8 +125,9 @@ carro".
   el reconocedor recorta esa zona (hasta 15 puntos, unas 10 pasadas de
   CLIP: 1 s en el PC, unos 5 en el teléfono) y pone la marca sin que nadie
   toque nada, con el anillo donde lo encontró; en la foto de la Captiva da
-  Chevrolet al 40 % y segura. Sin placa a la vista (foto de lado), queda el
-  toque o la foto de cerca. (2) La placa enderezada se lee con
+  Chevrolet al 40 % y segura. Sin placa a la vista, o si encima de la placa
+  el logo no se ve claro, la app barre la foto entera (ver el punto
+  siguiente). (2) La placa enderezada se lee con
   **fast-plate-ocr** (`js/vendor/placa/cct_xs_v2_global.onnx`, MIT, 3,3
   MB, de Ankandrew; corre con el mismo ONNX Runtime del reconocedor): con
   60 placas colombianas de ejemplo lee bien 56 (las que falla cambian una
@@ -156,6 +157,77 @@ carro".
   las tres mejores posiciones no mejoró. Los frentes de Kia siguen fallando
   (el logo nuevo, plano y negro sobre negro, CLIP no lo ve): ahí la persona
   toca el logo o elige Kia entre las diez marcas.
+- **La marca sola aunque no haya placa** (17-oct; Joan: "tomé la foto pero
+  sigue sin reconocer el vehículo"). Sin placa amarilla a la vista (foto de
+  lado, placa tapada, carro sin placa) o con el logo encima de la placa
+  dudoso, la app **barre la foto**: 70 recortes en rejilla (del 16 % del
+  lado mayor, cada 9 %, en la franja del 30 al 80 % del alto) y mira de
+  cerca, a las tres escalas del toque, los 3 que más parecen un logo: 76
+  pasadas de CLIP (la escala del medio repite el recorte de la rejilla y no
+  se paga dos veces). El 15-oct barrer a ciegas acertaba 4 de 10 y se
+  descartó; lo que lo hizo servir son las **frases de fondo** (parrilla,
+  faro, placa, chapa, llanta, vidrio, pared, letras del modelo, borroso:
+  `FRASES_FONDO` en `js/logo.js`) que compiten con los 70 logos: sin
+  ellas, el recorte que "más parecía un logo" era a menudo una llanta que
+  se llevaba un 20 % de "BMW". Y la marca del barrido solo queda
+  **segura** si sale primera en al menos 2 de los 3 puntos mirados de
+  cerca: un emblema de verdad se ve desde recortes vecinos, una textura que
+  engaña sale en uno solo (el Onix de lado salía Daihatsu al 36 %). La
+  persona ve el anillo donde la app encontró el logo, el avance ("Buscando
+  el logo en la foto (12 de 79)…") y puede tocar el logo o elegir marca en
+  cualquier momento: eso corta el barrido y lo suyo manda. **Medido con
+  46 fotos** (las 10 de antes y 36 de Commons; `herramientas/medir-cadena.mjs`
+  repite paso por paso lo que hace el teléfono):
+
+  | Una sola foto, sin tocar nada | Marca bien | Segura y bien | Segura y mal |
+  |---|---|---|---|
+  | Hasta el 16-oct (solo encima de la placa) | 17 | 14 | 1 |
+  | Desde el 17-oct (placa + barrido) | 29 | 23 | 1 |
+
+  La segura equivocada es el Renault Kwid por detrás (sale Kia: su logo
+  nuevo de 2021 se parece). Fallan todavía los BYD, los Kia de frente y
+  las fotos sin emblema a la vista. Antes de la revisión daba 30, 23 y 2:
+  el prior de presencia inflaba el "fondo" de los recortes de marcas poco
+  comunes, y al corregirlo el Kwid de frente dejó de salir "Chevrolet
+  seguro" (y se perdió un Prado al 7 % que nunca fue seguro). Cuánto
+  cuesta: en el PC el barrido tarda 11-12 s con 4 hilos; en un teléfono se
+  estima entre 30 s y un minuto (**sin medir todavía en el celular de
+  Joan**). Se midieron también rejillas más baratas (franja del 35 al 75 %,
+  paso del 10 %, recortes del 20 % cada 12 %): todas pierden entre 4 y 10
+  aciertos.
+- **El motor con varios hilos** (17-oct): el service worker sirve las
+  páginas y los scripts de los workers con las cabeceras de aislamiento de
+  origen (COOP/COEP) que GitHub Pages no manda, y con eso ONNX Runtime usa
+  hasta 4 hilos en vez de uno. Probado en el panel con
+  `http://127.0.0.1:8310/como-github/garaje.html`, que el servidor local
+  sirve como GitHub Pages (bajo una carpeta y sin cabeceras): la primera
+  visita sin aislamiento, la segunda aislada solo por el service worker,
+  los 3 workers del motor arriba y el barrido de la Frontier dando Nissan
+  al 63 %. En el PC
+  la búsqueda del logo encima de la placa de la Captiva bajó de 5,8 s a
+  1,3 s. La primera visita va sin aislamiento (un hilo: el service worker
+  aún no sirve la página); en iPhone siempre un hilo (Safari ha fallado con
+  la memoria compartida de ONNX); y si el motor con hilos falla en un
+  teléfono (después de bajar el modelo entero: antes es la red), la app lo
+  anota una semana y en ese tiempo usa uno solo.
+- **La placa con tres pasadas** (17-oct): si el amarillo normal no
+  encuentra nada, se prueba el amarillo "en sombra" (más oscuro y menos
+  saturado, para bajo techo o contraluz, exigiendo letras oscuras y altura
+  de bómper) y luego todo a 960 px buscando solo placas chicas (carro
+  lejos). En las 46 fotos estas pasadas no encontraron ninguna placa nueva:
+  al principio solo encontraban llantas, carretera y hojas pegadas al borde
+  de la foto, y se cerraron hasta no dar ni un falso (una mancha pegada al
+  borde izquierdo o derecho ya no es placa). Quedan porque las fotos de
+  Commons son de día y al aire libre; las del taller, bajo techo, son las
+  que pueden necesitarlas. **Sin medir con fotos del taller.**
+- **"Qué vio la app en la foto"** (17-oct): un desplegable al final de la
+  ficha con cada paso y su segundo: la foto y el teléfono, la versión de
+  la app que de verdad está corriendo (se la pregunta al service worker),
+  los hilos del motor, dónde vio la placa y con qué pasada, qué logo vio
+  encima de la placa y barriendo (las tres marcas con su porcentaje y si
+  quedó segura), la placa leída cruda y corregida, y cualquier error. El
+  botón **Copiar el detalle** lo deja listo para pegarlo en el chat: cuando
+  la app no reconozca un carro, eso dice qué paso falló.
 - **Cuatro carrocerías a la medida**: sedán, hatchback, SUV y camioneta de
   platón, dibujadas por código con las mismas 17 piezas (en el hatchback la
   pieza trasera se llama compuerta; en la camioneta, compuerta y costados
@@ -381,7 +453,7 @@ npm test
 | `garaje.html` | El Garaje: las pestañas de la app, el botón "Nuevo carro con foto" y su ficha (foto, color, sugerencias, marca y línea, carrocería, placa), el formulario por placa, la lista de carros y el bloque de la demostración. |
 | `tablero.html` | Las otras tres pestañas: Empleados (la nómina de la semana y la lista de empleados), Historial (entregados y cobrado) e Indicadores (todo junto, con dos gráficas). `?p=` dice cuál se abre. |
 | `manifest.webmanifest` | Lo que el celular lee para instalar la app: nombre, `start_url` y `scope` relativos (la app vive en `/taller/`, no en la raíz del dominio), `display: standalone`, colores e iconos (192 y 512, normales y maskable). |
-| `sw.js` | El service worker: al instalar precarga lo propio (36 archivos, 2,5 MB: páginas, CSS, módulos, Three.js, etiquetas, el bundle de Transformers.js, manifest e iconos) y desde ahí lo sirve de la caché; el motor ONNX (`ort-*`, 39 MB) se guarda al primer uso en su propia caché; Hugging Face no se toca. La versión del nombre de la caché la escribe `npm run sellar`. En el PC va primero a la red. |
+| `sw.js` | El service worker: al instalar precarga lo propio (36 archivos, 2,5 MB: páginas, CSS, módulos, Three.js, etiquetas, el bundle de Transformers.js, manifest e iconos) y desde ahí lo sirve de la caché; el motor ONNX (`ort-*`, 39 MB) se guarda al primer uso en su propia caché; Hugging Face no se toca. Las páginas y los scripts de los workers salen con COOP/COEP (los hilos del motor); el `.wasm` sale tal cual para no perder su código compilado. Contesta su versión cuando la ficha se la pregunta. La versión del nombre de la caché la escribe `npm run sellar`. En el PC va primero a la red. |
 | `js/instalable.js` | Registra el service worker con ruta relativa (solo https o localhost) y enciende en el Garaje el botón "Hay una versión nueva, toca para actualizar" cuando hay una esperando; tocarlo la activa y recarga. Lo cargan las tres páginas. |
 | `iconos/` | Los iconos de la app (dibujo propio: carro naranja de perfil con la línea de la puerta y una gota de pintura): 192 y 512 normales y maskable, 180 para iPhone, y el `icono.svg` original. Se regeneran con `npm run iconos`. |
 | `herramientas/generar-iconos.mjs` | Dibuja el SVG y lo convierte a PNG con `sharp`, que ya está en `node_modules` porque lo trae Transformers.js (no es una dependencia nueva). |
@@ -398,19 +470,22 @@ npm test
 | `js/garaje.js` | El registro: el modelo del carro (placa, marca, línea, carrocería, color, medidas, cobro, fecha de entrega, piezas con estado, trabajo, pintor y fecha) y del empleado como funciones puras, la tarifa (`TARIFA_PIEZA`), y el almacén en IndexedDB versión 2 (carros, fotos y empleados; `quitarDemo`). Sin DOM; probado en Node con `fake-indexeddb`. |
 | `js/fotos.js` | Reducir una foto a 1280 px y sacarle la miniatura con canvas. La cuenta de medidas es pura y se prueba en Node. |
 | `js/color-foto.js` | El color de la pintura a partir de la foto (k-medias sobre el centro, descartando vidrios y llantas) y su nombre de taller (plateado, vinotinto...). La parte pura se prueba en Node. |
-| `js/reconocer.js` | El reconocedor en el navegador: CLIP (visión) sobre la foto, comparado con los vectores de texto de `js/etiquetas-clip.json`. `reconocerCarro` (carrocerías, líneas y marcas por la foto entera, más el vector de la foto), `reconocerMarcaPorLogo` (recortes alrededor del toque contra los logos) y `lineasDeMarca` (las familias de una marca ordenadas por parecido). |
-| `js/logo.js` | La parte pura de la marca por el logo: nombres de marca como los conoce CLIP, frases con la forma de cada logo, recorte alrededor del toque, clasificación de los recortes, cuándo un logo es "seguro", y del toque en pantalla al punto de la foto. Sin modelo ni DOM; probado en Node. |
-| `js/etiquetas-clip.json` | GENERADO por `herramientas/calcular-etiquetas.mjs`: un vector por carrocería, por logo de marca (70) y por familia del catálogo (784, con su presencia; el carro entero se compara solo con las "muy común"). Int8 en base64, unos 600 KB. Hay que regenerarlo cuando cambie el catálogo o `logo.js`. |
+| `js/reconocer.js` | El reconocedor en el navegador: CLIP (visión) sobre la foto, comparado con los vectores de texto de `js/etiquetas-clip.json`. `reconocerCarro` (carrocerías, líneas y marcas por la foto entera, más el vector de la foto), `reconocerMarcaPorLogo` (recortes alrededor del toque contra los logos), `reconocerMarcaCercaDePlaca` (la zona encima de la placa), `reconocerMarcaBarriendo` (la rejilla sin placa; se puede abortar), `reconocerMarcaEnFotoDeCerca` y `lineasDeMarca` (las familias de una marca ordenadas por parecido). Cede el turno al navegador antes de cada pasada (`cederTurno`) y decide cuántos hilos usa el motor (`hilosDelMotor`). |
+| `js/logo.js` | La parte pura de la marca por el logo: nombres de marca como los conoce CLIP, frases con la forma de cada logo y las de fondo (`FRASES_FONDO`), recorte alrededor del toque, clasificación de los recortes (con el fondo compitiendo, opcional), cuándo un logo es "seguro", la rejilla y los criterios del barrido (`REJILLA_BARRIDO`, `rejillaDeBarrido`, `decidirBarrido` con la regla de 2 de 3), cuál logo queda entre el de la placa y el del barrido (`logoQueQueda`), y del toque en pantalla al punto de la foto. Sin modelo ni DOM; probado en Node; las herramientas de medir usan las mismas constantes. |
+| `js/etiquetas-clip.json` | GENERADO por `herramientas/calcular-etiquetas.mjs`: un vector por carrocería, por logo de marca (70) y por familia del catálogo (784, con su presencia; el carro entero se compara solo con las "muy común"). Desde el 17-oct trae también los 9 grupos de frases de fondo (`fondo`). Int8 en base64, unos 650 KB. Hay que regenerarlo cuando cambie el catálogo o `logo.js`. |
 | `herramientas/medir-logo.mjs` | Mide en el PC la marca por el logo con las fotos de `pruebas/fotos-reconocer/` (coordenadas del logo a ojo): por escala, promedio, con y sin prior, y con `--auto` el barrido sin toque. Es lo que dio los números del LEEME. |
 | `herramientas/medir-logo-variantes.mjs` | Lo mismo en condiciones de teléfono: foto reducida (1600 y 1000 px), dedo corrido un 3 %, cuatro escalas, el recorte más seguro y la búsqueda alrededor del toque. Dijo que el algoritmo actual ya aguanta y que las variantes no mejoran. |
 | `js/placa-foto.js` | Encontrar la placa amarilla en los píxeles (máscara, cierre, componentes, huecos encerrados), sus esquinas, enderezarla (homografía), dejarla en blanco y negro (Otsu), convertir el texto del OCR en placa colombiana (corrigiendo O/0, I/1, B/8 por posición; carros ABC123 y motos ABC12D) y la zona donde buscar el logo encima. Todo puro, probado en Node. |
-| `js/placa-ocr.js` | El lector de placas en el navegador: ubica (640 px), endereza desde la foto a 2000 px y lee con el modelo ONNX (128 × 64 en color, diez huecos). Devuelve la placa como propuesta. |
+| `js/placa-ocr.js` | El lector de placas en el navegador: ubica con tres pasadas (amarillo normal y en sombra a 640 px, y solo placas chicas a 960), endereza desde la foto a 2000 px y lee con el modelo ONNX (128 × 64 en color, diez huecos; segunda instancia de ONNX Runtime, siempre un hilo). Devuelve la placa como propuesta. |
 | `js/vendor/placa/` | `cct_xs_v2_global.onnx` (fast-plate-ocr, MIT, 3,3 MB; se guarda al primer uso como el motor) y `ort.wasm.min.mjs` (el cargador de ONNX Runtime Web, 50 KB, de la misma versión que el motor ya vendorizado). |
 | `herramientas/medir-placa.mjs` | Mide si la placa amarilla se encuentra en las fotos de prueba (solo la Captiva es colombiana; las demás sirven como "no debe encontrar nada") y guarda los recortes de la placa y de la zona del logo. |
 | `herramientas/medir-placa-onnx.mjs` | Mide el lector de placas en el PC con la Captiva enderezada y con las 60 placas colombianas de ejemplo de fast-plate-ocr (`pruebas/datos-externos/`, fuera del repo). |
 | `herramientas/calcular-prototipos.mjs` | Calcula prototipos de imagen de los logos (CLIP sobre el dataset CC BY de General Blockchain) con su sesgo; escribe `herramientas/prototipos-logos.json` (25 KB). Apagados en las etiquetas: medidos, no ayudan. |
 | `herramientas/medir-prototipos.mjs` | La medición que lo dijo: aciertos, "seguros" y probabilidad de la marca correcta con las frases solas y con prototipos a varios pesos. |
-| `herramientas/bajar-fotos-commons.mjs` | Baja fotos libres de carros en Colombia de Wikimedia Commons para medir (con autor y licencia en un CSV). El 16-oct Commons respondió 429 (demasiadas peticiones) y no se pudo usar; queda para cuando se levante el límite. |
+| `herramientas/bajar-fotos-commons.mjs` | Baja fotos libres de carros en Colombia de Wikimedia Commons para medir (con autor y licencia en un CSV, a `pruebas/datos-externos/commons-colombia/`, fuera de git). Commons responde 429 si se le pide rápido; con una petición por segundo y espera al 429 bajó 44 fotos el 16-oct. |
+| `herramientas/medir-cadena.mjs` | La medición que vale: repite en el PC lo que hace el teléfono con una sola foto (las tres pasadas de la placa, el logo encima, el barrido, cuál queda, la placa leída) sobre las 46 fotos, con las mismas constantes de `js/logo.js`. `--sin-barrido` da la cadena de antes del 17-oct. |
+| `herramientas/medir-barrido.mjs`, `medir-barrido-fino.mjs`, `medir-barrido-acuerdo.mjs` | Cómo se eligió el barrido: cuatro rejillas por dos criterios (probabilidad del mejor logo o "menos fondo"), con y sin fondo al decidir; luego franjas, pasos y refinados para el costo; y las reglas para frenar los "seguros" equivocados (de ahí los 2 de 3). Escriben su detalle en `pruebas/datos-externos/`. |
+| `herramientas/medir-placa-pasadas.mjs` | Qué encuentran las pasadas extra de la placa en las fotos reales, con una hoja de contactos de cada hallazgo para mirarlo. Dijo que encontraban llantas y carretera, y así se cerraron. |
 | `js/hoja.js` | La hoja de abajo del visor: chips con estado, trabajo (latonería), pintor y cámara; menú de estado, trabajo y pintor; tira de fotos y foto grande, con los nombres de la carrocería. DOM puro, sin Three.js. |
 | `js/ficha-carro.js` | La ficha "Datos del carro" del visor: marca, línea con el catálogo, versión, carrocería, color, cobro al cliente y entrega. DOM puro. |
 | `js/garaje-pantalla.js` | La pantalla Garaje: lista con portada y color (con "entregado" y lo cobrado, y la insignia «demo»), abrir o crear por placa, borrar, la ficha del carro nuevo con foto (color, reconocedor, catálogo, confirmación) y la demostración. |
@@ -418,10 +493,10 @@ npm test
 | `js/toque.js` | Qué pieza hay bajo el dedo: rayo central más un anillo de ocho para que estribos y espejos se dejen tocar. Sin DOM, probado con la cámara y el carro reales. |
 | `js/visor.js` | Escena, luces, cámara, giro con el dedo, el toque que marca, y el pegamento con el registro: qué carro está abierto (por la URL o el último), el 3D con su carrocería, color y medidas (se reconstruye al cambiar de carro), teñir por estado, guardar. |
 | `js/vendor/` | Three.js 0.169 (tres archivos) y, en `transformers/`, Transformers.js 4.3.1 con el motor ONNX Runtime (dos .wasm, 41 MB). Copiados de npm, no se editan. Así la app no depende de internet para dibujar ni de que cambie la versión. |
-| `herramientas/servidor.js` | Servidor estático sin dependencias; los módulos de JavaScript no cargan desde `file://`. Sirve `.wasm` con su tipo para que el motor compile en streaming. |
+| `herramientas/servidor.js` | Servidor estático sin dependencias; los módulos de JavaScript no cargan desde `file://`. Sirve `.wasm` con su tipo para que el motor compile en streaming, y todo con COOP/COEP para que el motor use varios hilos también en el PC. Bajo `/como-github/` sirve lo mismo como GitHub Pages (en una carpeta y sin cabeceras), para probar el service worker antes de publicar. |
 | `herramientas/generar-catalogo.mjs` | Del JSON de la investigación al catálogo: una entrada por marca y línea, medidas limpias, fuente conservada. |
 | `herramientas/calcular-etiquetas.mjs` | Calcula en el PC los vectores de texto de CLIP (modelo de texto, 60 MB que el teléfono así no necesita) y escribe `js/etiquetas-clip.json`. |
-| `pruebas/` | `estado.test.js` (la orden, las 29 piezas), `carro.test.js` (piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio, la base de puertas, la placa), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `tablero.test.js` (semanas, pesos, pago por pieza, pintor y entrega, nómina, historial, indicadores, la demostración, los empleados en el almacén y la subida de versión de la base sin perder carros), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras), `catalogo.test.js` (el catálogo y su buscador) e `instalable.test.js` (el manifest y sus iconos, los enlaces de las tres páginas, el sello de `sw.js` contra la carpeta real, y el service worker corriendo en un `vm` con navegador de mentira: qué toca, qué no, y que Hugging Face nunca). 121 pruebas. `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
+| `pruebas/` | `estado.test.js` (la orden, las 29 piezas), `carro.test.js` (piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio, la base de puertas, la placa), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `tablero.test.js` (semanas, pesos, pago por pieza, pintor y entrega, nómina, historial, indicadores, la demostración, los empleados en el almacén y la subida de versión de la base sin perder carros), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras), `catalogo.test.js` (el catálogo y su buscador) e `instalable.test.js` (el manifest y sus iconos, los enlaces de las tres páginas, el sello de `sw.js` contra la carpeta real, y el service worker corriendo en un `vm` con navegador de mentira: qué toca, qué no, que Hugging Face nunca, y las cabeceras de aislamiento). También `logo.test.js` (recorte, agrupación, clasificación con y sin fondo, la rejilla del barrido, la regla de 2 de 3 y cuál logo queda) y `placa-foto.test.js` (la placa amarilla con sus tres pasadas, el borde, las esquinas, enderezarla, leerla). 137 pruebas. `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
 
 Decisiones que conviene conocer:
 
@@ -686,6 +761,28 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
   prototipo de Mercedes/Hyundai/Honda se lleva recortes de otras marcas.
   Más certeza no es lo mismo que más aciertos: con prototipos la
   probabilidad media subía y los aciertos bajaban. Medir siempre las dos.
+- **`scheduler.yield()` no sirve para ceder el turno durante el barrido**:
+  en Chrome su continuación pasa por delante de los temporizadores y, medido
+  en el panel, ningún `setTimeout` de la página corrió en los 11 s del
+  barrido. Sin ceder nada era peor: la página no pintaba el avance ni
+  atendía el toque que debía cortarlo. `cederTurno` usa `setTimeout(0)`.
+  Para comprobarlo: un `setInterval` desde la consola que lea la pista
+  sobre la foto; si no ve el avance, el teléfono tampoco lo pintará.
+- **Las cabeceras de aislamiento van en la página Y en los scripts de los
+  workers**: los hilos de ONNX son workers que cargan su propio `.mjs`, y
+  en una página aislada un worker sin COEP no arranca. Pero NO en todo: el
+  service worker no debe rehacer la respuesta del `.wasm` (27 MB), porque
+  Chrome guarda junto a la caché el código ya compilado y con una
+  respuesta nueva lo recompilaría en cada carga. Y nada de otro origen en
+  las páginas (fuentes, imágenes, scripts de CDN): COEP lo bloquearía.
+  Hugging Face pasa porque va por `fetch` con CORS.
+- **No culpar a los hilos de lo que es la red**: el primer intento anotaba
+  "un hilo" ante cualquier fallo, también sin internet o con Hugging Face
+  diciendo 429. Ahora solo cuenta un fallo después de que el modelo bajó
+  entero, que no sea de red, y el recuerdo vence a la semana.
+- Las pasadas extra de la placa (sombra, 960 px) **encontraban de todo**
+  antes de cerrarlas: una llanta, carretera, hojas. Una mancha pegada al
+  borde izquierdo o derecho de la foto nunca fue placa en las 46 fotos.
 - Son dos instancias de ONNX Runtime en la página (la de Transformers.js y
   la del lector de placas, misma versión, mismo `.wasm`): el navegador baja
   el wasm una vez pero lo instancia dos veces en memoria. Si en un teléfono

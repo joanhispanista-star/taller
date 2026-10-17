@@ -14,8 +14,9 @@ import { colorDeFoto, nombreDeColor } from './color-foto.js';
 import { reducirFoto } from './fotos.js';
 import { cargarDemo, estadoDemo } from './demo.js';
 import { pesos } from './tablero.js';
-import { puntoEnFoto } from './logo.js';
+import { logoQueQueda, puntoEnFoto } from './logo.js';
 import { zonaDelLogo } from './placa-foto.js';
+import { versionInstalada } from './instalable.js';
 
 const ui = {
   demo: document.getElementById('demo'),
@@ -42,6 +43,9 @@ const ui = {
     archivoLogo: document.getElementById('foto-logo'),
     ayuda: document.getElementById('ficha-ayuda'),
     placaNota: document.getElementById('ficha-placa-nota'),
+    detalle: document.getElementById('ficha-detalle'),
+    detalleTexto: document.getElementById('ficha-detalle-texto'),
+    copiarDetalle: document.getElementById('ficha-copiar-detalle'),
     progreso: document.getElementById('ficha-progreso'),
     estado: document.getElementById('ficha-estado'),
     placa: document.getElementById('ficha-placa'),
@@ -294,6 +298,47 @@ function estadoFicha(texto, porcentaje) {
   if (typeof porcentaje === 'number') ui.ficha.progreso.style.width = Math.max(0, Math.min(100, porcentaje)) + '%';
 }
 
+// ---- Qué vio la app en la foto ----
+
+// Cada paso del reconocimiento deja una línea (con el segundo en que
+// pasó): qué placa vio y dónde, qué logo y con cuánto, qué leyó, qué
+// falló. Es lo que Joan copia y manda cuando "no reconoció": sin esto no
+// hay forma de saber desde lejos si falló la placa, el logo o la versión.
+function anotar(texto) {
+  if (!ficha) return;
+  const s = ((performance.now() - ficha.abiertaEn) / 1000).toFixed(1).padStart(5);
+  ficha.detalle.push(s + ' s  ' + texto);
+  ui.ficha.detalleTexto.textContent = ficha.detalle.join('\n');
+}
+
+// Las tres marcas que más votó un logo, como texto: "Chevrolet 40 %, Hyundai 12 %, Kia 8 %".
+function votosDeLogo(r) {
+  return r.marcas.slice(0, 3).map((m) => m.nombre + ' ' + Math.round(m.p * 100) + ' %').join(', ') + (r.seguro ? ' · seguro' : ' · no seguro') + (r.fondo > 0 ? ' · fondo ' + Math.round(r.fondo * 100) + ' %' : '') + ' · ' + (r.milisegundos / 1000).toFixed(1) + ' s';
+}
+
+function cajaComoTexto(c) {
+  return 'x ' + Math.round(c.x * 100) + ' % y ' + Math.round(c.y * 100) + ' %, ' + Math.round(c.w * 100) + ' × ' + Math.round(c.h * 100) + ' % de la foto';
+}
+
+async function copiarDetalle() {
+  const texto = ui.ficha.detalleTexto.textContent;
+  const boton = ui.ficha.copiarDetalle;
+  try {
+    await navigator.clipboard.writeText(texto);
+    boton.textContent = 'Copiado: pégalo en el chat';
+  } catch {
+    // Sin permiso de portapapeles (http en la red del PC): se selecciona
+    // el texto para copiarlo con el dedo.
+    const rango = document.createRange();
+    rango.selectNodeContents(ui.ficha.detalleTexto);
+    const seleccion = window.getSelection();
+    seleccion.removeAllRanges();
+    seleccion.addRange(rango);
+    boton.textContent = 'Texto seleccionado: cópialo';
+  }
+  setTimeout(() => (boton.textContent = 'Copiar el detalle'), 2500);
+}
+
 function chip(texto, detalle, activo) {
   const b = document.createElement('button');
   b.type = 'button';
@@ -376,7 +421,7 @@ function pintarMarcaTexto() {
     t.textContent = 'Sin marca fija: escribe la marca y la línea, o toca una marca abajo.';
   } else if (ficha.logo && !ficha.logoSeguro) {
     const nombres = ficha.logo.slice(0, 3).map((m) => m.nombre);
-    t.textContent = 'El logo no se ve claro. ¿Es ' + nombres.slice(0, -1).join(', ') + ' o ' + nombres[nombres.length - 1] + '? Toca una, tómale una foto de cerca, o toca el logo otra vez.';
+    t.textContent = 'El logo no se ve claro. ¿Es ' + nombres.slice(0, -1).join(', ') + ' o ' + nombres[nombres.length - 1] + '? Toca una, toca el logo en la foto o tómale una foto de cerca.';
   } else {
     t.textContent = 'Marca: toca el logo en la foto, tómale una foto de cerca, o elige abajo.';
   }
@@ -501,7 +546,12 @@ async function actualizarSugerencias() {
     ficha.sugerencias = [];
   }
   ui.ficha.ayuda.textContent = ficha.marcasLineas.length ? 'La app propone; tú confirmas con un toque.' : 'Las líneas salen cuando se sepa la marca.';
-  if (ficha.lineaPor !== 'mano' && ficha.sugerencias[0]) {
+  // Ni si la persona está escribiendo en el campo (lo escrito todavía no
+  // se tomó: eso pasa al salir del campo): el barrido puede tardar medio
+  // minuto en el teléfono, y encontrar la marca no puede borrarle lo que
+  // lleva escrito (revisión del 17-oct).
+  const escribiendo = ui.ficha.linea.value.trim() !== (ficha.ultimoTexto || '');
+  if (ficha.lineaPor !== 'mano' && !escribiendo && ficha.sugerencias[0]) {
     const mejor = mejorDeFamilia(ficha.sugerencias[0].marca, ficha.sugerencias[0].linea);
     if (mejor && mejor !== ficha.entrada) elegirEntrada(mejor, 'app');
   }
@@ -563,32 +613,46 @@ function pintarPlacaLeida() {
 // pisa. Sin placa a la vista (foto de lado), queda el toque de siempre.
 async function leerPlacaYLogo(archivo) {
   const sesion = ficha;
+  // Mientras la persona no toque el logo ni elija marca, lo automático
+  // puede proponer; en cuanto lo haga, lo suyo manda y lo que venga de
+  // aquí se descarta (y el barrido se aborta).
+  const vigente = () => ficha === sesion && ficha.toqueN === 0 && !ficha.marcasLineas.length && !ficha.marcaSoltada;
   let ubicacion = null;
+  let fallo = false;
   try {
     const { ubicarPlaca } = await import('./placa-ocr.js');
     ubicacion = await ubicarPlaca(archivo);
   } catch (e) {
     console.warn('No se pudo buscar la placa:', e);
+    fallo = true;
+    if (ficha === sesion) anotar('Error buscando la placa: ' + e.message);
   }
   if (ficha !== sesion) return;
   if (!ubicacion) {
+    if (!fallo) anotar('Placa: no vi ninguna placa amarilla (ni clara, ni en sombra, ni chica)');
     ficha.placaFoto = null;
     pintarPlacaLeida();
+    await buscarLogoSinPlaca(archivo, sesion, vigente);
     return;
   }
+  anotar('Placa: la vi (' + ubicacion.pasada + ') en ' + cajaComoTexto(ubicacion.placa));
   ficha.placaFoto = { ubicacion, leida: '', crudo: '', estado: 'leyendo' };
   pintarPlacaLeida();
 
   // 1. El logo encima de la placa.
-  if (!ficha.marcasLineas.length && !ficha.logo && ficha.toqueN === 0) {
+  let logoClaro = false;
+  if (vigente()) {
     try {
       ui.ficha.pistaLogo.textContent = 'Buscando el logo encima de la placa…';
       const { reconocerMarcaCercaDePlaca } = await cargarReconocedor();
       const r = await reconocerMarcaCercaDePlaca(archivo, zonaDelLogo(ubicacion.placa), (texto, pct) => estadoFicha(texto, 10 + pct * 0.8));
       if (ficha !== sesion) return;
-      if (r && ficha.toqueN === 0 && !ficha.marcasLineas.length) {
+      if (r) anotar('Logo encima de la placa: ' + votosDeLogo(r) + ' en ' + puntoComoTexto(r.punto));
+      else anotar('Logo encima de la placa: la placa está pegada al borde de arriba, no hay dónde buscar');
+      if (r && vigente()) {
         anilloEn(r.punto);
         await aplicarLogo(r, sesion);
+        logoClaro = r.seguro;
         if (!r.seguro) ui.ficha.pistaLogo.textContent = 'El logo encima de la placa no se ve claro · tócalo tú';
       } else if (!r) {
         ui.ficha.pistaLogo.textContent = 'Toca el logo de la marca';
@@ -596,6 +660,7 @@ async function leerPlacaYLogo(archivo) {
     } catch (e) {
       if (ficha !== sesion) return;
       console.warn('No se pudo buscar el logo encima de la placa:', e);
+      anotar('Error buscando el logo encima de la placa: ' + e.message);
       ui.ficha.pistaLogo.textContent = 'Toca el logo de la marca';
     }
   }
@@ -610,6 +675,7 @@ async function leerPlacaYLogo(archivo) {
     });
     if (ficha !== sesion) return;
     ficha.placaFoto = { ubicacion, leida: (lectura && lectura.placa) || '', crudo: (lectura && lectura.crudo) || '', estado: 'leida' };
+    anotar(lectura ? 'Placa leída: "' + lectura.crudo + '" → ' + (lectura.placa || 'sin formato de placa') + ' (letra menos segura ' + Math.round(lectura.confianza * 100) + ' %, ' + (lectura.milisegundos / 1000).toFixed(1) + ' s)' : 'Placa leída: no se pudo enderezar');
     if (ficha.placaFoto.leida && ficha.placaPor !== 'mano') {
       ui.ficha.placa.value = ficha.placaFoto.leida;
       ficha.placaPor = 'foto';
@@ -618,8 +684,64 @@ async function leerPlacaYLogo(archivo) {
   } catch (e) {
     if (ficha !== sesion) return;
     console.warn('No se pudo leer la placa:', e);
+    anotar('Error leyendo la placa: ' + e.message);
     ficha.placaFoto = { ...ficha.placaFoto, estado: 'error' };
     pintarPlacaLeida();
+  }
+
+  // 3. Si encima de la placa el logo no quedó claro, se barre la foto
+  // entera como si no hubiera placa (el emblema puede estar corrido: foto
+  // de tres cuartos, placa en el bómper de un lado).
+  if (!logoClaro && BARRER_SI_NO_ES_CLARO) await buscarLogoSinPlaca(archivo, sesion, vigente);
+}
+
+// Medido el 16-oct-2026 (herramientas/medir-barrido.mjs): ver LEEME.
+const BARRER_SI_NO_ES_CLARO = true;
+
+function puntoComoTexto(p) {
+  return 'x ' + Math.round(p.x * 100) + ' %, y ' + Math.round(p.y * 100) + ' %';
+}
+
+// El logo sin placa que diga dónde está: barrer la foto (reconocer.js,
+// reconocerMarcaBarriendo). Tarda, así que avisa cuánto va y se aborta si
+// la persona ya tocó el logo o eligió marca. Lo que sale compite con lo
+// que ya hubiera (el logo encima de la placa, no claro): se queda el que
+// gane con más fuerza.
+async function buscarLogoSinPlaca(archivo, sesion, vigente) {
+  if (!vigente()) return;
+  try {
+    ui.ficha.pistaLogo.textContent = 'Buscando el logo en la foto…';
+    const { reconocerMarcaBarriendo } = await cargarReconocedor();
+    const r = await reconocerMarcaBarriendo(archivo, {
+      alAvanzar: (texto) => {
+        if (ficha === sesion) ui.ficha.pistaLogo.textContent = texto;
+      },
+      sigueVigente: vigente,
+    });
+    if (ficha !== sesion) return;
+    if (!r) {
+      anotar('Barrido de la foto: cancelado (ya tocaste el logo o elegiste marca)');
+      // El avance del barrido no puede quedarse en pantalla prometiendo una
+      // búsqueda que ya no corre. Solo se cambia si sigue siendo el texto
+      // del barrido: si la persona tocó el logo, la pista es la de su toque.
+      if (/^(Buscando el logo en la foto|Mirando de cerca el logo)/.test(ui.ficha.pistaLogo.textContent)) ui.ficha.pistaLogo.textContent = 'Toca el logo de la marca';
+      return;
+    }
+    anotar('Logo barriendo la foto: ' + votosDeLogo(r) + ' en ' + puntoComoTexto(r.punto));
+    if (!vigente()) return;
+    const anterior = ficha.logo ? { marcas: ficha.logo, seguro: ficha.logoSeguro } : null;
+    if (logoQueQueda(anterior, r) !== r) {
+      ui.ficha.pistaLogo.textContent = 'No encontré el logo claro · tócalo tú o tómale foto de cerca';
+      return;
+    }
+    anilloEn(r.punto);
+    await aplicarLogo(r, sesion);
+    if (!r.seguro) ui.ficha.pistaLogo.textContent = 'No encontré el logo claro · tócalo tú o tómale foto de cerca';
+  } catch (e) {
+    if (ficha !== sesion) return;
+    console.warn('No se pudo barrer la foto buscando el logo:', e);
+    anotar('Error barriendo la foto: ' + e.message);
+    ui.ficha.pistaLogo.textContent = 'Toca el logo de la marca';
   }
 }
 
@@ -764,6 +886,26 @@ async function abrirFicha(archivo) {
     ultimoTexto: '',
     placaFoto: null, // { ubicacion, leida, crudo, estado }
     placaPor: '', // 'foto' (la leyó la app) o 'mano' (la escribió la persona)
+    detalle: [], // las líneas de "qué vio la app" (anotar)
+    abiertaEn: performance.now(),
+  };
+  const sesionAbierta = ficha;
+  ui.ficha.detalle.open = false;
+  ui.ficha.detalleTexto.textContent = '';
+  anotar('Foto: ' + (archivo.name || 'sin nombre') + ', ' + Math.round(archivo.size / 1024) + ' KB, ' + (archivo.type || 'tipo desconocido'));
+  anotar('Teléfono: ' + navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 90));
+  cargarReconocedor()
+    .then(({ hilosEnUso }) => {
+      if (ficha !== sesionAbierta) return;
+      const hilos = hilosEnUso();
+      anotar('Motor: ' + (hilos > 1 ? hilos + ' hilos' : 'un solo hilo') + (window.crossOriginIsolated ? '' : ' (página sin aislamiento: primera visita o http)') + ', ' + (navigator.hardwareConcurrency || '?') + ' núcleos');
+    })
+    .catch(() => {});
+  versionInstalada().then((v) => {
+    if (ficha === sesionAbierta) anotar('Versión de la app: ' + (v === null ? 'sin service worker (http, o primera visita)' : v || 'el service worker no dijo su versión (es uno anterior al 17-oct: toca "Hay una versión nueva" o recarga)'));
+  });
+  ui.ficha.foto.onload = () => {
+    if (ficha === sesionAbierta) anotar('Foto de ' + ui.ficha.foto.naturalWidth + ' × ' + ui.ficha.foto.naturalHeight + ' px');
   };
   ui.ficha.foto.src = urlFicha;
   ui.ficha.toque.hidden = true;
@@ -802,6 +944,7 @@ async function abrirFicha(archivo) {
     const resultado = await reconocerCarro(archivo, (texto, pct) => estadoFicha(texto, 10 + pct * 0.8));
     if (!ficha || ficha.archivo !== archivo) return; // la persona cerró o abrió otra foto
     ficha.vector = resultado.vector;
+    anotar('Carro entero: carrocería ' + resultado.carrocerias.slice(0, 2).map((c) => CARROCERIAS[c.tipo].nombre + ' ' + Math.round(c.p * 100) + ' %').join(', ') + '; se parece a ' + resultado.lineas.slice(0, 3).map((l) => l.marca + ' ' + l.linea).join(', ') + ' (' + (resultado.milisegundos / 1000).toFixed(1) + ' s; esto NO decide la marca)');
     if (resultado.carrocerias[0] && resultado.carrocerias[0].p > 0.6) {
       ficha.carroceriaVotada = resultado.carrocerias[0].tipo;
       if (ficha.carroceriaPor !== 'mano') {
@@ -817,6 +960,7 @@ async function abrirFicha(archivo) {
     pintarMarcas();
     estadoFicha('Esto propone la app (' + (resultado.milisegundos / 1000).toFixed(1) + ' s). Corrige lo que no sea.', 100);
   } catch (e) {
+    if (ficha && ficha.archivo === archivo) anotar('Error del reconocedor: ' + e.message);
     estadoFicha('No pude reconocer el carro (' + e.message + '). Escribe la marca y la línea.', 100);
   }
 }
@@ -834,6 +978,7 @@ ui.ficha.placa.addEventListener('input', () => {
   ficha.placaPor = 'mano';
   pintarPlacaLeida();
 });
+ui.ficha.copiarDetalle.addEventListener('click', copiarDetalle);
 ui.ficha.fotoLogo.addEventListener('click', () => ui.ficha.archivoLogo.click());
 ui.ficha.archivoLogo.addEventListener('change', () => {
   const archivo = ui.ficha.archivoLogo.files && ui.ficha.archivoLogo.files[0];

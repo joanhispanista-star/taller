@@ -72,4 +72,31 @@ async function registrar() {
   });
 }
 
+// La versión (el sello de sw.js) que de verdad está sirviendo la app en
+// este teléfono, preguntándosela al service worker que controla la
+// página. null si no hay service worker (http en la red del PC, o la
+// primera visita antes de que tome el control); '' si lo hay pero no
+// contestó (uno anterior al 17-oct, que no sabe la pregunta). Va en el
+// detalle que la ficha deja copiar.
+export function versionInstalada() {
+  return new Promise((resolver) => {
+    const sw = sePuede() && navigator.serviceWorker.controller;
+    if (!sw) return resolver(null);
+    const escuchar = (e) => {
+      if (!e.data || e.data.tipo !== 'version') return;
+      navigator.serviceWorker.removeEventListener('message', escuchar);
+      clearTimeout(reloj);
+      resolver(e.data.version || '');
+    };
+    // Si el service worker no contesta (uno viejo sin esta pregunta), se
+    // sigue sin versión: el detalle no puede quedarse esperando.
+    const reloj = setTimeout(() => {
+      navigator.serviceWorker.removeEventListener('message', escuchar);
+      resolver('');
+    }, 1500);
+    navigator.serviceWorker.addEventListener('message', escuchar);
+    sw.postMessage({ tipo: 'version' });
+  });
+}
+
 registrar();

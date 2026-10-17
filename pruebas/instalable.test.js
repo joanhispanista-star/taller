@@ -96,8 +96,23 @@ test('todo lo que el service worker precarga existe, y nada pesado va en la prec
 
 // ---------- El service worker corriendo en un vm ----------
 
+// El cuerpo lleva la etiqueta: así sobrevive a que el SW rehaga la
+// respuesta para ponerle las cabeceras de aislamiento (conAislamiento).
 function respuestaFalsa(etiqueta, { ok = true, status = 200 } = {}) {
-  return { etiqueta, ok, status, clone() { return this; } };
+  return { etiqueta, ok, status, type: 'basic', body: { etiqueta }, headers: new Headers(), clone() { return this; } };
+}
+class RespuestaFalsa {
+  constructor(cuerpo, init = {}) {
+    this.etiqueta = cuerpo && cuerpo.etiqueta;
+    this.body = cuerpo;
+    this.status = init.status;
+    this.ok = init.status >= 200 && init.status < 300;
+    this.type = 'basic';
+    this.headers = new Headers(init.headers);
+  }
+  clone() {
+    return this;
+  }
 }
 
 // Un navegador de mentira: `self` con sus eventos, `caches` que recuerda lo
@@ -145,12 +160,15 @@ function navegadorFalso({ ubicacion, cachesIniciales = {}, red = () => respuesta
       this.cache = init.cache;
       this.method = init.method || 'GET';
       this.mode = init.mode || 'cors';
+      this.destination = init.destination || '';
     }
   }
   const contexto = vm.createContext({
     self,
     URL,
     Request,
+    Headers,
+    Response: RespuestaFalsa,
     caches: {
       open: abrir,
       async keys() {
@@ -271,4 +289,26 @@ test('al instalar precarga todos los archivos saltándose la caché HTTP, y al a
   n.manejadores.message({ data: { tipo: 'otra' } });
   n.manejadores.message({ data: null });
   assert.equal(n.registro.skipWaiting, 1, 'solo el mensaje del botón activa la versión que espera');
+});
+
+test('la página y los workers salen con las cabeceras de aislamiento; el .wasm sale tal cual; y el SW dice su versión', async () => {
+  const base = 'https://joanhispanista-star.github.io/taller/';
+  const { pedir, manejadores } = navegadorFalso({ ubicacion: PUBLICA });
+  for (const [url, init] of [[base + 'garaje.html', { mode: 'navigate', destination: 'document' }], [base + 'js/vendor/transformers/ort-wasm-simd-threaded.asyncify.mjs', { destination: 'worker' }]]) {
+    const r = await pedir(url, init);
+    assert.equal(r.headers.get('Cross-Origin-Opener-Policy'), 'same-origin', url);
+    assert.equal(r.headers.get('Cross-Origin-Embedder-Policy'), 'require-corp', url);
+    assert.equal(r.etiqueta, 'de la red', 'el cuerpo es el mismo');
+  }
+  // El .wasm (y cualquier subrecurso) no se rehace: Chrome guarda su código
+  // compilado junto a la respuesta de la caché.
+  const wasm = await pedir(base + 'js/vendor/transformers/ort-wasm-simd-threaded.asyncify.wasm', { destination: '' });
+  assert.ok(!(wasm instanceof RespuestaFalsa), 'el wasm sale tal cual, sin rehacer la respuesta');
+  assert.equal(wasm.headers.get('Cross-Origin-Embedder-Policy'), null);
+  assert.equal(wasm.etiqueta, 'de la red');
+  const recibidos = [];
+  manejadores.message({ data: { tipo: 'version' }, source: { postMessage: (m) => recibidos.push(m) } });
+  assert.equal(recibidos.length, 1);
+  assert.equal(recibidos[0].version, leerSello(leer('sw.js')).version);
+  manejadores.message({ data: { tipo: 'version' } }); // sin source no revienta
 });

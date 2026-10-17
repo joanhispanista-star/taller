@@ -13,12 +13,17 @@
 // saturación y luz: el amarillo normado es muy saturado, y en sombra baja
 // la luz pero no el tono. Las rayas amarillas del parqueadero también
 // pasan el filtro: las descarta la forma, no el color.
-export function esAmarilloDePlaca(r, g, b) {
+//
+// `relajado`: segunda pasada cuando la normal no encuentra nada. Bajo
+// techo (el taller) o a contraluz la placa sale más oscura y menos
+// saturada que al sol; se admite más y que la forma (letras encerradas,
+// proporción, relleno) sea la que descarte lo que no es placa.
+export function esAmarilloDePlaca(r, g, b, relajado = false) {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
-  if (max < 90) return false; // muy oscuro
+  if (max < (relajado ? 60 : 90)) return false; // muy oscuro
   const saturacion = (max - min) / max;
-  if (saturacion < 0.45) return false;
+  if (saturacion < (relajado ? 0.3 : 0.45)) return false;
   // Tono en grados (0 rojo, 60 amarillo, 120 verde).
   let tono;
   if (max === r) tono = 60 * (((g - b) / (max - min)) % 6);
@@ -28,15 +33,15 @@ export function esAmarilloDePlaca(r, g, b) {
   // Medido en fotos reales: el amarillo de placa va de 37° (en sombra) a
   // 46° (al sol). Hasta 66° entraban hojas al sol (amarillo verdoso) y en
   // una foto de Commons un árbol pasó por placa.
-  return tono >= 30 && tono <= 56;
+  return relajado ? tono >= 28 && tono <= 60 : tono >= 30 && tono <= 56;
 }
 
 // Máscara binaria (Uint8Array) de píxeles amarillos. `canales` es 4 para
 // RGBA (getImageData) y 3 para RGB (RawImage).
-export function mascaraAmarilla(pixeles, ancho, alto, canales = 4) {
+export function mascaraAmarilla(pixeles, ancho, alto, canales = 4, relajado = false) {
   const mascara = new Uint8Array(ancho * alto);
   for (let i = 0, p = 0; i < ancho * alto; i++, p += canales) {
-    if (esAmarilloDePlaca(pixeles[p], pixeles[p + 1], pixeles[p + 2])) mascara[i] = 1;
+    if (esAmarilloDePlaca(pixeles[p], pixeles[p + 1], pixeles[p + 2], relajado)) mascara[i] = 1;
   }
   return mascara;
 }
@@ -171,15 +176,32 @@ function componentes(mascara, ancho, alto) {
 }
 
 // Fracción de píxeles oscuros dentro de una caja: las letras de la placa.
-// Una raya pintada o un aviso amarillo liso no tienen.
-function fraccionOscura(pixeles, ancho, canales, c) {
+// Una raya pintada o un aviso amarillo liso no tienen. "Oscuro" es menos
+// de 90 de luz; con el amarillo relajado (placa en sombra, cuyo amarillo
+// puede andar por 70) sería la placa entera, así que ahí oscuro es lo que
+// tiene menos del 60 % de la luz del amarillo de la propia mancha.
+function fraccionOscura(pixeles, ancho, canales, c, mascara = null, relajado = false) {
   if (!pixeles) return null;
+  let umbral = 90;
+  if (relajado && mascara) {
+    let luz = 0;
+    let n = 0;
+    for (let y = c.y1; y <= c.y2; y++) {
+      for (let x = c.x1; x <= c.x2; x++) {
+        if (!mascara[y * ancho + x]) continue;
+        const p = (y * ancho + x) * canales;
+        luz += Math.max(pixeles[p], pixeles[p + 1], pixeles[p + 2]);
+        n += 1;
+      }
+    }
+    if (n) umbral = Math.min(90, 0.6 * (luz / n));
+  }
   let oscuros = 0;
   let total = 0;
   for (let y = c.y1; y <= c.y2; y++) {
     for (let x = c.x1; x <= c.x2; x++) {
       const p = (y * ancho + x) * canales;
-      if (Math.max(pixeles[p], pixeles[p + 1], pixeles[p + 2]) < 90) oscuros += 1;
+      if (Math.max(pixeles[p], pixeles[p + 1], pixeles[p + 2]) < umbral) oscuros += 1;
       total += 1;
     }
   }
@@ -197,7 +219,12 @@ function fraccionOscura(pixeles, ancho, canales, c) {
 // Todas las manchas amarillas con sus medidas y el motivo por el que no
 // son placa (o '' si lo son). Lo usa candidatasAPlaca y la herramienta de
 // medir, para ver por qué una placa real no salió.
-export function diagnosticarManchas(mascara, ancho, alto, pixeles = null, canales = 4) {
+// Opciones: `relajado` (amarillo en sombra: exige además letras oscuras,
+// altura de bómper y no estar pegada a un lado) y `soloChicas` (pasada a
+// 960 px para una placa lejana: solo cajas de menos del 8 % del ancho;
+// medido el 16-oct-2026, sin estas dos exigencias las pasadas extra
+// encontraban llantas, carretera y hojas, y ninguna placa de verdad).
+export function diagnosticarManchas(mascara, ancho, alto, pixeles = null, canales = 4, { relajado = false, soloChicas = false } = {}) {
   const total = ancho * alto;
   const cerrada = cerrarMascara(mascara, ancho, alto, 2);
   const salida = [];
@@ -209,7 +236,7 @@ export function diagnosticarManchas(mascara, ancho, alto, pixeles = null, canale
     const relleno = c.area / (w * h);
     const fraccion = c.area / total;
     const huecos = huecosEncerrados(mascara, ancho, c);
-    const oscuros = fraccionOscura(pixeles, ancho, canales, c);
+    const oscuros = fraccionOscura(pixeles, ancho, canales, c, mascara, relajado);
     const borde = bordeAmarillo(cerrada, ancho, c);
     const cy = (c.y1 + c.y2) / 2 / alto;
     const tocaElPiso = c.y2 >= alto - 3 ? 0.3 : 1;
@@ -227,6 +254,12 @@ export function diagnosticarManchas(mascara, ancho, alto, pixeles = null, canale
     // hojas que quedan las saca la altura).
     else if (cy < 0.12 || c.y1 / alto < 0.05) motivo = 'muy arriba en la foto';
     else if (oscuros !== null && oscuros > 0.52) motivo = 'demasiado oscuro para ser placa';
+    // Una mancha que toca el borde izquierdo o derecho de la foto: en las
+    // fotos reales fue siempre otra cosa (un pedazo de carretera, un árbol
+    // cortado), y una placa cortada por el borde tampoco se podría leer.
+    else if (c.x1 < 3 || c.x2 > ancho - 4) motivo = 'pegada al borde';
+    else if (relajado && (cy < 0.3 || (oscuros !== null && oscuros < 0.08))) motivo = 'en sombra, sin letras o muy arriba';
+    else if (soloChicas && w / ancho > 0.08) motivo = 'no es chica';
     salida.push({
       x: c.x1 / ancho,
       y: c.y1 / alto,
@@ -247,16 +280,19 @@ export function diagnosticarManchas(mascara, ancho, alto, pixeles = null, canale
   return salida.sort((a, b) => b.puntaje - a.puntaje);
 }
 
-export function candidatasAPlaca(mascara, ancho, alto, pixeles = null, canales = 4) {
-  return diagnosticarManchas(mascara, ancho, alto, pixeles, canales).filter((m) => !m.motivo);
+export function candidatasAPlaca(mascara, ancho, alto, pixeles = null, canales = 4, opciones = {}) {
+  return diagnosticarManchas(mascara, ancho, alto, pixeles, canales, opciones).filter((m) => !m.motivo);
 }
 
 // La placa más probable, o null. Pensado para una versión reducida de la
 // foto de unos 640 px de ancho: a 360 las letras de una placa chica no se
 // resuelven y los huecos no se ven; a 640 sí, y sigue tardando poco.
-export function buscarPlaca(pixeles, ancho, alto, canales = 4) {
-  const candidatas = candidatasAPlaca(mascaraAmarilla(pixeles, ancho, alto, canales), ancho, alto, pixeles, canales);
-  return candidatas[0] || null;
+// Con `relajado`, el amarillo se admite más oscuro y menos saturado (ver
+// esAmarilloDePlaca); la placa que sale trae `modo` para que quien
+// vuelva a calcular la máscara (las esquinas) use el mismo amarillo.
+export function buscarPlaca(pixeles, ancho, alto, canales = 4, { relajado = false, soloChicas = false } = {}) {
+  const candidatas = candidatasAPlaca(mascaraAmarilla(pixeles, ancho, alto, canales, relajado), ancho, alto, pixeles, canales, { relajado, soloChicas });
+  return candidatas[0] ? { ...candidatas[0], modo: relajado ? 'relajado' : 'normal' } : null;
 }
 
 // La caja de la placa con un margen alrededor (fracción de su alto), para

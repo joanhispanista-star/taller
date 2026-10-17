@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { AutoTokenizer, CLIPTextModelWithProjection, env } from '@huggingface/transformers';
 import { CATALOGO } from '../js/catalogo-carros.js';
 import { familiaDe } from '../js/catalogo.js';
-import { frasesDeLogo, marcasConLogo } from '../js/logo.js';
+import { FRASES_FONDO, frasesDeLogo, marcasConLogo } from '../js/logo.js';
 
 export const MODELO = 'Xenova/clip-vit-base-patch32';
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -86,6 +86,14 @@ for (const m of marcasConLogo(CATALOGO)) {
   salida.marcas.push(etiqueta);
 }
 console.log(salida.marcas.length + ' logos de marca, ' + conPrototipo + ' con prototipo de imagen');
+
+// Lo que no es logo (parrilla, faro, placa, llanta...), un vector por
+// grupo: compite con los logos cuando la app busca el emblema sola, para
+// que un recorte sin logo no le regale su probabilidad a una marca
+// cualquiera (clasificarLogo con `fondo`, 16-oct-2026).
+salida.fondo = [];
+for (const [nombre, frases] of Object.entries(FRASES_FONDO)) salida.fondo.push({ nombre, e: aBase64(await vectorDe(frases)) });
+console.log(salida.fondo.length + ' grupos de fondo');
 
 // Al reconocedor van FAMILIAS (Logan, Hilux, Kona), no cada generación:
 // medido el 15-oct-2026, con 604 líneas sueltas las generaciones de un

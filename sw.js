@@ -31,7 +31,7 @@
 // navegador seguiría mostrando el viejo y nadie entendería por qué.
 
 /* SELLO-INICIO: lo escribe `npm run sellar` (herramientas/sellar-version.mjs). No editar a mano. */
-const VERSION = 'd22fbaa94bb8';
+const VERSION = '7295d8bec883';
 const VERSION_MOTOR = 'a4950633eb87';
 const ARCHIVOS = [
   "./",
@@ -114,7 +114,12 @@ self.addEventListener('activate', (evento) => {
 // El botón "Hay una versión nueva" del Garaje manda esto: la versión que
 // espera pasa a activa y la página se recarga (instalable.js).
 self.addEventListener('message', (evento) => {
-  if (evento.data && evento.data.tipo === 'activar') self.skipWaiting();
+  if (!evento.data) return;
+  if (evento.data.tipo === 'activar') self.skipWaiting();
+  // "¿Qué versión eres?": la ficha con foto lo pone en el detalle que Joan
+  // copia cuando algo no reconoce, para saber si el teléfono ya tiene la
+  // versión nueva o sigue con la vieja (instalable.js, versionInstalada).
+  if (evento.data.tipo === 'version' && evento.source) evento.source.postMessage({ tipo: 'version', version: VERSION, motor: VERSION_MOTOR });
 });
 
 // Qué hacer con cada petición: 'app' (lo propio, precargado), 'motor' (ONNX,
@@ -163,8 +168,36 @@ async function responder(peticion, decision) {
   return guardarSiSirve(cache, peticion, await fetch(peticion));
 }
 
+// Las páginas y los scripts de los workers salen con las dos cabeceras de
+// aislamiento de origen (COOP/COEP): con ellas el navegador permite
+// SharedArrayBuffer y el motor del reconocedor (ONNX Runtime) corre con
+// varios hilos en vez de uno. GitHub Pages no manda cabeceras, así que las
+// pone el service worker, que sirve la página desde la segunda visita (la
+// primera va sin ellas: un hilo). Los workers también: los hilos de ONNX
+// cargan su propio script (ort-wasm-*.mjs) y un worker sin COEP no
+// arranca dentro de una página aislada. Lo demás (el .wasm de 27 MB, los
+// módulos, el JSON) va TAL CUAL sale de la caché: rehacer la respuesta le
+// quita a Chrome el código del .wasm ya compilado que guarda junto a la
+// caché, y lo volvería a compilar en cada carga (revisión del 17-oct). Un
+// recurso del mismo origen no necesita las cabeceras. Lo que la app carga
+// de otro origen (el modelo de Hugging Face) va por fetch con CORS, que el
+// aislamiento permite.
+function conAislamiento(respuesta) {
+  // Una respuesta opaca o de error no se toca (no se pueden leer sus cabeceras).
+  if (!respuesta || respuesta.type === 'opaque' || respuesta.status === 0) return respuesta;
+  const cabeceras = new Headers(respuesta.headers);
+  cabeceras.set('Cross-Origin-Opener-Policy', 'same-origin');
+  cabeceras.set('Cross-Origin-Embedder-Policy', 'require-corp');
+  return new Response(respuesta.body, { status: respuesta.status, statusText: respuesta.statusText, headers: cabeceras });
+}
+
+function necesitaAislamiento(peticion) {
+  return peticion.mode === 'navigate' || ['document', 'worker', 'sharedworker'].includes(peticion.destination);
+}
+
 self.addEventListener('fetch', (evento) => {
   const decision = decidir(evento.request);
   if (decision === 'red') return;
-  evento.respondWith(responder(evento.request, decision));
+  const respuesta = responder(evento.request, decision);
+  evento.respondWith(necesitaAislamiento(evento.request) ? respuesta.then(conAislamiento) : respuesta);
 });
