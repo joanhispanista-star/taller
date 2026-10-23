@@ -6,7 +6,10 @@
 // teléfono con garaje.js; la hoja de abajo la pinta hoja.js. El 3D se
 // construye con la carrocería, el color y las medidas de la línea del carro
 // (carro.js y carrocerias.js): no es el carro exacto, es uno del mismo tipo,
-// tamaño y color, y la ficha de arriba lo dice.
+// tamaño y color, y la ficha de arriba lo dice. Desde el 22-oct, si el
+// carro tiene ESCANEO (escaneo-pantalla.js), lo que se ve es el escaneo: el
+// carro real a su tamaño, partido en las piezas del genérico ajustado a sus
+// medidas; "Ver las piezas por dentro" vuelve al genérico, a esas medidas.
 import * as THREE from 'three';
 import { OrbitControls } from './vendor/OrbitControls.js';
 import { RoomEnvironment } from './vendor/RoomEnvironment.js';
@@ -34,6 +37,8 @@ import {
 import { crearHoja } from './hoja.js';
 import { crearFichaCarro } from './ficha-carro.js';
 import { reducirFoto } from './fotos.js';
+import { modeloDesdeEscaneo } from './escaneo.js';
+import { crearEscaneoPantalla, textoDeMedidas } from './escaneo-pantalla.js';
 
 const COLOR_BASE = 0xcfd4da;
 
@@ -199,19 +204,29 @@ escena.add(...crearPiso());
 // `modelo` es el carro en 3D; `carro` (arriba) es el registro: placa, marca
 // y el estado de cada pieza. Dos cosas distintas con dos nombres. El modelo
 // se vuelve a construir cuando cambia lo que lo define: carrocería, color o
-// medidas de la línea.
+// medidas de la línea, o el escaneo que se está viendo.
+let escaneoVisto = null; // el escaneo del carro (guardado o en vista previa), o null
+let escaneoEsPrevia = false;
+let verPiezasEscaneo = false;
+let versionEscaneo = 0; // sube cada vez que cambia lo que se ve del escaneo
 function opcionesDelModelo() {
+  // Con escaneo, el genérico (el de "ver las piezas") va a las medidas
+  // medidas y con la carrocería con que se etiquetó el escaneo.
   return {
     colorBase: carro.color || COLOR_BASE,
-    carroceria: carro.carroceria || 'sedan',
-    medidas: carro.medidas || undefined,
+    carroceria: escaneoVisto ? escaneoVisto.carroceria : carro.carroceria || 'sedan',
+    medidas: escaneoVisto ? escaneoVisto.medidasDibujo : carro.medidas || undefined,
     placa: formatearPlaca(carro.placa),
   };
 }
 function firmaDelModelo() {
-  return JSON.stringify(opcionesDelModelo());
+  return JSON.stringify({ ...opcionesDelModelo(), escaneo: escaneoVisto ? versionEscaneo : 0, verPiezas: verPiezasEscaneo });
 }
-let modelo = construirCarro(opcionesDelModelo());
+function construirModelo() {
+  if (escaneoVisto && !verPiezasEscaneo) return modeloDesdeEscaneo(escaneoVisto, { colorBase: carro.color || COLOR_BASE });
+  return construirCarro(opcionesDelModelo());
+}
+let modelo = construirModelo();
 let firmaModelo = firmaDelModelo();
 escena.add(modelo.grupo);
 
@@ -230,7 +245,7 @@ function reconstruirModelo() {
       material.dispose();
     }
   });
-  modelo = construirCarro(opcionesDelModelo());
+  modelo = construirModelo();
   firmaModelo = firma;
   escena.add(modelo.grupo);
   // Otro carro, otro largo: la cámara vuelve a la vista de inicio a la
@@ -553,6 +568,27 @@ const hoja = crearHoja({
 // La ficha de datos (marca, línea, versión, carrocería, color): al guardar,
 // el carro se vuelve a limpiar con crearCarro (placa y piezas no cambian),
 // se guarda y el 3D se reconstruye si cambió lo que lo define.
+// El escaneo: el botón, sus opciones, el escáner y la vista previa. Le
+// dice al visor qué mostrar; el visor reconstruye y vuelve a teñir.
+const pantallaEscaneo = crearEscaneoPantalla({
+  obtenerCarro: () => carro,
+  avisar: (texto) => hoja.avisar(texto),
+  mostrar(escaneo, { previa, verPiezas }) {
+    escaneoVisto = escaneo || null;
+    escaneoEsPrevia = Boolean(previa);
+    verPiezasEscaneo = Boolean(verPiezas);
+    versionEscaneo += 1;
+    reconstruirModelo();
+    aplicarSeleccion();
+    pintarFicha();
+    // Un escaneo no abre puertas: es una sola superficie.
+    ui.pista.textContent =
+      escaneoVisto && !verPiezasEscaneo
+        ? 'Un dedo: toca una pieza para marcarla · Dos dedos: gira el carro, pellizca para acercar · Para abrir puertas: Escaneo → Ver las piezas por dentro'
+        : 'Un dedo: toca una pieza para marcarla, arrastra una puerta para abrirla · Dos dedos: gira el carro, pellizca para acercar';
+  },
+});
+
 const fichaCarro = crearFichaCarro({
   alGuardar(datos) {
     carro = crearCarro({ ...carro, ...datos });
@@ -576,16 +612,23 @@ function pintarHoja() {
 function pintarFicha() {
   const nombre = nombreCompletoDelCarro(carro);
   ui.datos.textContent = nombreDelCarro(carro) || 'Datos del carro';
-  if (!nombre && !carro.carroceria) {
+  if (!nombre && !carro.carroceria && !escaneoVisto) {
     ui.ficha.hidden = true;
     return;
   }
   const tipo = CARROCERIAS[normalizarCarroceria(carro.carroceria || 'sedan')].nombre;
-  const largo = carro.medidas && carro.medidas.largo ? (carro.medidas.largo / 1000).toFixed(2).replace('.', ',') + ' m' : '';
+  const largo = !escaneoVisto && carro.medidas && carro.medidas.largo ? (carro.medidas.largo / 1000).toFixed(2).replace('.', ',') + ' m' : '';
   // Un carro entregado lo dice aquí arriba: lo que se le marque ya no
   // entra en la nómina como trabajo nuevo sin que alguien se dé cuenta.
   const entrega = carro.entregado ? 'entregado ' + fechaCorta(carro.entregado) : '';
-  ui.ficha.textContent = [nombre, tipo, largo, entrega].filter(Boolean).join(' · ') + ' · carrocería de referencia';
+  // Lo que es el 3D, sin adornarlo: la carrocería de referencia, el
+  // escaneo (con lo que midió), o las piezas a las medidas del escaneo.
+  let queEs = 'carrocería de referencia';
+  if (escaneoVisto) {
+    const medidas = textoDeMedidas(escaneoVisto);
+    queEs = escaneoEsPrevia ? 'escaneo sin guardar: ' + medidas : verPiezasEscaneo ? 'piezas a las medidas del escaneo (' + medidas + ')' : 'escaneado: ' + medidas;
+  }
+  ui.ficha.textContent = [nombre, tipo, largo, entrega, queEs].filter(Boolean).join(' · ');
   ui.ficha.hidden = false;
 }
 
@@ -687,6 +730,9 @@ async function abrirCarro(placa, base) {
 
 function refrescar() {
   ui.placa.value = carro.placa;
+  // Primero el escaneo de esta placa (si cambió de carro, lo del anterior se
+  // suelta ya, antes de reconstruir: que no se vea ni un momento sobre este).
+  pantallaEscaneo.cargar(carro.placa);
   reconstruirModelo();
   aplicarSeleccion();
   pintarHoja();
@@ -819,6 +865,10 @@ window.__visor = {
   get modelo() {
     return modelo;
   },
+  get escaneo() {
+    return { visto: escaneoVisto, previa: escaneoEsPrevia, verPiezas: verPiezasEscaneo };
+  },
+  pantallaEscaneo,
   camara,
   depurar: () => ({ enMovimiento, dedos, animacionActiva: Boolean(animacionActiva), gesto: Boolean(gesto), controles: controles.enabled }),
   alternar,

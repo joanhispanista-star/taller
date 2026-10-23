@@ -406,7 +406,17 @@ ui.demoBoton.addEventListener('click', async () => {
   try {
     if (ui.demoBoton.dataset.accion === 'quitar') {
       if (!confirm('¿Quitar los carros y empleados de demostración? Lo real se queda.')) return;
+      // Los escaneos viven en otra base (escaneos.js): los de los carros de
+      // demostración se van con ellos; si se quedaran, volverían pegados al
+      // mismo DEM00x al cargar la demostración otra vez.
+      const placasDemo = (await almacen.listar()).filter((c) => c.demo).map((c) => c.placa);
       await almacen.quitarDemo();
+      import('./escaneos.js')
+        .then(({ abrirEscaneos }) => abrirEscaneos())
+        .then(async (escaneos) => {
+          for (const placa of placasDemo) await escaneos.borrar(placa);
+        })
+        .catch(() => {});
     } else {
       await cargarDemo(almacen);
     }

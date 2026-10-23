@@ -137,7 +137,8 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
   position: absolute;
   top: 10px;
   left: 10px;
-  max-width: calc(100% - 20px);
+  /* Deja sitio al botón Escanear, arriba a la derecha. */
+  max-width: calc(100% - 120px);
   background: rgba(0, 0, 0, 0.55);
   border: 0;
   padding: 6px 10px;
@@ -149,7 +150,9 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 
 .pista {
   position: absolute;
-  top: 44px;
+  /* 56 y no 44: desde que la ficha deja sitio al botón Escanear, en 360 px
+     ocupa dos líneas y la pista le tapaba la segunda. */
+  top: 56px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.55);
@@ -1040,4 +1043,70 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
   background: var(--panel-2);
   color: var(--texto);
   font-size: 12px;
+}
+
+/* ---------- El escaneo (escaneo-pantalla.js) ---------- */
+
+.boton-escanear {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(36, 42, 50, 0.88);
+  border: 1px solid var(--acento);
+  color: var(--texto);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 13px;
+}
+.boton-escanear.con-escaneo { background: var(--acento); color: #111; }
+
+.previa-escaneo {
+  position: absolute;
+  /* Encima de las vistas: en 360 px las vistas van en dos renglones y le
+     tapaban el borde a Guardar. */
+  z-index: 2;
+  left: 10px;
+  right: 10px;
+  bottom: 56px;
+  background: rgba(20, 24, 30, 0.92);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.previa-escaneo p { margin: 0; }
+.previa-escaneo .acciones { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+.opcion-escaneo { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.opcion-escaneo .ayuda { margin: 0; }
+
+/* Encima de la cámara: transparente, con el texto en recuadros oscuros. */
+.hud-escaneo {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: calc(14px + env(safe-area-inset-top)) 14px calc(18px + env(safe-area-inset-bottom));
+  background: transparent;
+  color: #fff;
+  pointer-events: none;
+}
+.hud-escaneo > * { pointer-events: auto; }
+.hud-arriba { background: rgba(0, 0, 0, 0.55); border-radius: 12px; padding: 10px 12px; }
+.hud-titulo { margin: 0 0 4px; font-weight: 600; }
+#hud-texto { margin: 0 0 8px; font-size: 14px; }
+.hud-vuelta { display: flex; gap: 4px; }
+.hud-vuelta i { flex: 1; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.25); }
+.hud-vuelta i.visto { background: var(--estado-terminada, #3ddc84); }
+.hud-escaneo .acciones { display: flex; gap: 10px; justify-content: space-between; }
+.hud-escaneo .acciones button { flex: 1; padding: 14px; font-size: 16px; border-radius: 12px; }
+
+@media (max-width: 480px) {
+  /* Las vistas en dos renglones: la vista previa sube por encima. */
+  .previa-escaneo { bottom: 96px; }
 }

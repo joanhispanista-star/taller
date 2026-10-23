@@ -63,6 +63,42 @@ persona confirma), y el 3D sale de ESA carrocería a las medidas de ESA línea.
 La ficha de arriba del visor lo dice: "carrocería de referencia", no "tu
 carro".
 
+**La tercera vuelta, el 22 de octubre: el escaneo SÍ se construyó.** Joan lo
+volvió a pedir ("que la imagen sea un 3D de tamaño y forma real, y que si no
+está escaneado se pueda escanear con el celular"), y es su decisión. Una
+investigación nueva (9 agentes, leyendo el código de Chrome) cambió dos de
+las tres razones de arriba:
+
+1. *La pintura es un espejo:* sigue siendo cierto, pero de otra forma. La
+   profundidad ya no sale de fotos sino del movimiento del celular (ARCore,
+   por WebXR, en Chrome de Android). Chrome solo entrega la profundidad
+   "suavizada", que rellena todo: los vidrios, el cromo y la pintura negra no
+   salen como huecos ni abolladuras sino como profundidad inventada. El error
+   típico es de 6 a 10 cm (ISPRS 2022). Alcanza para el **tamaño y la
+   silueta**, no para la forma de un panel ni para una abolladura.
+2. *Un escaneo es una sola masa:* sigue siendo cierto, y se resolvió sin
+   pelear con eso. Las piezas no se adivinan en la malla: el carro genérico
+   se ajusta a las medidas del escaneo y cada punto toma la pieza genérica
+   más cercana. La puerta queda donde está la puerta; las juntas son las del
+   genérico, no las del carro real.
+3. *"Android no tiene escaneo":* era falso. Chrome para Android da
+   profundidad por cuadro desde la versión 90 a más del 88 % de los
+   celulares activos (no a todos: Galaxy A14 5G, A24, A25 5G y A34 5G no la
+   tienen). Lo que no existía era el escáner: se programó en la app (fusión
+   TSDF, malla, piso, orientación, piezas). En iPhone no hay WebXR: ahí se
+   sube un escaneo hecho con RealityScan (gratis, de Epic, permite uso
+   comercial).
+
+**El freno, dicho claro:** para un carro que está en el catálogo, el escaneo
+aporta poco más que una silueta con unos 10 cm de error sobre medidas que ya
+se conocen. Sirve de verdad para los carros que NO están en el catálogo y
+como registro de cómo entró el carro al taller. Y **nada de esto se ha
+probado en un celular de verdad**: la fusión, la malla, las piezas y el
+pegamento con WebXR están probados en Node con escaneos de mentira (ruido,
+reflejos, un WebXR que imita el de Chrome), y la importación en el navegador
+del PC; la cámara del celular, la deriva al dar la vuelta y la pintura real
+falta probarlas.
+
 ## Lo que sí hace hoy
 
 - Dibuja un sedán genérico con **17 piezas pintables**, cada una con su
@@ -233,6 +269,64 @@ carro".
   quedó segura), la placa leída cruda y corregida, y cualquier error. El
   botón **Copiar el detalle** lo deja listo para pegarlo en el chat: cuando
   la app no reconozca un carro, eso dice qué paso falló.
+- **El carro escaneado: tamaño y silueta reales** (22-oct). En el visor, el
+  botón **Escanear** (arriba a la derecha) ofrece:
+  - **Escanear con este celular** (Android con Chrome y ARCore): se ve la
+    cámara con las instrucciones, cuántos de los 12 lados del carro van
+    vistos y los botones Terminar y Cancelar. Hay que caminar alrededor a uno
+    o dos metros, una vuelta a la altura del pecho y otra con el celular
+    levantado para que vea el techo, moviéndolo siempre (quieto no mide).
+    Cada cuadro trae unos 160 × 120 puntos de profundidad y la pose de la
+    cámara; se funde en una TSDF de 3 cm (solo cuando la cámara se movió 10
+    cm o giró 5°) y al terminar sale la malla con surface nets, suavizada.
+  - **Subir un escaneo** (GLB, glTF, OBJ o PLY) de otra app, para iPhone:
+    la app adivina qué eje es arriba (el piso es el plano más lleno), pasa
+    centímetros o milímetros a metros, conserva el color (de la textura o
+    por vértice) y simplifica las mallas de más de 500.000 triángulos sin
+    perder el color.
+  - Con cualquiera de los dos, la app encuentra el piso, se queda con el
+    carro (el bloque más grande encima), lo orienta (eje largo por el
+    rectángulo de menor área de su huella; frente por dónde queda la
+    cabina), lo mide (mediana de los puntos más externos de cada cara: el
+    ruido no la corre) y le pone las piezas del genérico ajustado a esas
+    medidas. **Nada se guarda sin verlo:** sale una vista previa con las
+    medidas medidas al lado de las del catálogo y los botones Guardar,
+    Frente al revés (si la cabina engañó), Está acostado (solo en lo
+    importado: recorre los seis "arriba" hasta que quede parado) y
+    Descartar. Ponerle la placa al carro no tira la vista previa (es justo
+    lo que se pide para guardarla); cambiar a OTRO carro sí, con aviso.
+  - Guardado, el 3D del carro ES el escaneo (la ficha dice "escaneado:
+    4,36 × 1,80 × 1,69 m"), y se marcan y tiñen las piezas igual que antes.
+    "Ver las piezas por dentro" vuelve al genérico, a las medidas del
+    escaneo, para abrir puertas y marcar lo de adentro. "Quitar el escaneo"
+    lo borra (las piezas marcadas no se tocan). Borrar el carro en el Garaje
+    borra su escaneo.
+  - **Medido en Node** (escaneos de mentira hechos del carro genérico): sin
+    ruido, largo, ancho y alto a 3-4 cm; con 4 cm de ruido y uno de cada
+    cinco puntos "reflejado" 20-50 cm detrás de la chapa, a menos de 10 cm y
+    con el frente bien; la fusión de una vuelta simulada con un WebXR que
+    imita el de Chrome, a 6 cm. En el navegador del PC, importar un escaneo
+    de 2 MB tarda 2,5 s (en el celular, unos 10 s, sin medir).
+  - **La revisión** (3 revisores y un escéptico por hallazgo, 29 agentes)
+    confirmó 21 defectos distintos y todos se arreglaron. Los graves: la
+    camioneta salía SIEMPRE al revés (la regla del frente estaba invertida
+    para ella, y la camioneta de la app es doble cabina, con el techo detrás
+    del centro como un sedán); un escaneo recortado sin piso salía acostado
+    o boca abajo (el costado y el techo también son planos llenos; ahora un
+    piso tiene que rodear al objeto); y la vista previa se perdía al
+    ponerle la placa al carro. Además: carreras entre importaciones y
+    cambios de carro (un turno por operación), un escaneo cortado por una
+    llamada se arma con lo que alcanzó a ver, la escala ya no la mueven
+    unos puntos sueltos, la profundidad que tarda no se confunde con un
+    celular que no la tiene, corregir la carrocería en la ficha reacomoda
+    las piezas del escaneo, y quitar la demostración borra sus escaneos.
+  - **Lo que la pantalla NO promete** (y dice): las medidas son aproximadas
+    (unos 10 cm), la malla del escáner sale en el color del carro y no en
+    foto (no se pide la cámara a color: en Chrome 147-148 tumbaba la
+    pestaña), los vidrios y la pintura negra salen rellenos a ojo, las
+    piezas se ubican de forma aproximada y el escaneo vive solo en ese
+    celular. RealityScan sube las fotos (con la placa) a la nube de Epic:
+    la pantalla pide permiso al cliente.
 - **Cuatro carrocerías a la medida**: sedán, hatchback, SUV y camioneta de
   platón, dibujadas por código con las mismas 17 piezas (en el hatchback la
   pieza trasera se llama compuerta; en la camioneta, compuerta y costados
@@ -496,12 +590,19 @@ npm test
 | `js/garaje-pantalla.js` | La pantalla Garaje: lista con portada y color (con "entregado" y lo cobrado, y la insignia «demo»), abrir o crear por placa, borrar, la ficha del carro nuevo con foto (color, reconocedor, catálogo, confirmación) y la demostración. |
 | `js/carro.js` | El carro, pieza por pieza, construido con perfiles extruidos, en cuatro carrocerías y a las medidas de la línea (`disposicion` convierte medidas en bordes y alturas). Cada pieza es un objeto aparte con su propio material; las articuladas (puertas, capó, pieza trasera) cuelgan de un pivote en su bisagra (`articular`) y las de interior comparten material con sus paredes (`acompanar`). Sin DOM: también se construye en Node para probarlo. |
 | `js/toque.js` | Qué pieza hay bajo el dedo: rayo central más un anillo de ocho para que estribos y espejos se dejen tocar. Sin DOM, probado con la cámara y el carro reales. |
-| `js/visor.js` | Escena, luces, cámara, giro con el dedo, el toque que marca, y el pegamento con el registro: qué carro está abierto (por la URL o el último), el 3D con su carrocería, color y medidas (se reconstruye al cambiar de carro), teñir por estado, guardar. |
+| `js/visor.js` | Escena, luces, cámara, giro con el dedo, el toque que marca, y el pegamento con el registro: qué carro está abierto (por la URL o el último), el 3D con su carrocería, color y medidas (se reconstruye al cambiar de carro), teñir por estado, guardar. Si el carro tiene escaneo, el modelo es el escaneado (`modeloDesdeEscaneo`) o el genérico a sus medidas ("ver piezas"). |
+| `js/escaneo.js` | La tubería pura del escaneo, probada en Node: TSDF dispersa por bloques, de la profundidad a puntos (`puntosDeCuadro`), surface nets (de la TSDF o de la densidad de una nube), piso, aislar el carro, orientarlo y medirlo, suavizado de Taubin, simplificación por agrupamiento de vértices, muestreo de superficie, las piezas por la muestra más cercana del genérico, y el modelo para el visor (una malla por pieza, con el mismo contrato que `construirCarro`). |
+| `js/escaneo-ar.js` | El escáner del celular: WebXR `immersive-ar` con `depth-sensing` opcional (`cpu-optimized`, `luminance-alpha`/`unsigned-short`, `matchDepthView`), un lienzo WebGL propio (no `renderer.xr` de three r169, que revienta), el espacio `local`, el filtro de movimiento y los 12 lados de la vuelta. Probado con un WebXR de mentira; **sin probar en un celular**. |
+| `js/escaneo-importar.js` | Importar un escaneo de otra app: lee GLB/glTF/OBJ/PLY con los cargadores de three, junta las mallas, saca el color de la textura, adivina arriba, corrige la escala y lo pasa por la tubería. |
+| `js/escaneos.js` | Los escaneos guardados, en una base de IndexedDB APARTE (`taller-escaneos`): pesan megas y así el Garaje abre sin leerlos, y no hubo que subir la versión de la base de los carros. |
+| `js/escaneo-pantalla.js` | La pantalla del escaneo: el botón, el diálogo, lo que se ve encima de la cámara (dom-overlay), la vista previa con Guardar / Frente al revés / Descartar, ver piezas y quitar. |
+| `js/vendor/loaders/`, `js/vendor/utils/` | GLTFLoader, OBJLoader, PLYLoader y BufferGeometryUtils de three 0.169, copiados tal cual (MIT); están en la precarga para que importar funcione sin internet. |
+| `herramientas/fabricar-escaneo-de-prueba.mjs` | Fabrica dos escaneos de mentira de una SUV (una nube PLY en milímetros con z arriba y una malla PLY con color) en `pruebas/datos-externos/escaneos-de-prueba/`, para probar el importador en el navegador sin celular. |
 | `js/vendor/` | Three.js 0.169 (tres archivos) y, en `transformers/`, Transformers.js 4.3.1 con el motor ONNX Runtime (dos .wasm, 41 MB). Copiados de npm, no se editan. Así la app no depende de internet para dibujar ni de que cambie la versión. |
 | `herramientas/servidor.js` | Servidor estático sin dependencias; los módulos de JavaScript no cargan desde `file://`. Sirve `.wasm` con su tipo para que el motor compile en streaming, y todo con COOP/COEP para que el motor use varios hilos también en el PC. Bajo `/como-github/` sirve lo mismo como GitHub Pages (en una carpeta y sin cabeceras), para probar el service worker antes de publicar. |
 | `herramientas/generar-catalogo.mjs` | Del JSON de la investigación al catálogo: una entrada por marca y línea, medidas limpias, fuente conservada. |
 | `herramientas/calcular-etiquetas.mjs` | Calcula en el PC los vectores de texto de CLIP (modelo de texto, 60 MB que el teléfono así no necesita) y escribe `js/etiquetas-clip.json`. |
-| `pruebas/` | `estado.test.js` (la orden, las 29 piezas), `carro.test.js` (piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio, la base de puertas, la placa), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `tablero.test.js` (semanas, pesos, pago por pieza, pintor y entrega, nómina, historial, indicadores, la demostración, los empleados en el almacén y la subida de versión de la base sin perder carros), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras), `catalogo.test.js` (el catálogo y su buscador) e `instalable.test.js` (el manifest y sus iconos, los enlaces de las tres páginas, el sello de `sw.js` contra la carpeta real, y el service worker corriendo en un `vm` con navegador de mentira: qué toca, qué no, que Hugging Face nunca, y las cabeceras de aislamiento). También `logo.test.js` (recorte, agrupación, clasificación con y sin fondo, la rejilla del barrido, la regla de 2 de 3 y cuál logo queda) y `placa-foto.test.js` (la placa amarilla con sus tres pasadas, el borde, las esquinas, enderezarla, leerla). 137 pruebas. `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
+| `pruebas/` | `estado.test.js` (la orden, las 29 piezas), `carro.test.js` (piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio, la base de puertas, la placa), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `tablero.test.js` (semanas, pesos, pago por pieza, pintor y entrega, nómina, historial, indicadores, la demostración, los empleados en el almacén y la subida de versión de la base sin perder carros), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras), `catalogo.test.js` (el catálogo y su buscador) e `instalable.test.js` (el manifest y sus iconos, los enlaces de las tres páginas, el sello de `sw.js` contra la carpeta real, y el service worker corriendo en un `vm` con navegador de mentira: qué toca, qué no, que Hugging Face nunca, y las cabeceras de aislamiento). También `logo.test.js` (recorte, agrupación, clasificación con y sin fondo, la rejilla del barrido, la regla de 2 de 3 y cuál logo queda), `placa-foto.test.js` (la placa amarilla con sus tres pasadas, el borde, las esquinas, enderezarla, leerla), `escaneo.test.js` (la tubería con escaneos de mentira: fusión, piso, estorbo, orientación sin reflejo, medidas con ruido y reflejos, piezas, el contrato del visor), `escaneo-importar.test.js` (PLY en milímetros con z arriba, malla con color, escala, simplificar, el almacén de escaneos) y `escaneo-ar.test.js` (el escáner con un WebXR de mentira). 164 pruebas. `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
 
 Decisiones que conviene conocer:
 
@@ -591,7 +692,10 @@ el lunes 19.
 | **Lunes 26 a viernes 30-oct** (empleados, nómina, historial e indicadores hechos el jueves 15; queda la nube) | Empleados: asignar pintor a cada pieza y marcarla terminada; resumen semanal por pintor con piezas × 90.000. La nube (Supabase, con RLS) para que el dueño y el asistente vean lo mismo desde dos teléfonos. | Pagar la semana con la lista en la mano; el asistente ve la orden en la app, no solo en WhatsApp. |
 | **Lunes 2 a viernes 6-nov** (carrocerías y foto hechas el jueves 15; lo instalable, el viernes 16) | Otras carrocerías (hatchback, SUV, camioneta/pick-up: cambia el baúl por la compuerta y el largo); instalable en el celular (PWA primero; APK por enlace como Tu Garantía si hace falta). | Usarla con los carros que de verdad llegan al taller, como una app más. |
 
-Lo que NO está en el plan y no se va a prometer: escaneo del carro real
+El escaneo del carro real, que estaba aquí como "no se va a prometer", se
+construyó el 22-oct con los límites de arriba. Lo que NO está en el plan y
+no se va a prometer: la forma exacta de un panel o una abolladura desde el
+escaneo
 (arriba está el porqué), presupuestos al cliente, facturación.
 
 ## Lo que solo Joan decide (antes del lunes 19)
@@ -788,6 +892,38 @@ Lo que NO está en el plan y no se va a prometer: escaneo del carro real
 - Las pasadas extra de la placa (sombra, 960 px) **encontraban de todo**
   antes de cerrarlas: una llanta, carretera, hojas. Una mancha pegada al
   borde izquierdo o derecho de la foto nunca fue placa en las 46 fotos.
+- **three.js 0.169 revienta con una sesión WebXR que traiga
+  `depth-sensing`** si se la pasa a `renderer.xr` (llama la profundidad de la
+  GPU sin mirar el modo; se arregló en la r173). El escáner no usa
+  `renderer.xr`: lienzo WebGL propio que solo limpia la pantalla, y la
+  profundidad se lee en la CPU.
+- En Chrome para Android, **`local-floor` es una altura fija de 1,2 m**, no
+  el piso: el escáner usa `local` y saca el piso de los datos.
+- Las muestras oficiales de WebXR (`webxr-samples/proposals/phone-ar-depth`)
+  usan nombres viejos (`getDepth`, `normTextureFromNormView`) que ya no
+  existen: no copiarlas.
+- Una **clave de tres índices empaquetada en un número** tiene que caber en 53
+  bits: con 21 bits por eje (63) dos celdas distintas compartían clave y un
+  estorbo a un metro quedaba "pegado" al carro. Van 17 por eje.
+- **Medir con percentiles extremos es medir el ruido**: con 4 cm de ruido el
+  ancho salía 11 cm de más. Las caras se miden con la mediana de sus puntos
+  más externos.
+- El color por vértice se guarda en sRGB (0-255, como viene) y Three.js lo
+  quiere en lineal: sin convertir, el vino tinto salía rosado.
+- Rehacer una malla desde sus vértices (densidad + surface nets) la vuelve
+  una cáscara de doble capa, gris y más gorda: las mallas grandes se
+  simplifican agrupando vértices.
+- **Una prueba que mira la punta más baja no ve un carro al revés** si las
+  dos puntas son bajas (camioneta): la orientación se prueba mirando dónde
+  quedan el capó y el espejo izquierdo de verdad, en las cuatro carrocerías.
+- `node --test` cuenta aparte las pruebas **canceladas** (una promesa que
+  nunca se resuelve): el resumen puede decir "fail 0" con un "not ok"
+  arriba. Mirar siempre `# cancelled`.
+- **Scaniverse gratis es "no comercial"** (sus términos del 20-feb-2026) y
+  Polycam pide permiso escrito para integrarlo con otra app: la pantalla
+  solo nombra RealityScan. En Android, RealityScan guarda el GLB en
+  `Android/data/`, que el selector de archivos de Android 11+ no muestra: no
+  está probado que se pueda subir desde ahí.
 - Son dos instancias de ONNX Runtime en la página (la de Transformers.js y
   la del lector de placas, misma versión, mismo `.wasm`): el navegador baja
   el wasm una vez pero lo instancia dos veces en memoria. Si en un teléfono

@@ -1,0 +1,4 @@
+GLTFLoader.js, OBJLoader.js y PLYLoader.js (y ../utils/BufferGeometryUtils.js)
+copiados tal cual de three@0.169.0 (node_modules/three/examples/jsm), licencia
+MIT de three.js. Los usa js/escaneo-importar.js para leer escaneos hechos con
+otras apps. No se editan: si se actualiza Three.js, se copian de nuevo.

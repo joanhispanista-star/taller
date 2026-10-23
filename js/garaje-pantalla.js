@@ -221,7 +221,17 @@ ui.demoBoton.addEventListener('click', async () => {
   try {
     if (ui.demoBoton.dataset.accion === 'quitar') {
       if (!confirm('¿Quitar los carros y empleados de demostración? Lo real se queda.')) return;
+      // Los escaneos viven en otra base (escaneos.js): los de los carros de
+      // demostración se van con ellos; si se quedaran, volverían pegados al
+      // mismo DEM00x al cargar la demostración otra vez.
+      const placasDemo = (await almacen.listar()).filter((c) => c.demo).map((c) => c.placa);
       await almacen.quitarDemo();
+      import('./escaneos.js')
+        .then(({ abrirEscaneos }) => abrirEscaneos())
+        .then(async (escaneos) => {
+          for (const placa of placasDemo) await escaneos.borrar(placa);
+        })
+        .catch(() => {});
     } else {
       await cargarDemo(almacen);
     }
@@ -237,6 +247,12 @@ async function borrarCarro(placa) {
   if (!confirm('¿Borrar el carro ' + placa + ' con sus piezas y sus fotos? No se puede deshacer.')) return;
   try {
     await almacen.borrar(placa);
+    // Su escaneo (vive en otra base, escaneos.js) se va con él. Si falla,
+    // el carro ya se borró: un escaneo huérfano solo ocupa espacio.
+    import('./escaneos.js')
+      .then(({ abrirEscaneos }) => abrirEscaneos())
+      .then((escaneos) => escaneos.borrar(placa))
+      .catch(() => {});
     // Si el visor tenía ese carro abierto, su borrador lo volvería a crear
     // al entrar: se limpia también.
     const borrador = leerBorrador();

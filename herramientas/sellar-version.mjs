@@ -47,6 +47,10 @@ export function archivosApp(raiz = RAIZ) {
     ...listar(raiz, 'css', (n) => n.endsWith('.css')),
     ...listar(raiz, 'js', (n) => n.endsWith('.js') || n.endsWith('.json')),
     ...listar(raiz, 'js/vendor', (n) => n.endsWith('.js')),
+    // Los cargadores de escaneos (GLB, OBJ, PLY) de Three.js 0.169, con la
+    // utilidad que usa el de GLB: 180 KB, para que importar funcione sin internet.
+    ...listar(raiz, 'js/vendor/loaders', (n) => n.endsWith('.js')),
+    ...listar(raiz, 'js/vendor/utils', (n) => n.endsWith('.js')),
     ...listar(raiz, 'js/vendor/transformers', (n) => n === 'transformers.min.js'),
     // El cargador del lector de placas (50 KB); el modelo va con el motor.
     ...listar(raiz, 'js/vendor/placa', (n) => n.endsWith('.mjs')),

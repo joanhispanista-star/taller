@@ -45,6 +45,19 @@
     <!-- Qué carro es y que el 3D es una carrocería de referencia, no el
          exacto. Tocarla abre la ficha de datos. -->
     <button type="button" id="ficha" class="ficha" hidden></button>
+    <!-- El carro de verdad: escanearlo con este celular o subir el escaneo
+         de otra app (escaneo-pantalla.js). Con escaneo, dice "Escaneo". -->
+    <button type="button" id="escanear" class="boton-escanear">Escanear</button>
+    <!-- La vista previa de un escaneo: nada se guarda sin verlo antes. -->
+    <div id="previa-escaneo" class="previa-escaneo" hidden>
+      <p id="previa-escaneo-texto"></p>
+      <div class="acciones">
+        <button type="button" data-accion="descartar">Descartar</button>
+        <button type="button" data-accion="voltear">Frente al revés</button>
+        <button type="button" data-accion="acostado" hidden>Está acostado</button>
+        <button type="button" data-accion="guardar" class="primario">Guardar</button>
+      </div>
+    </div>
     <nav class="vistas" aria-label="Vistas del carro">
       <button type="button" data-vista="frente">Frente</button>
       <button type="button" data-vista="izquierdo">Izquierdo</button>
@@ -118,6 +131,46 @@
       </div>
     </div>
   </dialog>
+
+  <dialog id="dialogo-escaneo" class="ficha-nueva" aria-label="Escanear el carro">
+    <div class="ficha-cuerpo">
+      <h2 class="titulo-dialogo">El carro de verdad, en 3D</h2>
+      <p class="ayuda" id="escaneo-estado"></p>
+      <div class="opcion-escaneo">
+        <button type="button" id="escaneo-celular" class="primario" disabled>Escanear con este celular</button>
+        <p class="ayuda" id="escaneo-celular-nota"></p>
+      </div>
+      <div class="opcion-escaneo">
+        <button type="button" id="escaneo-subir">Subir un escaneo (GLB, OBJ o PLY)</button>
+        <p class="ayuda">Para iPhone (que no puede escanear desde aquí): escanéalo con RealityScan (gratis, de Epic Games, permite uso comercial), exporta el modelo en OBJ a Archivos y súbelo aquí. Sirve cualquier escaneo en GLB, OBJ o PLY. Ojo: RealityScan sube las fotos (con la placa) a la nube de Epic; pídele permiso al cliente. Las piezas se ubican solas sobre el escaneo, de forma aproximada.</p>
+        <!-- Sin "accept": en Android ese filtro puede dejar grises los .glb.
+             El importador reconoce el formato por la cabecera del archivo. -->
+        <input id="archivo-escaneo" type="file" hidden>
+      </div>
+      <div id="escaneo-guardado" class="opcion-escaneo" hidden>
+        <button type="button" id="escaneo-ver">Ver las piezas por dentro</button>
+        <button type="button" id="escaneo-quitar">Quitar el escaneo</button>
+      </div>
+      <div class="acciones">
+        <button type="button" data-accion="cerrar">Cerrar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Lo que se ve encima de la cámara mientras se escanea (dom-overlay de
+       WebXR): fuera de cualquier diálogo, porque la sesión lo pone en
+       pantalla completa. -->
+  <div id="hud-escaneo" class="hud-escaneo" hidden>
+    <div class="hud-arriba">
+      <p class="hud-titulo">Camina alrededor del carro</p>
+      <p id="hud-texto"></p>
+      <div id="hud-vuelta" class="hud-vuelta" aria-hidden="true"></div>
+    </div>
+    <div class="acciones">
+      <button type="button" id="hud-cancelar">Cancelar</button>
+      <button type="button" id="hud-terminar" class="primario">Terminar</button>
+    </div>
+  </div>
 
   <dialog id="foto-grande" class="foto-grande" aria-label="Foto de la pieza">
     <img alt="">
