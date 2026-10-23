@@ -919,11 +919,17 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
     grupo.add(vidrioTrasero);
   }
   const finCabina = d.tipo === 'camioneta' ? d.cabinaTras : d.techoTras;
-  grupo.add(caja(d.anchoVidrio - 0.06, 0.015, finCabina - d.parabrisasAlto - 0.08, materialPlastico(), 0, d.techo - 0.012, (d.parabrisasAlto + finCabina) / 2));
+  const forro = caja(d.anchoVidrio - 0.06, 0.015, finCabina - d.parabrisasAlto - 0.08, materialPlastico(), 0, d.techo - 0.012, (d.parabrisasAlto + finCabina) / 2);
+  // Relleno: no se ve desde afuera. Lo marca para que el escaneo no le
+  // reparta puntos (escaneo.js, muestrasDelGenerico): a 1 cm del techo,
+  // se robaba la mitad del techo escaneado y lo dejaba como "nada".
+  forro.userData.relleno = true;
+  grupo.add(forro);
 
   // Bajo el capó, el bloque oscuro del motor baja hasta la bandeja; su
   // frente sigue la pendiente del capó.
   const nucleoDelantero = extruirPerfil(perfilNucleoDelantero(d), { xDesde: d.anchoNucleo / 2, grosor: d.anchoNucleo, bisel: 0, material: materialNegro() });
+  nucleoDelantero.userData.relleno = true;
   grupo.add(nucleoDelantero);
   afinarDel.push(nucleoDelantero);
 
@@ -931,6 +937,7 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
   // depende de la carrocería (el baúl, la cola del hatchback o el platón).
   const bloque = (desde, hasta, arriba) => {
     const b = caja(d.anchoNucleo, arriba - d.radioRueda, hasta - desde, materialNegro(), 0, (arriba + d.radioRueda) / 2, (desde + hasta) / 2);
+    b.userData.relleno = true;
     grupo.add(b);
     afinarTras.push(b);
     return b;

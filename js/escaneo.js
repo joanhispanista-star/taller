@@ -153,11 +153,18 @@ export function crearTSDF({ voxel = 0.03, truncamiento = null, pesoMaximo = 40, 
       dz /= largo;
       for (let s = -pasos; s <= pasosDetras; s++) {
         const t = s * voxel;
-        const qx = px + dx * t;
-        const qy = py + dy * t;
-        const qz = pz + dz * t;
-        // Delante de la superficie (hacia la cámara, t < 0) es positivo.
-        actualizarVoxel(Math.round(qx / voxel), Math.round(qy / voxel), Math.round(qz / voxel), Math.max(-1, Math.min(1, -t / trunc)));
+        const ix = Math.round((px + dx * t) / voxel);
+        const iy = Math.round((py + dy * t) / voxel);
+        const iz = Math.round((pz + dz * t) / voxel);
+        // La distancia del CENTRO del vóxel al punto medido, a lo largo del
+        // rayo; delante de la superficie (hacia la cámara) es positiva. Antes
+        // se usaba el paso (s × vóxel): el vóxel del punto valía 0 caiga
+        // donde caiga, la superficie quedaba en escalones, y en las latas
+        // vistas de canto (capó, techo) el vóxel de debajo casi nunca salía
+        // negativo y la malla quedaba llena de huecos (maqueta del 23-oct,
+        // con el ruido de ARCore).
+        const d = (px - ix * voxel) * dx + (py - iy * voxel) * dy + (pz - iz * voxel) * dz;
+        actualizarVoxel(ix, iy, iz, Math.max(-1, Math.min(1, d / trunc)));
       }
     }
   }
@@ -753,6 +760,11 @@ export function muestrasDelGenerico(modelo, { paso = 0.04 } = {}) {
     if (id && esInterior(id)) return;
     if (!id && objeto.userData.decorativo) return; // manijas y molduras: las tapa la chapa
     if (objeto.name === 'interior') return;
+    // Los bloques de relleno (el forro bajo el techo, el del motor bajo el
+    // capó) no se ven desde afuera, pero están a 1-2 cm de la lata: si se
+    // muestrean, se roban los puntos del techo y del capó escaneados y los
+    // dejan como "nada", a manchas (maqueta del 23-oct).
+    if (objeto.userData.relleno) return;
     const nombre = id || 'nada';
     if (!indiceDe.has(nombre)) {
       indiceDe.set(nombre, nombres.length);
@@ -1091,6 +1103,105 @@ function areaTriangulo(p, i0, i1, i2) {
 //
 // `suavizar`: para las mallas que arma la app (suavizarMalla), no para las
 // que vienen hechas de otra app.
+// ---------- Cerrar los huecos chicos ----------
+//
+// En el escaneo del celular, el capó y el techo se ven casi de canto
+// (nadie sube el celular dos metros por encima del carro) y, con el ruido
+// de ARCore, la TSDF no alcanza a saber qué queda debajo de la lata: la
+// malla sale picada de huecos de 3 a 20 cm (maqueta del 23-oct-2026, con
+// el escaneo simulado de un sedán). Bajar el peso mínimo no los cierra: no
+// faltan datos, falta el lado de adentro. Lo que hace cualquier app de
+// escaneo: cerrar los huecos CHICOS de la malla. Cada hueco es un lazo de
+// aristas de borde (las que solo tienen un triángulo); si es corto, se
+// tapa con un abanico desde su centro. Los lazos largos (la panza del
+// carro, que nunca se ve) quedan abiertos: taparlos sería inventar.
+export function cerrarHuecos(malla, { maxAristas = 60, maxPerimetro = 1.2 } = {}) {
+  const { posiciones, indices, colores } = malla;
+  const nv = posiciones.length / 3;
+  const clave = (a, b) => a * nv + b;
+  const aristas = new Set();
+  for (let t = 0; t < indices.length; t += 3) {
+    aristas.add(clave(indices[t], indices[t + 1]));
+    aristas.add(clave(indices[t + 1], indices[t + 2]));
+    aristas.add(clave(indices[t + 2], indices[t]));
+  }
+  // De cada vértice del borde sale UNA arista de borde (si la malla es
+  // limpia). Si salen dos, el vértice es ambiguo y su lazo no se toca.
+  const sale = new Map();
+  const ambiguo = new Set();
+  for (let t = 0; t < indices.length; t += 3) {
+    for (let k = 0; k < 3; k++) {
+      const a = indices[t + k];
+      const b = indices[t + ((k + 1) % 3)];
+      if (aristas.has(clave(b, a))) continue;
+      if (sale.has(a)) ambiguo.add(a);
+      else sale.set(a, b);
+    }
+  }
+  const visto = new Set();
+  const nuevasPos = [];
+  const nuevosCol = [];
+  const nuevosInd = [];
+  for (const inicio of sale.keys()) {
+    if (visto.has(inicio)) continue;
+    const lazo = [];
+    let v = inicio;
+    let sirve = true;
+    let perimetro = 0;
+    for (;;) {
+      if (visto.has(v)) {
+        if (v !== inicio) sirve = false;
+        break;
+      }
+      visto.add(v);
+      if (ambiguo.has(v)) sirve = false;
+      lazo.push(v);
+      const w = sale.get(v);
+      if (w === undefined) {
+        sirve = false;
+        break;
+      }
+      perimetro += Math.hypot(posiciones[w * 3] - posiciones[v * 3], posiciones[w * 3 + 1] - posiciones[v * 3 + 1], posiciones[w * 3 + 2] - posiciones[v * 3 + 2]);
+      v = w;
+    }
+    if (!sirve || lazo.length < 3 || lazo.length > maxAristas || perimetro > maxPerimetro) continue;
+    // Los triángulos nuevos van al revés del borde, para quedar con la
+    // misma orientación que los de alrededor.
+    if (lazo.length === 3) {
+      nuevosInd.push(lazo[0], lazo[2], lazo[1]);
+      continue;
+    }
+    const centro = nv + nuevasPos.length / 3;
+    let cx = 0;
+    let cy = 0;
+    let cz = 0;
+    const col = [0, 0, 0];
+    for (const i of lazo) {
+      cx += posiciones[i * 3];
+      cy += posiciones[i * 3 + 1];
+      cz += posiciones[i * 3 + 2];
+      if (colores) for (let k = 0; k < 3; k++) col[k] += colores[i * 3 + k];
+    }
+    nuevasPos.push(cx / lazo.length, cy / lazo.length, cz / lazo.length);
+    if (colores) nuevosCol.push(...col.map((c) => Math.round(c / lazo.length)));
+    for (let i = 0; i < lazo.length; i++) nuevosInd.push(lazo[(i + 1) % lazo.length], lazo[i], centro);
+  }
+  if (!nuevosInd.length) return malla;
+  const pos = new Float32Array(posiciones.length + nuevasPos.length);
+  pos.set(posiciones);
+  pos.set(nuevasPos, posiciones.length);
+  const ind = new Uint32Array(indices.length + nuevosInd.length);
+  ind.set(indices);
+  ind.set(nuevosInd, indices.length);
+  let col = null;
+  if (colores) {
+    col = new Uint8Array(colores.length + nuevosCol.length);
+    col.set(colores);
+    col.set(nuevosCol, colores.length);
+  }
+  return { posiciones: pos, indices: ind, colores: col };
+}
+
 export function procesarEscaneo(malla, { carroceria = 'sedan', medidasCatalogo = null, voltear = false, entreEjes = null, puntos = null, suavizar = false } = {}) {
   // Se mide sobre puntos repartidos por la superficie (muestrearMalla), no
   // sobre los vértices; o sobre la nube original si la hay.
@@ -1110,8 +1221,12 @@ export function procesarEscaneo(malla, { carroceria = 'sedan', medidasCatalogo =
     const enCaja = Math.abs(x) < m.ancho / 2 + 0.25 && Math.abs(z) < m.largo / 2 + 0.1 && y > 0.08 && y < m.alto + 0.1;
     dentro[v] = enCaja ? 1 : 0;
   }
-  const recortada = recortarMalla({ posiciones: enCarroTodo, indices: malla.indices, colores: malla.colores || null }, dentro);
-  if (recortada.indices.length < 300) throw new Error('No encontré un carro en el escaneo (quedaron muy pocos triángulos)');
+  const cortada = recortarMalla({ posiciones: enCarroTodo, indices: malla.indices, colores: malla.colores || null }, dentro);
+  if (cortada.indices.length < 300) throw new Error('No encontré un carro en el escaneo (quedaron muy pocos triángulos)');
+  // El escaneo del celular (el que se suaviza) trae huecos chicos donde la
+  // lata se vio de canto; se cierran ANTES de suavizar, para que el
+  // suavizado acomode el parche con lo de alrededor.
+  const recortada = suavizar ? cerrarHuecos(cortada) : cortada;
   const enCarro = suavizar ? suavizarMalla(recortada.posiciones, recortada.indices) : recortada.posiciones;
   const medidas = orientacion.medidas;
   const ejes = entreEjes || (medidasCatalogo && medidasCatalogo.entreEjes) || null;

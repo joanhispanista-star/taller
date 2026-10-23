@@ -99,6 +99,37 @@ reflejos, un WebXR que imita el de Chrome), y la importación en el navegador
 del PC; la cámara del celular, la deriva al dar la vuelta y la pintura real
 falta probarlas.
 
+**El 23 de octubre, viendo cómo saldría un escaneo de verdad.** Para que
+Joan viera el escaneo del celular antes de elegir cómo presentarlo, se
+simuló uno: la profundidad de un sedán (el genérico a las medidas del Kia
+K3) dibujada a 160 × 120 como la da ARCore, con su ruido (ondulación de
+cuadro a cuadro, error que crece con la distancia, el suavizado que mezcla
+los bordes), fundida con el mismo código de la app. Mide 4,57 × 1,76 ×
+1,51 m contra 4,54 × 1,76 × 1,48 de la ficha. Salieron dos defectos que las
+pruebas con cajas no veían, y se arreglaron:
+
+- **El techo y el capó salían a manchas** como "nada": el forro bajo el
+  techo y el bloque del motor bajo el capó, a 1-2 cm de la lata, se robaban
+  los puntos al repartir las piezas. Ahora `carro.js` los marca
+  `userData.relleno` y `muestrasDelGenerico` no los muestrea.
+- **El capó y el techo salían picados de huecos**: se ven casi de canto, y
+  con el ruido la TSDF no alcanza a saber qué hay debajo de la lata. Bajar el
+  peso mínimo no los cierra (no faltan datos: falta el lado de adentro). Se
+  cierran los huecos chicos de la malla (`cerrarHuecos`: lazos de borde de
+  hasta 60 aristas y 1,2 m de perímetro, con un abanico, antes de suavizar);
+  la panza del carro, que nunca se ve, queda abierta. La distancia de cada
+  vóxel ahora se mide desde su centro y no por pasos del rayo.
+- **Y una lección para el escáner:** con la vuelta alta a 1,4 m del carro el
+  techo sale lleno de huecos igual; a un metro y con el brazo arriba (2,1 m)
+  sale entero. Las instrucciones de la pantalla tienen que pedirlo.
+
+Las maquetas (holograma, plano técnico, vitrina para el cliente) y su
+simulador están en `pruebas/datos-externos/diseno-escaneo/` (fuera de git).
+Pintado "realista", el escaneo del celular parece un carro de plastilina con
+grumos: sin color (Chrome no deja usar la cámara para eso) y a 3 cm por
+vóxel, luce en los estilos que lo leen como dato (holograma, plano), no en
+el de vitrina.
+
 ## Lo que sí hace hoy
 
 - Dibuja un sedán genérico con **17 piezas pintables**, cada una con su
@@ -602,7 +633,7 @@ npm test
 | `herramientas/servidor.js` | Servidor estático sin dependencias; los módulos de JavaScript no cargan desde `file://`. Sirve `.wasm` con su tipo para que el motor compile en streaming, y todo con COOP/COEP para que el motor use varios hilos también en el PC. Bajo `/como-github/` sirve lo mismo como GitHub Pages (en una carpeta y sin cabeceras), para probar el service worker antes de publicar. |
 | `herramientas/generar-catalogo.mjs` | Del JSON de la investigación al catálogo: una entrada por marca y línea, medidas limpias, fuente conservada. |
 | `herramientas/calcular-etiquetas.mjs` | Calcula en el PC los vectores de texto de CLIP (modelo de texto, 60 MB que el teléfono así no necesita) y escribe `js/etiquetas-clip.json`. |
-| `pruebas/` | `estado.test.js` (la orden, las 29 piezas), `carro.test.js` (piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio, la base de puertas, la placa), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `tablero.test.js` (semanas, pesos, pago por pieza, pintor y entrega, nómina, historial, indicadores, la demostración, los empleados en el almacén y la subida de versión de la base sin perder carros), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras), `catalogo.test.js` (el catálogo y su buscador) e `instalable.test.js` (el manifest y sus iconos, los enlaces de las tres páginas, el sello de `sw.js` contra la carpeta real, y el service worker corriendo en un `vm` con navegador de mentira: qué toca, qué no, que Hugging Face nunca, y las cabeceras de aislamiento). También `logo.test.js` (recorte, agrupación, clasificación con y sin fondo, la rejilla del barrido, la regla de 2 de 3 y cuál logo queda), `placa-foto.test.js` (la placa amarilla con sus tres pasadas, el borde, las esquinas, enderezarla, leerla), `escaneo.test.js` (la tubería con escaneos de mentira: fusión, piso, estorbo, orientación sin reflejo, medidas con ruido y reflejos, piezas, el contrato del visor), `escaneo-importar.test.js` (PLY en milímetros con z arriba, malla con color, escala, simplificar, el almacén de escaneos) y `escaneo-ar.test.js` (el escáner con un WebXR de mentira). 164 pruebas. `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
+| `pruebas/` | `estado.test.js` (la orden, las 29 piezas), `carro.test.js` (piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio, la base de puertas, la placa), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `tablero.test.js` (semanas, pesos, pago por pieza, pintor y entrega, nómina, historial, indicadores, la demostración, los empleados en el almacén y la subida de versión de la base sin perder carros), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras), `catalogo.test.js` (el catálogo y su buscador) e `instalable.test.js` (el manifest y sus iconos, los enlaces de las tres páginas, el sello de `sw.js` contra la carpeta real, y el service worker corriendo en un `vm` con navegador de mentira: qué toca, qué no, que Hugging Face nunca, y las cabeceras de aislamiento). También `logo.test.js` (recorte, agrupación, clasificación con y sin fondo, la rejilla del barrido, la regla de 2 de 3 y cuál logo queda), `placa-foto.test.js` (la placa amarilla con sus tres pasadas, el borde, las esquinas, enderezarla, leerla), `escaneo.test.js` (la tubería con escaneos de mentira: fusión, piso, estorbo, orientación sin reflejo, medidas con ruido y reflejos, piezas, el contrato del visor, cerrar huecos y los bloques de relleno), `escaneo-importar.test.js` (PLY en milímetros con z arriba, malla con color, escala, simplificar, el almacén de escaneos) y `escaneo-ar.test.js` (el escáner con un WebXR de mentira). 166 pruebas. `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
 
 Decisiones que conviene conocer:
 

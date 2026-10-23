@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { construirCarro } from '../js/carro.js';
 import {
   aislarCarro,
+  cerrarHuecos,
   crearTSDF,
   estimarPiso,
   mallaDesdePuntos,
@@ -505,4 +506,74 @@ test('la fusión de profundidad: cuadros densos alrededor de una caja de carro d
   assert.ok(Math.abs(e.medidas.largo - L) < 0.04, 'largo ' + e.medidas.largo.toFixed(3));
   assert.ok(Math.abs(e.medidas.ancho - W) < 0.04, 'ancho ' + e.medidas.ancho.toFixed(3));
   assert.ok(Math.abs(e.medidas.alto - H) < 0.04, 'alto ' + e.medidas.alto.toFixed(3));
+});
+
+// Una caja hecha de triángulos, sin la cara de arriba: un hueco de 4 aristas.
+function cajaAbierta(lado) {
+  const h = lado / 2;
+  const v = [];
+  for (const x of [-h, h]) for (const y of [-h, h]) for (const z of [-h, h]) v.push(x, y, z);
+  const i = (x, y, z) => x * 4 + y * 2 + z;
+  // Caras con la normal hacia afuera; falta la de y = +h.
+  const caras = [
+    [i(0, 0, 0), i(1, 0, 0), i(1, 0, 1), i(0, 0, 1)],
+    [i(0, 0, 0), i(0, 0, 1), i(0, 1, 1), i(0, 1, 0)],
+    [i(1, 0, 0), i(1, 1, 0), i(1, 1, 1), i(1, 0, 1)],
+    [i(0, 0, 0), i(0, 1, 0), i(1, 1, 0), i(1, 0, 0)],
+    [i(0, 0, 1), i(1, 0, 1), i(1, 1, 1), i(0, 1, 1)],
+  ];
+  const ind = [];
+  for (const [a, b, c, d] of caras) ind.push(a, b, c, a, c, d);
+  return { posiciones: Float32Array.from(v), indices: Uint32Array.from(ind), colores: null };
+}
+function aristasDeBorde({ indices }) {
+  const todas = new Set();
+  for (let t = 0; t < indices.length; t += 3) for (let k = 0; k < 3; k++) todas.add(indices[t + k] + ',' + indices[t + ((k + 1) % 3)]);
+  let borde = 0;
+  for (const a of todas) {
+    const [x, y] = a.split(',');
+    if (!todas.has(y + ',' + x)) borde++;
+  }
+  return borde;
+}
+
+test('cerrarHuecos tapa un hueco chico con la misma orientación y deja abierto uno grande', () => {
+  const chica = cajaAbierta(0.2);
+  assert.equal(aristasDeBorde(chica), 4);
+  const cerrada = cerrarHuecos(chica);
+  assert.equal(aristasDeBorde(cerrada), 0, 'sin bordes: el parche quedó soldado y con la misma orientación');
+  assert.equal(cerrada.posiciones.length / 3, 9, 'un vértice nuevo, el centro del hueco');
+  // La panza de un carro: un lazo de 8 m de perímetro no se inventa.
+  const grande = cajaAbierta(2);
+  assert.equal(aristasDeBorde(cerrarHuecos(grande)), 4);
+});
+
+test('los bloques de relleno del genérico no reparten piezas: el techo y el capó escaneados no salen a manchas', () => {
+  const generico = construirCarro({ carroceria: 'sedan', medidas: MEDIDAS });
+  let rellenos = 0;
+  generico.grupo.traverse((m) => {
+    if (m.isMesh && m.userData.relleno) rellenos++;
+  });
+  assert.ok(rellenos >= 3, 'el forro, el bloque del motor y los del medio están marcados: ' + rellenos);
+  // Un punto 5 mm por encima del techo y otro sobre el capó: lo más cercano
+  // tiene que ser el techo y el capó, no el forro ni el bloque de debajo.
+  const muestras = muestrasDelGenerico(generico);
+  const cerca = (x, y, z) => {
+    let mejor = Infinity;
+    let cual = 0;
+    for (let k = 0; k < muestras.puntos.length / 3; k++) {
+      const d = Math.hypot(muestras.puntos[k * 3] - x, muestras.puntos[k * 3 + 1] - y, muestras.puntos[k * 3 + 2] - z);
+      if (d < mejor) {
+        mejor = d;
+        cual = muestras.etiquetas[k];
+      }
+    }
+    return muestras.nombres[cual];
+  };
+  const caja = new THREE.Box3().setFromObject(generico.porId.get('techo'));
+  const c = caja.getCenter(new THREE.Vector3());
+  assert.equal(cerca(c.x, caja.max.y - 0.01, c.z), 'techo');
+  const capo = new THREE.Box3().setFromObject(generico.porId.get('capo'));
+  const k = capo.getCenter(new THREE.Vector3());
+  assert.equal(cerca(k.x + 0.3, capo.max.y - 0.02, k.z), 'capo');
 });
