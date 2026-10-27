@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { construirCarro } from '../js/carro.js';
 import {
   aislarCarro,
+  ajustesDelEscaneo,
   cerrarHuecos,
   crearTSDF,
   estimarPiso,
@@ -19,6 +20,8 @@ import {
   muestrasDelGenerico,
   orientarCarro,
   muestrearMalla,
+  pinturaDelEscaneo,
+  suavizarEtiquetas,
   procesarEscaneo,
   puntoDesdeProfundidad,
   reetiquetarEscaneo,
@@ -576,4 +579,89 @@ test('los bloques de relleno del genérico no reparten piezas: el techo y el cap
   const capo = new THREE.Box3().setFromObject(generico.porId.get('capo'));
   const k = capo.getCenter(new THREE.Vector3());
   assert.equal(cerca(k.x + 0.3, capo.max.y - 0.02, k.z), 'capo');
+});
+
+test('el genérico se acomoda a lo medido: de un carro con ejes, piso y cintura conocidos, se leen los mismos', () => {
+  // Un SUV "real" con proporciones que no son las típicas (lata hasta 25 cm,
+  // vidrio desde 0,95 m, ejes corridos), como el Kona escaneado.
+  const medidas = { largo: 4.2, ancho: 1.8, alto: 1.55, entreEjes: 2.6 };
+  const reales = { ejeDel: -1.25, ejeTras: 1.4, piso: 0.25, cintura: 0.95 };
+  const real = construirCarro({ carroceria: 'suv', medidas, ajustes: reales });
+  // Lo que vería un escáner: por cada franja de 2 cm (alto y largo) y cada
+  // lado, solo el punto más de afuera. El genérico tiene caras de adentro
+  // (el revés de las puertas) que un escaneo nunca ve y angostan el perfil.
+  const { puntos: todos } = muestrasDelGenerico(real, { paso: 0.02 });
+  const afuera = new Map();
+  for (let i = 0; i < todos.length / 3; i++) {
+    const [x, y, z] = [todos[i * 3], todos[i * 3 + 1], todos[i * 3 + 2]];
+    const clave = Math.round(y / 0.02) + ',' + Math.round(z / 0.02) + ',' + Math.sign(x);
+    const antes = afuera.get(clave);
+    if (!antes || Math.abs(x) > Math.abs(antes[0])) afuera.set(clave, [x, y, z]);
+  }
+  const puntos = Float32Array.from([...afuera.values()].flat());
+  const leidos = ajustesDelEscaneo(puntos, medidas);
+  assert.ok(Math.abs(leidos.ejeDel - reales.ejeDel) < 0.08, 'eje delantero ' + leidos.ejeDel);
+  assert.ok(Math.abs(leidos.ejeTras - reales.ejeTras) < 0.08, 'eje trasero ' + leidos.ejeTras);
+  assert.ok(Math.abs(leidos.piso - reales.piso) < 0.06, 'piso ' + leidos.piso);
+  assert.ok(Math.abs(leidos.cintura - reales.cintura) < 0.08, 'cintura ' + leidos.cintura);
+  // Y el genérico con lo leído pone las piezas donde están en el "real":
+  // a 60 cm de alto, en medio de la puerta delantera, es puerta, no estribo.
+  const acomodado = construirCarro({ carroceria: 'suv', medidas, ajustes: leidos });
+  const caja = new THREE.Box3().setFromObject(acomodado.porId.get('puerta-del-der'));
+  assert.ok(caja.min.y < 0.45 && caja.max.y > 0.85, 'la puerta va de ' + caja.min.y.toFixed(2) + ' a ' + caja.max.y.toFixed(2));
+});
+
+test('suavizarEtiquetas borra una peca suelta y deja el borde entre dos piezas', () => {
+  // Una rejilla de 6 × 6 vértices: mitad izquierda pieza 1, mitad derecha
+  // pieza 2, y un vértice suelto con la pieza 3 en medio de la 1.
+  const n = 6;
+  const indices = [];
+  for (let y = 0; y < n - 1; y++) {
+    for (let x = 0; x < n - 1; x++) {
+      const a = y * n + x;
+      indices.push(a, a + 1, a + n, a + 1, a + n + 1, a + n);
+    }
+  }
+  const etiquetas = new Uint8Array(n * n).map((_, i) => (i % n < 3 ? 1 : 2));
+  etiquetas[2 * n + 1] = 3;
+  const limpias = suavizarEtiquetas(Uint32Array.from(indices), etiquetas);
+  assert.equal(limpias[2 * n + 1], 1, 'la peca pasa a la pieza de alrededor');
+  assert.equal(limpias[0], 1);
+  assert.equal(limpias[n - 1], 2);
+  assert.equal(limpias.filter((e) => e === 1).length, n * 3, 'el borde no se corre');
+});
+
+test('pinturaDelEscaneo: con pintura de color separa el plástico negro; con un carro plateado no opina', () => {
+  const medidas = { largo: 4.2, ancho: 1.8, alto: 1.5 };
+  const posiciones = [];
+  const azul = [];
+  const plata = [];
+  for (let i = 0; i < 2000; i++) {
+    const y = (i % 100) / 100 * 1.5;
+    posiciones.push(0.88, y, ((i / 100) | 0) / 20 - 0.5);
+    // Plástico negro abajo (< 30 cm), pintura azul encima, y un reflejo del
+    // cielo (claro, sin color) en medio de la puerta: sigue siendo pintura.
+    const reflejo = y > 0.7 && y < 0.75;
+    azul.push(...(y < 0.3 ? [25, 27, 30] : reflejo ? [215, 222, 228] : [30, 150, 210]));
+    plata.push(...(y < 0.3 ? [25, 27, 30] : [190, 192, 195]));
+  }
+  const pos = Float32Array.from(posiciones);
+  const pintura = pinturaDelEscaneo(pos, Uint8Array.from(azul), medidas);
+  assert.ok(pintura, 'con azul sí opina');
+  for (let i = 0; i < 2000; i++) {
+    const y = pos[i * 3 + 1];
+    assert.equal(pintura[i], y < 0.3 ? 0 : 1, 'a ' + y.toFixed(2) + ' m');
+  }
+  assert.equal(pinturaDelEscaneo(pos, Uint8Array.from(plata), medidas), null, 'plateado: el color no separa la lata del vidrio');
+  assert.equal(pinturaDelEscaneo(pos, null, medidas), null, 'sin color: nada');
+});
+
+test('el modelo del escaneo trae las juntas entre piezas, y el toque las atraviesa', () => {
+  const e = escaneoDePuntos().escaneo;
+  const modelo = modeloDesdeEscaneo(e, { colorBase: 0xaa3322 });
+  const juntas = modelo.grupo.getObjectByName('juntas');
+  assert.ok(juntas && juntas.isLineSegments, 'hay juntas');
+  assert.ok(juntas.geometry.attributes.position.count > 100, 'segmentos: ' + juntas.geometry.attributes.position.count / 2);
+  const rayo = new THREE.Raycaster(new THREE.Vector3(-4, 0.75, -0.3), new THREE.Vector3(1, 0, 0));
+  assert.equal(rayo.intersectObject(juntas, false).length, 0);
 });

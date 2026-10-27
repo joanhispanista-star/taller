@@ -123,8 +123,31 @@ pruebas con cajas no veían, y se arreglaron:
   techo sale lleno de huecos igual; a un metro y con el brazo arriba (2,1 m)
   sale entero. Las instrucciones de la pantalla tienen que pedirlo.
 
-Las maquetas (holograma, plano técnico, vitrina para el cliente) y su
-simulador están en `pruebas/datos-externos/diseno-escaneo/` (fuera de git).
+**El 27 de octubre, las piezas sobre el escaneo.** Con un Hyundai Kona real
+(reconstruido en el PC de una vuelta con celular: CO3D de Meta, solo para
+mostrar) se vio que las piezas caían corridas: el genérico SUV empieza la
+lata a 42 cm y el vidrio a 86 cm, y el Kona real a 20 cm y a 1 m, así que
+media puerta quedaba como "nada" y el estribo era una franja enorme. Ahora:
+
+- **El genérico se acomoda a lo medido** (`ajustesDelEscaneo`, y
+  `disposicion(carroceria, medidas, ajustes)` en `carro.js`): los ejes
+  (donde los costados tocan el piso), el piso de la lata (lo más bajo entre
+  las llantas) y la cintura (donde la cabina se angosta 8 cm, con el
+  percentil 70 del ancho para que los espejos no cuenten). Se guardan con el
+  escaneo (`ajustes`) para rehacer igual las piezas de adentro.
+- **Con color, lo oscuro no es pieza pintada** (`pinturaDelEscaneo`):
+  plástico negro, llantas, vidrio polarizado. Lo claro sin color sí cuenta
+  (es el reflejo del cielo en la misma pintura). Con plateado, blanco o
+  negro el color no separa nada y no se usa.
+- **Bordes limpios** (`suavizarEtiquetas`, mayoría de vecinos, tres vueltas)
+  y **juntas** (`juntasDelEscaneo`): una línea entre pieza y pieza, como la
+  luz entre dos latas. El toque del dedo las atraviesa (un rayo de Three.js
+  "toca" una línea a un metro por defecto, y tapaban las piezas).
+
+Las maquetas (holograma, plano técnico, vitrina para el cliente, la base de
+carros) y su simulador están en `pruebas/datos-externos/diseno-escaneo/`
+(fuera de git); la tubería de fotogrametría del PC, en
+`pruebas/datos-externos/fotogrametria/`.
 Pintado "realista", el escaneo del celular parece un carro de plastilina con
 grumos: sin color (Chrome no deja usar la cámara para eso) y a 3 cm por
 vóxel, luce en los estilos que lo leen como dato (holograma, plano), no en
@@ -633,7 +656,7 @@ npm test
 | `herramientas/servidor.js` | Servidor estático sin dependencias; los módulos de JavaScript no cargan desde `file://`. Sirve `.wasm` con su tipo para que el motor compile en streaming, y todo con COOP/COEP para que el motor use varios hilos también en el PC. Bajo `/como-github/` sirve lo mismo como GitHub Pages (en una carpeta y sin cabeceras), para probar el service worker antes de publicar. |
 | `herramientas/generar-catalogo.mjs` | Del JSON de la investigación al catálogo: una entrada por marca y línea, medidas limpias, fuente conservada. |
 | `herramientas/calcular-etiquetas.mjs` | Calcula en el PC los vectores de texto de CLIP (modelo de texto, 60 MB que el teléfono así no necesita) y escribe `js/etiquetas-clip.json`. |
-| `pruebas/` | `estado.test.js` (la orden, las 29 piezas), `carro.test.js` (piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio, la base de puertas, la placa), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `tablero.test.js` (semanas, pesos, pago por pieza, pintor y entrega, nómina, historial, indicadores, la demostración, los empleados en el almacén y la subida de versión de la base sin perder carros), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras), `catalogo.test.js` (el catálogo y su buscador) e `instalable.test.js` (el manifest y sus iconos, los enlaces de las tres páginas, el sello de `sw.js` contra la carpeta real, y el service worker corriendo en un `vm` con navegador de mentira: qué toca, qué no, que Hugging Face nunca, y las cabeceras de aislamiento). También `logo.test.js` (recorte, agrupación, clasificación con y sin fondo, la rejilla del barrido, la regla de 2 de 3 y cuál logo queda), `placa-foto.test.js` (la placa amarilla con sus tres pasadas, el borde, las esquinas, enderezarla, leerla), `escaneo.test.js` (la tubería con escaneos de mentira: fusión, piso, estorbo, orientación sin reflejo, medidas con ruido y reflejos, piezas, el contrato del visor, cerrar huecos y los bloques de relleno), `escaneo-importar.test.js` (PLY en milímetros con z arriba, malla con color, escala, simplificar, el almacén de escaneos) y `escaneo-ar.test.js` (el escáner con un WebXR de mentira). 166 pruebas. `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
+| `pruebas/` | `estado.test.js` (la orden, las 29 piezas), `carro.test.js` (piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio, la base de puertas, la placa), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `tablero.test.js` (semanas, pesos, pago por pieza, pintor y entrega, nómina, historial, indicadores, la demostración, los empleados en el almacén y la subida de versión de la base sin perder carros), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras), `catalogo.test.js` (el catálogo y su buscador) e `instalable.test.js` (el manifest y sus iconos, los enlaces de las tres páginas, el sello de `sw.js` contra la carpeta real, y el service worker corriendo en un `vm` con navegador de mentira: qué toca, qué no, que Hugging Face nunca, y las cabeceras de aislamiento). También `logo.test.js` (recorte, agrupación, clasificación con y sin fondo, la rejilla del barrido, la regla de 2 de 3 y cuál logo queda), `placa-foto.test.js` (la placa amarilla con sus tres pasadas, el borde, las esquinas, enderezarla, leerla), `escaneo.test.js` (la tubería con escaneos de mentira: fusión, piso, estorbo, orientación sin reflejo, medidas con ruido y reflejos, piezas, el contrato del visor, cerrar huecos, los bloques de relleno, el genérico acomodado a lo medido, la máscara de pintura, el suavizado de etiquetas y las juntas), `escaneo-importar.test.js` (PLY en milímetros con z arriba, malla con color, escala, simplificar, el almacén de escaneos) y `escaneo-ar.test.js` (el escáner con un WebXR de mentira). 170 pruebas. `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
 
 Decisiones que conviene conocer:
 

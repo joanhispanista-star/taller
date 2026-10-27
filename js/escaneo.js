@@ -1230,7 +1230,7 @@ export function procesarEscaneo(malla, { carroceria = 'sedan', medidasCatalogo =
   const enCarro = suavizar ? suavizarMalla(recortada.posiciones, recortada.indices) : recortada.posiciones;
   const medidas = orientacion.medidas;
   const ejes = entreEjes || (medidasCatalogo && medidasCatalogo.entreEjes) || null;
-  const piezas = piezasDelEscaneo(enCarro, carroceria, medidas, ejes);
+  const piezas = piezasDelEscaneo(enCarro, carroceria, medidas, ejes, { indices: recortada.indices, colores: recortada.colores });
   return {
     posiciones: enCarro,
     indices: recortada.indices,
@@ -1247,15 +1247,215 @@ export function procesarEscaneo(malla, { carroceria = 'sedan', medidasCatalogo =
 // el genérico de verdad dibuja: si el escaneo mide algo fuera de lo que
 // es un carro (un alto de 3 m por un estorbo pegado), el genérico se queda
 // en lo razonable y `fueraDeRango` lo dice, para que la pantalla avise.
-export function piezasDelEscaneo(enCarro, carroceria, medidas, entreEjes = null) {
+//
+// Desde el 27-oct-2026 el genérico no solo toma el largo, el ancho y el
+// alto: se acomoda a lo que se lee en el escaneo (ajustesDelEscaneo: los
+// ejes, el bajo de la lata y la línea del vidrio). Si el escaneo trae color,
+// lo que es claramente oscuro (plástico negro, llantas, vidrio polarizado)
+// no se cuenta como pieza pintada. Y las etiquetas se limpian por mayoría de
+// vecinos, para que cada pieza tenga un borde limpio y no dientes.
+export function piezasDelEscaneo(enCarro, carroceria, medidas, entreEjes = null, { indices = null, colores = null } = {}) {
   const tipo = normalizarCarroceria(carroceria);
   const pedidas = { largo: medidas.largo, ancho: medidas.ancho, alto: medidas.alto };
   if (entreEjes) pedidas.entreEjes = entreEjes > 100 ? entreEjes / 1000 : entreEjes;
   const medidasDibujo = medidasParaDibujar(tipo, pedidas);
   const fueraDeRango = ['largo', 'ancho', 'alto'].some((c) => Math.abs(medidasDibujo[c] - medidas[c]) > 0.02);
-  const generico = construirCarro({ carroceria: tipo, medidas: medidasDibujo });
-  const muestras = muestrasDelGenerico(generico);
-  return { etiquetas: etiquetarPiezas(enCarro, muestras), nombres: muestras.nombres, medidasDibujo, fueraDeRango, carroceria: tipo };
+  const ajustes = ajustesDelEscaneo(enCarro, medidasDibujo);
+  const generico = construirCarro({ carroceria: tipo, medidas: medidasDibujo, ajustes });
+  const muestras = muestrasDelGenerico(generico, { paso: 0.03 });
+  let etiquetas = etiquetarPiezas(enCarro, muestras);
+  const pintura = pinturaDelEscaneo(enCarro, colores, medidasDibujo);
+  if (pintura) {
+    for (let v = 0; v < etiquetas.length; v++) if (!pintura[v]) etiquetas[v] = 0;
+  }
+  if (indices) etiquetas = suavizarEtiquetas(indices, etiquetas);
+  return { etiquetas, nombres: muestras.nombres, medidasDibujo, fueraDeRango, carroceria: tipo, ajustes };
+}
+
+// ---------- Acomodar el genérico a lo medido ----------
+//
+// Tres cosas que se leen en la malla del carro (en su marco: piso en y = 0,
+// frente hacia -Z), y que mandan sobre las proporciones típicas:
+//  - Los EJES: a lo largo del carro, por tajadas de 5 cm, el punto más bajo
+//    de los costados. Donde están las llantas, toca el piso; entre ellas y
+//    en los voladizos, queda a la altura del bajo de la lata. Los dos tramos
+//    que tocan el piso son las llantas, y su centro, el eje.
+//  - El PISO (dónde empieza la lata): la mediana de ese punto más bajo entre
+//    las dos llantas.
+//  - La CINTURA (dónde termina la lata y empieza el vidrio): por alturas, el
+//    ancho de la carrocería en la mitad del carro (percentil 70, para que los
+//    espejos no cuenten). La cabina es más angosta que la lata: la cintura
+//    es la primera altura, por encima de lo más ancho, donde el carro se
+//    angosta 8 cm.
+// Lo que no se pueda leer con confianza no se devuelve, y el genérico usa lo
+// típico. Medido en el Kona escaneado: ejes a -1,23 y +1,53 m, piso a 20 cm,
+// cintura a 1,00 m (el genérico SUV ponía 42 cm y 86 cm).
+export function ajustesDelEscaneo(posiciones, medidas) {
+  const { largo, ancho, alto } = medidas;
+  const n = posiciones.length / 3;
+  const ajustes = {};
+  const paso = 0.05;
+  const z0 = -largo / 2;
+  const nz = Math.ceil(largo / paso) + 1;
+  const bajo = new Float32Array(nz).fill(Infinity);
+  for (let i = 0; i < n; i++) {
+    if (Math.abs(posiciones[i * 3]) < ancho / 2 - 0.3) continue;
+    const b = Math.floor((posiciones[i * 3 + 2] - z0) / paso);
+    const y = posiciones[i * 3 + 1];
+    if (b >= 0 && b < nz && y < bajo[b]) bajo[b] = y;
+  }
+  let suelo = Infinity;
+  for (const y of bajo) if (y < suelo) suelo = y;
+  if (Number.isFinite(suelo)) {
+    const tramos = [];
+    let ini = -1;
+    let ult = -1;
+    for (let b = 0; b < nz; b++) {
+      if (bajo[b] < suelo + 0.08) {
+        if (ini < 0) ini = b;
+        ult = b;
+      } else if (ini >= 0 && b - ult > 2) {
+        tramos.push([ini, ult]);
+        ini = -1;
+      }
+    }
+    if (ini >= 0) tramos.push([ini, ult]);
+    const centro = ([a, b]) => z0 + ((a + b + 1) / 2) * paso;
+    const ancho_ = ([a, b]) => (b - a + 1) * paso;
+    const llantas = tramos.filter((t) => ancho_(t) >= 0.12 && ancho_(t) <= 1.1);
+    const mayor = (lista) => lista.sort((p, q) => ancho_(q) - ancho_(p))[0];
+    const del = mayor(llantas.filter((t) => centro(t) < -largo * 0.1));
+    const tras = mayor(llantas.filter((t) => centro(t) > largo * 0.1));
+    if (del && tras) {
+      const ejeDel = centro(del);
+      const ejeTras = centro(tras);
+      if (ejeTras - ejeDel > 0.5 * largo && ejeTras - ejeDel < 0.75 * largo) {
+        ajustes.ejeDel = ejeDel;
+        ajustes.ejeTras = ejeTras;
+        const entre = [];
+        for (let b = 0; b < nz; b++) {
+          const z = z0 + (b + 0.5) * paso;
+          if (z > ejeDel + 0.5 && z < ejeTras - 0.5 && Number.isFinite(bajo[b])) entre.push(bajo[b]);
+        }
+        if (entre.length >= 5) {
+          entre.sort((p, q) => p - q);
+          const piso = entre[Math.floor(entre.length / 2)];
+          if (piso >= 0.1 && piso <= 0.6) ajustes.piso = piso;
+        }
+      }
+    }
+  }
+  const pasoY = 0.05;
+  const ny = Math.ceil(alto / pasoY) + 1;
+  const xs = Array.from({ length: ny }, () => []);
+  for (let i = 0; i < n; i++) {
+    if (Math.abs(posiciones[i * 3 + 2]) > largo * 0.2) continue;
+    const b = Math.floor(posiciones[i * 3 + 1] / pasoY);
+    if (b >= 0 && b < ny) xs[b].push(Math.abs(posiciones[i * 3]));
+  }
+  const anchoEn = xs.map((a) => {
+    if (a.length < 20) return NaN;
+    a.sort((p, q) => p - q);
+    return 2 * a[Math.floor(a.length * 0.7)];
+  });
+  let maximo = -1;
+  let enMaximo = -1;
+  for (let b = 0; b < ny; b++) {
+    const y = b * pasoY;
+    if (y < 0.3 || y > 0.75 * alto || !(anchoEn[b] > maximo)) continue;
+    maximo = anchoEn[b];
+    enMaximo = b;
+  }
+  if (enMaximo >= 0) {
+    for (let b = enMaximo + 1; b < ny; b++) {
+      if (anchoEn[b] < maximo - 0.08) {
+        const cintura = b * pasoY;
+        if (cintura >= 0.45 * alto && cintura <= 0.85 * alto && cintura > (ajustes.piso ?? 0.3) + 0.35) ajustes.cintura = cintura;
+        break;
+      }
+    }
+  }
+  return ajustes;
+}
+
+// Qué vértices son PINTURA, por el color (solo si el escaneo trae color).
+// El color de la pintura sale de la franja media de los costados (entre el
+// 35 y el 60 % del alto, en la mitad del largo): ahí siempre hay lata. No es
+// pintura lo claramente OSCURO respecto de ella (plástico negro, llantas,
+// vidrio polarizado, faros apagados). Lo claro y sin color NO se descarta:
+// es el reflejo del cielo en la misma pintura (en el Kona, rayas blancas en
+// las puertas). Con una pintura sin color (plateado, blanco, negro) el color
+// no separa la lata del vidrio ni del plástico, y no se usa: devuelve null.
+export function pinturaDelEscaneo(posiciones, colores, medidas) {
+  if (!colores) return null;
+  const { largo, ancho, alto } = medidas;
+  const n = posiciones.length / 3;
+  // Saturación y brillo (el tono no hace falta: se separa por oscuridad).
+  const hsv = (i) => {
+    const max = Math.max(colores[i * 3], colores[i * 3 + 1], colores[i * 3 + 2]) / 255;
+    const min = Math.min(colores[i * 3], colores[i * 3 + 1], colores[i * 3 + 2]) / 255;
+    return [max > 0 ? (max - min) / max : 0, max];
+  };
+  const sat = [];
+  const val = [];
+  for (let i = 0; i < n; i++) {
+    const y = posiciones[i * 3 + 1];
+    if (y < 0.35 * alto || y > 0.6 * alto || Math.abs(posiciones[i * 3 + 2]) > largo * 0.2 || Math.abs(posiciones[i * 3]) < ancho / 2 - 0.25) continue;
+    const [s, v] = hsv(i);
+    sat.push(s);
+    val.push(v);
+  }
+  if (sat.length < 50) return null;
+  const mediana = (a) => a.sort((p, q) => p - q)[Math.floor(a.length / 2)];
+  const satPintura = mediana(sat);
+  const valPintura = mediana(val);
+  if (satPintura < 0.25) return null;
+  const pintura = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const [s, v] = hsv(i);
+    pintura[i] = v < 0.5 * valPintura || (s < 0.4 * satPintura && v < 0.75 * valPintura) ? 0 : 1;
+  }
+  return pintura;
+}
+
+// Limpia las etiquetas por mayoría: cada vértice toma la pieza que más se
+// repite entre él y sus vecinos (él cuenta doble, para no comerse las
+// piezas angostas como el espejo). Tres vueltas quitan los dientes y las
+// pecas del borde sin mover las piezas.
+export function suavizarEtiquetas(indices, etiquetas, vueltas = 3) {
+  const n = etiquetas.length;
+  const grado = new Uint32Array(n + 1);
+  for (let t = 0; t < indices.length; t++) grado[indices[t] + 1] += 2;
+  for (let i = 0; i < n; i++) grado[i + 1] += grado[i];
+  const vecinos = new Uint32Array(grado[n]);
+  const lleno = grado.slice(0, n);
+  for (let t = 0; t < indices.length; t += 3) {
+    for (let k = 0; k < 3; k++) {
+      const a = indices[t + k];
+      vecinos[lleno[a]++] = indices[t + ((k + 1) % 3)];
+      vecinos[lleno[a]++] = indices[t + ((k + 2) % 3)];
+    }
+  }
+  let actual = Uint8Array.from(etiquetas);
+  const cuenta = new Uint16Array(256);
+  for (let vuelta = 0; vuelta < vueltas; vuelta++) {
+    const nueva = actual.slice();
+    for (let v = 0; v < n; v++) {
+      const propia = actual[v];
+      cuenta[propia] += 2;
+      let mejor = propia;
+      for (let k = grado[v]; k < grado[v + 1]; k++) {
+        const e = actual[vecinos[k]];
+        cuenta[e]++;
+        if (cuenta[e] > cuenta[mejor]) mejor = e;
+      }
+      nueva[v] = mejor;
+      cuenta[propia] = 0;
+      for (let k = grado[v]; k < grado[v + 1]; k++) cuenta[actual[vecinos[k]]] = 0;
+    }
+    actual = nueva;
+  }
+  return actual;
 }
 
 // Volver a poner las piezas de un escaneo con otra carrocería (la persona
@@ -1264,7 +1464,7 @@ export function piezasDelEscaneo(enCarro, carroceria, medidas, entreEjes = null)
 // se toca.
 export function reetiquetarEscaneo(escaneo, carroceria) {
   const ejes = escaneo.medidasDibujo && escaneo.medidasDibujo.entreEjes;
-  return { ...escaneo, ...piezasDelEscaneo(escaneo.posiciones, carroceria, escaneo.medidas, ejes) };
+  return { ...escaneo, ...piezasDelEscaneo(escaneo.posiciones, carroceria, escaneo.medidas, ejes, { indices: escaneo.indices, colores: escaneo.colores }) };
 }
 
 // ---------- El modelo para el visor ----------
@@ -1281,16 +1481,53 @@ function srgbALineal(c) {
 // como una malla que para el dedo (como el vidrio). Las piezas de adentro
 // (que el escaneo no ve) se toman del genérico a las mismas medidas, fuera
 // de la escena: así marcarlas desde la lista sigue funcionando.
+// Las aristas donde cambia la pieza, como segmentos (THREE.LineSegments con
+// userData.juntas). Una arista la comparten dos triángulos; si son de piezas
+// distintas y al menos uno es pieza, es junta.
+export function juntasDelEscaneo(posiciones, indices, deTriangulo, nombres) {
+  const nv = posiciones.length / 3;
+  const primera = new Map();
+  const segmentos = [];
+  for (let t = 0; t < indices.length / 3; t++) {
+    for (let k = 0; k < 3; k++) {
+      const a = indices[t * 3 + k];
+      const b = indices[t * 3 + ((k + 1) % 3)];
+      const clave = a < b ? a * nv + b : b * nv + a;
+      const otra = primera.get(clave);
+      if (otra === undefined) {
+        primera.set(clave, t);
+        continue;
+      }
+      const ea = deTriangulo[t];
+      const eb = deTriangulo[otra];
+      if (ea !== eb && (nombres[ea] !== 'nada' || nombres[eb] !== 'nada')) {
+        for (const v of [a, b]) segmentos.push(posiciones[v * 3], posiciones[v * 3 + 1], posiciones[v * 3 + 2]);
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(segmentos), 3));
+  const lineas = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x0b0e12, transparent: true, opacity: 0.85 }));
+  lineas.name = 'juntas';
+  lineas.userData.juntas = true;
+  // Son dibujo: el toque del dedo las atraviesa (un rayo de Three.js "toca"
+  // una línea a un metro de distancia por defecto, y tapaba las piezas).
+  lineas.raycast = () => {};
+  return lineas;
+}
+
 export function modeloDesdeEscaneo(escaneo, { colorBase = 0xcfd4da } = {}) {
   const { posiciones, indices, colores, etiquetas, nombres } = escaneo;
   const grupo = new THREE.Group();
   grupo.name = 'carro-escaneado';
   const porTriangulo = new Map();
+  const deTriangulo = new Uint8Array(indices.length / 3);
   for (let t = 0; t < indices.length; t += 3) {
     const a = etiquetas[indices[t]];
     const b = etiquetas[indices[t + 1]];
     const c = etiquetas[indices[t + 2]];
     const etiqueta = a === b || a === c ? a : b === c ? b : a;
+    deTriangulo[t / 3] = etiqueta;
     let lista = porTriangulo.get(etiqueta);
     if (!lista) porTriangulo.set(etiqueta, (lista = []));
     lista.push(indices[t], indices[t + 1], indices[t + 2]);
@@ -1327,11 +1564,17 @@ export function modeloDesdeEscaneo(escaneo, { colorBase = 0xcfd4da } = {}) {
     }
     grupo.add(malla);
   }
+  // Las JUNTAS: el borde entre dos piezas (o entre una pieza y lo que no es
+  // pieza), como una línea oscura, igual que la luz entre dos latas de un
+  // carro de verdad. Sin ellas, en un escaneo gris no se ve dónde termina
+  // la puerta y empieza el guardafango (pedido de Joan, 27-oct-2026).
+  grupo.add(juntasDelEscaneo(posiciones, indices, deTriangulo, nombres));
   // Las de adentro, del genérico, sin agregarlas a la escena.
-  const generico = construirCarro({ colorBase, carroceria: escaneo.carroceria, medidas: escaneo.medidasDibujo });
+  const ajustes = escaneo.ajustes || {};
+  const generico = construirCarro({ colorBase, carroceria: escaneo.carroceria, medidas: escaneo.medidasDibujo, ajustes });
   for (const malla of generico.seleccionables) {
     if (!porId.has(malla.userData.piezaId)) porId.set(malla.userData.piezaId, malla);
   }
   grupo.updateMatrixWorld(true);
-  return { grupo, seleccionables, porId, articulaciones: new Map(), disposicion: disposicion(escaneo.carroceria, escaneo.medidasDibujo), escaneado: true };
+  return { grupo, seleccionables, porId, articulaciones: new Map(), disposicion: disposicion(escaneo.carroceria, escaneo.medidasDibujo, ajustes), escaneado: true };
 }

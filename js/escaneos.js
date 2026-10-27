@@ -40,6 +40,9 @@ export function escaneoParaGuardar(placa, escaneo, { origen = 'celular', archivo
     escalaAjustada: escaneo.escalaAjustada || null,
     fueraDeRango: Boolean(escaneo.fueraDeRango),
     ejeArriba: escaneo.ejeArriba || null,
+    // Lo medido en el escaneo para acomodar el genérico (ejes, piso, cintura):
+    // con eso se rehacen las piezas de adentro igual que las de afuera.
+    ajustes: escaneo.ajustes ? { ...escaneo.ajustes } : null,
     posiciones: Float32Array.from(escaneo.posiciones),
     indices: Uint32Array.from(escaneo.indices),
     colores: escaneo.colores ? Uint8Array.from(escaneo.colores) : null,

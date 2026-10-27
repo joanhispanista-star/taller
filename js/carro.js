@@ -39,7 +39,14 @@ const H = 0.012 + BISEL;
 // entre ejes) está expresado como una distancia a un eje, a la punta o a la
 // cola: al cambiar las medidas el carro se estira donde se estira un carro
 // de verdad (entre los ejes y en los voladizos), no como una foto escalada.
-export function disposicion(carroceria, medidas) {
+// `ajustes` (opcional) trae lo que se MIDIÓ en un escaneo y manda sobre las
+// proporciones típicas de la carrocería: dónde están los ejes (z), a qué
+// altura empieza la lata por abajo (piso) y dónde termina y empieza el
+// vidrio (cintura). Sin ellos, las piezas del genérico caían corridas sobre
+// el carro real: en el Kona escaneado la lata baja hasta 20 cm (el genérico
+// SUV la empezaba en 42) y el vidrio empieza a 1 m (el genérico, a 86 cm), y
+// media puerta quedaba como "nada" (27-oct-2026).
+export function disposicion(carroceria, medidas, ajustes = {}) {
   const tipo = normalizarCarroceria(carroceria);
   const m = medidasParaDibujar(tipo, medidas);
   const d = { tipo, ...m };
@@ -55,13 +62,13 @@ export function disposicion(carroceria, medidas) {
   d.techo = m.alto - 0.055 - (tipo === 'suv' ? 0.06 : 0);
 
   if (tipo === 'sedan') {
-    d.piso = 0.3; // la chapa empieza a 30 cm del suelo
-    d.estriboAlto = 0.42;
+    d.piso = ajustes.piso ?? 0.3; // la chapa empieza a 30 cm del suelo
+    d.estriboAlto = d.piso + 0.12;
     d.radioRueda = 0.32;
     d.arco = 0.4; // radio del pase de rueda: 8 cm de aire sobre la llanta
-    d.cintura = m.alto - 0.505; // donde termina la chapa y empieza el vidrio
-    d.ejeDel = d.punta + (m.largo - m.entreEjes) * 0.545;
-    d.ejeTras = d.ejeDel + m.entreEjes;
+    d.cintura = ajustes.cintura ?? m.alto - 0.505; // donde termina la chapa y empieza el vidrio
+    d.ejeDel = ajustes.ejeDel ?? d.punta + (m.largo - m.entreEjes) * 0.545;
+    d.ejeTras = ajustes.ejeTras ?? d.ejeDel + m.entreEjes;
     d.bomperDel = d.punta + 0.23; // donde termina el bómper y empieza la chapa
     d.capoDel = d.punta + 0.25;
     d.capoTras = d.ejeDel + 0.79; // base del parabrisas
@@ -79,14 +86,14 @@ export function disposicion(carroceria, medidas) {
     d.bomperTras = d.cola - 0.23;
     d.finCostado = d.bomperTras;
   } else if (tipo === 'camioneta') {
-    d.piso = 0.48;
-    d.estriboAlto = 0.58;
+    d.piso = ajustes.piso ?? 0.48;
+    d.estriboAlto = d.piso + 0.1;
     d.radioRueda = 0.38;
     d.arco = 0.47;
-    d.cintura = m.alto - 0.68;
+    d.cintura = ajustes.cintura ?? m.alto - 0.68;
     // Las camionetas llevan la cabina adelante y un voladizo trasero largo.
-    d.ejeDel = d.punta + (m.largo - m.entreEjes) * 0.42;
-    d.ejeTras = d.ejeDel + m.entreEjes;
+    d.ejeDel = ajustes.ejeDel ?? d.punta + (m.largo - m.entreEjes) * 0.42;
+    d.ejeTras = ajustes.ejeTras ?? d.ejeDel + m.entreEjes;
     d.bomperDel = d.punta + 0.25;
     d.capoDel = d.punta + 0.27;
     d.capoTras = d.ejeDel + 1.05; // capó largo
@@ -103,13 +110,13 @@ export function disposicion(carroceria, medidas) {
   } else {
     // hatchback y SUV: mismo dibujo, la SUV más alta y con más aire abajo.
     const alta = tipo === 'suv';
-    d.piso = alta ? 0.42 : 0.3;
-    d.estriboAlto = alta ? 0.52 : 0.42;
+    d.piso = ajustes.piso ?? (alta ? 0.42 : 0.3);
+    d.estriboAlto = d.piso + (alta ? 0.1 : 0.12);
     d.radioRueda = alta ? 0.35 : 0.3;
     d.arco = alta ? 0.44 : 0.38;
-    d.cintura = m.alto - (alta ? 0.6 : 0.52);
-    d.ejeDel = d.punta + (m.largo - m.entreEjes) * 0.56;
-    d.ejeTras = d.ejeDel + m.entreEjes;
+    d.cintura = ajustes.cintura ?? m.alto - (alta ? 0.6 : 0.52);
+    d.ejeDel = ajustes.ejeDel ?? d.punta + (m.largo - m.entreEjes) * 0.56;
+    d.ejeTras = ajustes.ejeTras ?? d.ejeDel + m.entreEjes;
     d.bomperDel = d.punta + 0.23;
     d.capoDel = d.punta + 0.25;
     d.capoTras = d.ejeDel + (alta ? 0.85 : 0.75);
@@ -123,6 +130,7 @@ export function disposicion(carroceria, medidas) {
     d.bomperTras = d.cola - 0.23;
     d.finCostado = d.cola - 0.32;
   }
+  d.entreEjes = d.ejeTras - d.ejeDel;
   return d;
 }
 
@@ -718,8 +726,8 @@ function articular(grupo, articulaciones, id, { bisagra, eje, signo, max, refere
 // y `medidas` (del catálogo) sale el tipo y el tamaño de la línea del
 // cliente. Devuelve las piezas pintables (`seleccionables`, `porId`) y las
 // bisagras (`articulaciones`: puertas, capó, baúl o compuerta).
-export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', medidas, placa: numeroPlaca = '' } = {}) {
-  const d = disposicion(carroceria, medidas);
+export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', medidas, placa: numeroPlaca = '', ajustes = {} } = {}) {
+  const d = disposicion(carroceria, medidas, ajustes);
   const grupo = new THREE.Group();
   grupo.name = 'carro';
   const base = new THREE.Color(colorBase);
