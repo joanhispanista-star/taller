@@ -21,6 +21,13 @@ export const TRIANGULOS_MAXIMOS = 500000;
 // u, v)` si se da y el material tiene textura (en el navegador). Si el
 // archivo es solo puntos (un PLY de nube o de splats), `indices` queda
 // vacío y `esNube` en true.
+//
+// Si TODO el archivo usa una sola textura (RealityScan, la tubería del PC),
+// además se conservan las coordenadas: `uvs` (con v = 0 arriba en la imagen,
+// venga como venga) y `mapa`, la textura de Three.js. El color por vértice
+// sigue haciendo falta (la máscara de pintura, y lo que se ve mientras carga
+// la imagen), pero es lo que antes se quedaba: una mancha de 2 cm donde el
+// archivo traía el logo, los rines y la parrilla.
 export function mallaDeObjeto3D(objeto, { colorDeTextura = null } = {}) {
   objeto.updateMatrixWorld(true);
   // Primero contar, para reservar los arreglos de una vez: con push, un
@@ -30,12 +37,16 @@ export function mallaDeObjeto3D(objeto, { colorDeTextura = null } = {}) {
   let vertices = 0;
   let indicesTotal = 0;
   let conColor = false;
+  const mapas = new Set();
+  let algunaSinMapa = false;
   objeto.traverse((hijo) => {
     if (!(hijo.isMesh || hijo.isPoints) || !hijo.geometry || !hijo.geometry.attributes.position) return;
     const geo = hijo.geometry;
     const material = Array.isArray(hijo.material) ? hijo.material[0] : hijo.material;
     const conTextura = Boolean(colorDeTextura && geo.attributes.uv && material && material.map);
     if (geo.attributes.color || conTextura) conColor = true;
+    if (conTextura) mapas.add(material.map);
+    else algunaSinMapa = true;
     piezas.push({ hijo, geo, material, conTextura });
     vertices += geo.attributes.position.count;
     if (hijo.isMesh) indicesTotal += geo.index ? geo.index.count : geo.attributes.position.count;
@@ -43,6 +54,8 @@ export function mallaDeObjeto3D(objeto, { colorDeTextura = null } = {}) {
   const posiciones = new Float32Array(vertices * 3);
   const colores = conColor ? new Uint8Array(vertices * 3).fill(128) : null;
   const indices = new Uint32Array(indicesTotal);
+  const mapa = mapas.size === 1 && !algunaSinMapa ? [...mapas][0] : null;
+  const uvs = mapa ? new Float32Array(vertices * 2) : null;
   let nube = false;
   let v0 = 0;
   let i0 = 0;
@@ -70,6 +83,10 @@ export function mallaDeObjeto3D(objeto, { colorDeTextura = null } = {}) {
         colores[k + 1] = g;
         colores[k + 2] = b;
       }
+      if (uvs) {
+        uvs[(v0 + i) * 2] = uv.getX(i);
+        uvs[(v0 + i) * 2 + 1] = mapa.flipY === false ? uv.getY(i) : 1 - uv.getY(i);
+      }
     }
     if (hijo.isPoints) {
       nube = true;
@@ -81,7 +98,7 @@ export function mallaDeObjeto3D(objeto, { colorDeTextura = null } = {}) {
     v0 += p.count;
   }
   // Los vértices de una malla sin color (si otra sí lo traía) quedan grises.
-  return { posiciones, indices: indices.subarray(0, i0), colores, esNube: nube && i0 === 0 };
+  return { posiciones, indices: indices.subarray(0, i0), colores, esNube: nube && i0 === 0, uvs, mapa };
 }
 
 // Qué eje es "arriba". Las apps de escaneo del celular exportan con y hacia
@@ -220,14 +237,16 @@ export function procesarImportado(malla, { carroceria = 'sedan', medidasCatalogo
     // 3 s solo en hacerlos.
     base = { ...mallaDesdePuntos(soloElCarro(posiciones), { voxel: 0.025 }), colores: null };
   } else {
-    base = { posiciones, indices: malla.indices, colores: malla.colores };
+    base = { posiciones, indices: malla.indices, colores: malla.colores, uvs: malla.uvs || null };
+    // Simplificar junta vértices y pierde las coordenadas: queda el color por vértice.
     if (triangulos > TRIANGULOS_MAXIMOS) base = simplificarMalla(base, { maximo: TRIANGULOS_MAXIMOS });
   }
   // La malla rehecha de puntos sale grumosa: se alisa (después de medir).
-  const escaneo = procesarEscaneo(base, { carroceria, medidasCatalogo, voltear, puntos, suavizar: Boolean(puntos) });
+  const escaneo = procesarEscaneo(base, { carroceria, medidasCatalogo, voltear, puntos, suavizar: Boolean(puntos), luz: malla.luz || null });
   escaneo.escalaAjustada = escala.motivo ? { factor: escala.factor, motivo: escala.motivo, medido: escala.medido } : null;
   escaneo.ejeArriba = arriba.eje;
   escaneo.rehecha = Boolean(puntos);
+  escaneo.textura = escaneo.uvs ? malla.textura || null : null;
   return escaneo;
 }
 
@@ -295,7 +314,55 @@ export async function leerArchivoDeEscaneo(archivo) {
   } else {
     throw new Error('Ese archivo no es un escaneo que la app sepa leer (GLB, glTF, OBJ o PLY)');
   }
-  return mallaDeObjeto3D(objeto, { colorDeTextura: crearLectorDeTextura() });
+  const malla = mallaDeObjeto3D(objeto, { colorDeTextura: crearLectorDeTextura() });
+  if (malla.mapa) {
+    malla.textura = await blobDeTextura(malla.mapa.image);
+    malla.luz = luzDeTextura(malla.mapa.image);
+  }
+  if (!malla.textura) malla.uvs = null;
+  malla.mapa = null;
+  return malla;
+}
+
+// La imagen de la textura como JPEG, de hasta 4096 px (lo que dibuja cualquier
+// celular): es lo que se guarda con el escaneo y lo que se vuelve a abrir.
+async function blobDeTextura(imagen, lado = 4096) {
+  try {
+    const factor = Math.min(1, lado / Math.max(imagen.width, imagen.height));
+    const ancho = Math.round(imagen.width * factor);
+    const alto = Math.round(imagen.height * factor);
+    if (typeof OffscreenCanvas !== 'undefined') {
+      const lienzo = new OffscreenCanvas(ancho, alto);
+      lienzo.getContext('2d').drawImage(imagen, 0, 0, ancho, alto);
+      return await lienzo.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
+    }
+    const lienzo = Object.assign(document.createElement('canvas'), { width: ancho, height: alto });
+    lienzo.getContext('2d').drawImage(imagen, 0, 0, ancho, alto);
+    return await new Promise((listo) => lienzo.toBlob(listo, 'image/jpeg', 0.9));
+  } catch {
+    return null;
+  }
+}
+
+// La foto en grises, a su tamaño (hasta 4096 px), para leer las juntas de las
+// puertas: una junta mide medio centímetro y no se ve en el color por vértice,
+// que va cada 2 cm. Un byte por píxel: 16 MB, que se sueltan al cerrar la vista
+// previa. Si el celular no da para tanto, no se leen las juntas.
+function luzDeTextura(imagen, lado = 4096) {
+  try {
+    const factor = Math.min(1, lado / Math.max(imagen.width, imagen.height));
+    const ancho = Math.round(imagen.width * factor);
+    const alto = Math.round(imagen.height * factor);
+    const lienzo = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(ancho, alto) : Object.assign(document.createElement('canvas'), { width: ancho, height: alto });
+    const ctx = lienzo.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(imagen, 0, 0, ancho, alto);
+    const rgba = ctx.getImageData(0, 0, ancho, alto).data;
+    const datos = new Uint8Array(ancho * alto);
+    for (let i = 0; i < datos.length; i++) datos[i] = (rgba[i * 4] * 77 + rgba[i * 4 + 1] * 150 + rgba[i * 4 + 2] * 29) >> 8;
+    return { datos, ancho, alto };
+  } catch {
+    return null;
+  }
 }
 
 function crearLectorDeTextura() {

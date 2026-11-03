@@ -41,8 +41,10 @@ const H = 0.012 + BISEL;
 // de verdad (entre los ejes y en los voladizos), no como una foto escalada.
 // `ajustes` (opcional) trae lo que se MIDIÓ en un escaneo y manda sobre las
 // proporciones típicas de la carrocería: dónde están los ejes (z), a qué
-// altura empieza la lata por abajo (piso) y dónde termina y empieza el
-// vidrio (cintura). Sin ellos, las piezas del genérico caían corridas sobre
+// altura empieza la lata por abajo (piso), dónde termina y empieza el vidrio
+// (cintura), el perfil de arriba: la base del parabrisas (capoTras), su tope
+// (parabrisasAlto) y el final del techo (techoTras), y las juntas de las puertas
+// (puertaDel, puertaMedia, puertaTras). Sin ellos, las piezas del genérico caían corridas sobre
 // el carro real: en el Kona escaneado la lata baja hasta 20 cm (el genérico
 // SUV la empezaba en 42) y el vidrio empieza a 1 m (el genérico, a 86 cm), y
 // media puerta quedaba como "nada" (27-oct-2026).
@@ -71,16 +73,16 @@ export function disposicion(carroceria, medidas, ajustes = {}) {
     d.ejeTras = ajustes.ejeTras ?? d.ejeDel + m.entreEjes;
     d.bomperDel = d.punta + 0.23; // donde termina el bómper y empieza la chapa
     d.capoDel = d.punta + 0.25;
-    d.capoTras = d.ejeDel + 0.79; // base del parabrisas
-    d.puertaDel = d.capoTras - 0.04;
-    d.puertaTras = d.ejeTras - 0.43;
-    d.puertaMedia = d.puertaDel + (d.puertaTras - d.puertaDel) * 0.569;
-    d.parabrisasAlto = d.capoTras + 0.71;
+    d.capoTras = ajustes.capoTras ?? d.ejeDel + 0.79; // base del parabrisas
+    d.puertaDel = ajustes.puertaDel ?? d.capoTras - 0.04;
+    d.puertaTras = ajustes.puertaTras ?? d.ejeTras - 0.43;
+    d.puertaMedia = ajustes.puertaMedia ?? d.puertaDel + (d.puertaTras - d.puertaDel) * 0.569;
+    d.parabrisasAlto = ajustes.parabrisasAlto ?? d.capoTras + 0.71;
     // El techo termina antes del eje trasero y el vidrio cae hasta poco
     // después: así la tapa del baúl mide unos 40 cm, como en un sedán de
     // verdad, y al abrirse se nota.
-    d.techoTras = d.ejeTras - 0.3;
-    d.vidrioTras = d.ejeTras + 0.1; // base del vidrio trasero
+    d.techoTras = ajustes.techoTras ?? d.ejeTras - 0.3;
+    d.vidrioTras = Math.max(d.ejeTras + 0.1, d.techoTras + 0.35); // base del vidrio trasero
     d.baulDel = d.vidrioTras + 0.01;
     d.baulTras = d.cola - 0.22;
     d.bomperTras = d.cola - 0.23;
@@ -96,11 +98,11 @@ export function disposicion(carroceria, medidas, ajustes = {}) {
     d.ejeTras = ajustes.ejeTras ?? d.ejeDel + m.entreEjes;
     d.bomperDel = d.punta + 0.25;
     d.capoDel = d.punta + 0.27;
-    d.capoTras = d.ejeDel + 1.05; // capó largo
-    d.puertaDel = d.capoTras - 0.04;
-    d.puertaTras = d.ejeTras - 0.65; // doble cabina: la puerta trasera termina antes del eje
-    d.puertaMedia = d.puertaDel + (d.puertaTras - d.puertaDel) * 0.55;
-    d.parabrisasAlto = d.capoTras + 0.75;
+    d.capoTras = ajustes.capoTras ?? d.ejeDel + 1.05; // capó largo
+    d.puertaDel = ajustes.puertaDel ?? d.capoTras - 0.04;
+    d.puertaTras = ajustes.puertaTras ?? d.ejeTras - 0.65; // doble cabina: la puerta trasera termina antes del eje
+    d.puertaMedia = ajustes.puertaMedia ?? d.puertaDel + (d.puertaTras - d.puertaDel) * 0.55;
+    d.parabrisasAlto = ajustes.parabrisasAlto ?? d.capoTras + 0.75;
     d.cabinaTras = d.puertaTras + 0.12; // pared trasera de la cabina
     d.techoTras = d.cabinaTras - 0.02;
     d.platonDel = d.cabinaTras + 0.06;
@@ -119,12 +121,12 @@ export function disposicion(carroceria, medidas, ajustes = {}) {
     d.ejeTras = ajustes.ejeTras ?? d.ejeDel + m.entreEjes;
     d.bomperDel = d.punta + 0.23;
     d.capoDel = d.punta + 0.25;
-    d.capoTras = d.ejeDel + (alta ? 0.85 : 0.75);
-    d.puertaDel = d.capoTras - 0.04;
-    d.puertaTras = d.ejeTras - 0.3;
-    d.puertaMedia = d.puertaDel + (d.puertaTras - d.puertaDel) * 0.56;
-    d.parabrisasAlto = d.capoTras + 0.7;
-    d.techoTras = d.cola - (alta ? 0.42 : 0.5); // el techo llega casi hasta la cola
+    d.capoTras = ajustes.capoTras ?? d.ejeDel + (alta ? 0.85 : 0.75);
+    d.puertaDel = ajustes.puertaDel ?? d.capoTras - 0.04;
+    d.puertaTras = ajustes.puertaTras ?? d.ejeTras - 0.3;
+    d.puertaMedia = ajustes.puertaMedia ?? d.puertaDel + (d.puertaTras - d.puertaDel) * 0.56;
+    d.parabrisasAlto = ajustes.parabrisasAlto ?? d.capoTras + 0.7;
+    d.techoTras = ajustes.techoTras ?? d.cola - (alta ? 0.42 : 0.5); // el techo llega casi hasta la cola
     d.compuertaArriba = d.cintura + (alta ? 0.22 : 0.2); // donde termina la chapa de la compuerta y empieza su vidrio
     d.compuertaZ = d.cola - 0.24; // cara exterior de la compuerta, arriba
     d.bomperTras = d.cola - 0.23;
@@ -575,6 +577,14 @@ function placa(x, y, z, inclinacion = 0, texto = '', mirandoA = -1) {
 // del carro, pero distinguirse de un vistazo.
 export function resaltar(malla, acento) {
   const material = malla.material;
+  // Con la foto del escaneo no hay color ni brillo que tocar: el acento se mezcla
+  // encima de la foto (multiplicarla dejaba verde sucio un carro azul marcado de
+  // naranja).
+  if (material.uniforms && material.uniforms.mezcla) {
+    if (acento != null) material.uniforms.tinte.value.set(acento);
+    material.uniforms.mezcla.value = acento == null ? 0 : 0.68;
+    return;
+  }
   const base = malla.userData.colorBase;
   if (acento == null) {
     material.color.copy(base);

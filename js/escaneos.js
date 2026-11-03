@@ -46,6 +46,9 @@ export function escaneoParaGuardar(placa, escaneo, { origen = 'celular', archivo
     posiciones: Float32Array.from(escaneo.posiciones),
     indices: Uint32Array.from(escaneo.indices),
     colores: escaneo.colores ? Uint8Array.from(escaneo.colores) : null,
+    // La textura (una foto JPEG) con sus coordenadas, si el archivo la traía.
+    uvs: escaneo.uvs && escaneo.textura ? Float32Array.from(escaneo.uvs) : null,
+    textura: escaneo.uvs && escaneo.textura ? escaneo.textura : null,
     etiquetas: Uint8Array.from(escaneo.etiquetas),
     nombres: [...escaneo.nombres],
   };

@@ -66,7 +66,10 @@ export function normalizarCarroceria(valor) {
 const RANGO = {
   largo: [2.6, 6.5],
   ancho: [1.4, 2.3],
-  alto: [1.2, 2.3],
+  // Desde 1,1 m: un deportivo mide 1,15 m, y el Moskvitch escaneado, 1,17. Con el
+  // tope en 1,2 el genérico se dibujaba a la altura típica (28 cm de más) y las
+  // piezas caían corridas.
+  alto: [1.1, 2.3],
   entreEjes: [1.8, 4.0],
 };
 

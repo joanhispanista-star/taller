@@ -144,6 +144,56 @@ media puerta quedaba como "nada" y el estribo era una franja enorme. Ahora:
   luz entre dos latas. El toque del dedo las atraviesa (un rayo de Three.js
   "toca" una línea a un metro por defecto, y tapaban las piezas).
 
+**El 3 de noviembre, carros reales que se ven reales.** Joan pidió ver un carro
+de verdad, no "un carro de juguete", y que cada pieza se lea clara. Lo que entró
+a la app (sirve para cualquier archivo con textura, como el GLB de RealityScan):
+
+- **La foto va pegada encima.** Un archivo con una sola textura conserva sus
+  coordenadas (`uvs`, con v = 0 arriba) y la imagen, un JPEG de hasta 4096 px
+  (`textura`), y las dos se guardan con el escaneo. Se ven el logo, los rines y
+  la placa, que el color por vértice (cada 2 cm) volvía una mancha. Las normales
+  se sacan soldando por posición (`normalesSoldadas`): una malla con textura
+  repite los vértices en cada costura de foto, y se veía un quiebre de luz.
+- **Las piezas caen sobre las juntas reales.** `puertasDeLaFoto` pinta el costado
+  como una imagen, a 5 mm, y busca las rayas verticales oscuras que atraviesan la
+  lata en los dos lados del carro: una manija no atraviesa, un reflejo no está en
+  los dos lados. Primero la junta del medio (el pilar, la más marcada), y las
+  otras dos a partir de ella. El genérico las ponía hasta 40 cm al lado. Solo se
+  usan las que se ven claras; las leídas se guardan en `ajustes` y sobreviven a
+  un cambio de carrocería, porque son del carro.
+- **Bordes rectos y sin pecas.** `etiquetarPiezas` mide a lo largo de la lata
+  (con las normales), no en el espacio: si no, una junta recta del genérico salía
+  ondulada. `quitarIslas` les da a los pedacitos sueltos y a los huecos chicos la
+  etiqueta de alrededor, y la limpieza de bordes trabaja con los vértices
+  soldados, para cruzar las costuras de foto.
+- **Una malla sin piso alrededor** ya no pierde los últimos 8 cm de las llantas,
+  y con color, la cintura sale de donde se acaba la pintura (con pintura sin color
+  no se inventa).
+
+La tubería del PC que hizo los dos carros de muestra también cambió, y **sigue
+siendo del PC, no del celular**: la forma sale de las siluetas del video (un casco
+visual: `casco.py`, que no depende del brillo de la pintura) y encima van las
+fotos (`textura.py`). Lo que aprendió, por si se vuelve a tocar:
+
+- Las siluetas no ven debajo del carro: el casco baja en cuña hasta el piso, y el
+  piso solo se puede leer en la franja de las llantas. La panza se talla aparte y
+  las llantas llevan su arco; la panza plana no se guarda, porque `estimarPiso`
+  la toma por el piso y corta el carro ahí.
+- Desde la altura del pecho el techo no se ve: lo que hay es reflejo, distinto en
+  cada foto. Va del color de la pintura (**es un relleno, no una lectura**; si el
+  techo es de otro color se pasa a mano) y su borde se funde con la foto.
+- Corregir la exposición automática de la cámara salió peor: esa exposición es la
+  que hace ver bien los dos costados. Solo se aclara el costado a contraluz, poco
+  a poco según el ángulo de la cámara; foto por foto salían franjas.
+- `diseno-escaneo/capturar.mjs` dejaba navegadores vivos sin ventana (el proceso
+  que se lanza ya salió: `kill()` no los toca). Llegaron a ser 190 procesos, 5 GB
+  de RAM del PC de Joan y 6 GB de perfiles en temporales. Ahora los mata por el
+  nombre del perfil, al empezar y al terminar.
+
+**Lo que falta medir:** todo esto se probó con videos de otros, no con un escaneo
+de RealityScan hecho en el taller. Importar ese GLB usa este mismo código, pero
+las juntas y la cintura solo se han leído en estos dos carros.
+
 Las maquetas (holograma, plano técnico, vitrina para el cliente, la base de
 carros) y su simulador están en `pruebas/datos-externos/diseno-escaneo/`
 (fuera de git); la tubería de fotogrametría del PC, en
@@ -591,7 +641,7 @@ Claude, la entrada `taller-pintura-celular` de `.claude/launch.json` arranca
 el servidor abierto a la red. El reconocedor de fotos sí necesita internet
 en el teléfono la primera vez (89 MB desde Hugging Face); lo demás no.
 
-Pruebas (121, en Node, sin navegador; el registro se prueba contra
+Pruebas (185, en Node, sin navegador; el registro se prueba contra
 `fake-indexeddb`, una IndexedDB de mentira que se instala con `npm install`):
 
 ```bash

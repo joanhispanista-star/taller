@@ -223,7 +223,20 @@ function firmaDelModelo() {
   return JSON.stringify({ ...opcionesDelModelo(), escaneo: escaneoVisto ? versionEscaneo : 0, verPiezas: verPiezasEscaneo });
 }
 function construirModelo() {
-  if (escaneoVisto && !verPiezasEscaneo) return modeloDesdeEscaneo(escaneoVisto, { colorBase: carro.color || COLOR_BASE });
+  if (escaneoVisto && !verPiezasEscaneo) {
+    const conFoto = modeloDesdeEscaneo(escaneoVisto, { colorBase: carro.color || COLOR_BASE });
+    // La foto llega un momento después, y aquí solo se dibuja cuando algo cambia:
+    // sin pedir el cuadro, el carro se quedaba en su color por vértice (pálido y a
+    // manchas) hasta el primer toque. Y cambia de material: hay que volver a teñir.
+    if (conFoto.texturaLista) {
+      conFoto.texturaLista.then((foto) => {
+        if (!foto || modelo !== conFoto) return;
+        for (const malla of modelo.seleccionables) tenir(malla.userData.piezaId);
+        pedirCuadro();
+      });
+    }
+    return conFoto;
+  }
   return construirCarro(opcionesDelModelo());
 }
 let modelo = construirModelo();

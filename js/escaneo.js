@@ -812,7 +812,13 @@ export function muestrasDelGenerico(modelo, { paso = 0.04 } = {}) {
 // un Map: 17 s para 340.000 vértices en el PC; una propagación por ondas
 // también se fue de las manos (las celdas se volvían a mejorar onda tras
 // onda). Así son unas décimas de segundo.
-export function etiquetarPiezas(posiciones, muestras, { celda = 0.12, radio = 0.35 } = {}) {
+//
+// Con `normales`, lo que cuenta es la distancia A LO LARGO de la lata: lo que
+// separa el escaneo del genérico (el escaneo es unos centímetros más ancho o más
+// delgado) casi no cuenta. Si no, la junta entre dos puertas, que en el genérico
+// es una recta, salía ondulada: el punto más cercano en el espacio no es el que
+// está a la misma altura y en la misma tajada del carro.
+export function etiquetarPiezas(posiciones, muestras, { celda = 0.12, radio = 0.35, normales = null } = {}) {
   const { puntos, etiquetas } = muestras;
   const n = etiquetas.length;
   const caja = cajaDe(puntos);
@@ -844,6 +850,9 @@ export function etiquetarPiezas(posiciones, muestras, { celda = 0.12, radio = 0.
     const cx = Math.floor((px - x0) / celda);
     const cy = Math.floor((py - y0) / celda);
     const cz = Math.floor((pz - z0) / celda);
+    const nx_ = normales ? normales[v * 3] : 0;
+    const ny_ = normales ? normales[v * 3 + 1] : 0;
+    const nz_ = normales ? normales[v * 3 + 2] : 0;
     let mejor = -1;
     let mejorD = r2;
     for (let r = 1; r <= 2 && mejor < 0; r++) {
@@ -856,7 +865,8 @@ export function etiquetarPiezas(posiciones, muestras, { celda = 0.12, radio = 0.
               const dx = puntos[i * 3] - px;
               const dy = puntos[i * 3 + 1] - py;
               const dz = puntos[i * 3 + 2] - pz;
-              const d = dx * dx + dy * dy + dz * dz;
+              const hondo = dx * nx_ + dy * ny_ + dz * nz_;
+              const d = dx * dx + dy * dy + dz * dz - 0.85 * hondo * hondo;
               if (d < mejorD) {
                 mejorD = d;
                 mejor = i;
@@ -889,16 +899,20 @@ export function transformar(posiciones, matriz) {
 // Quita de una malla los triángulos cuyos tres vértices están fuera de la
 // máscara, y los vértices que quedan sueltos. Devuelve la malla nueva y,
 // si se dan, los colores recortados igual.
-export function recortarMalla({ posiciones, indices, colores = null }, conservar) {
+export function recortarMalla({ posiciones, indices, colores = null, uvs = null, normales = null }, conservar) {
   const nuevoIndice = new Int32Array(posiciones.length / 3).fill(-1);
   const pos = [];
   const col = colores ? [] : null;
+  const uv = uvs ? [] : null;
+  const nor = normales ? [] : null;
   const ind = [];
   const tomar = (v) => {
     if (nuevoIndice[v] < 0) {
       nuevoIndice[v] = pos.length / 3;
       pos.push(posiciones[v * 3], posiciones[v * 3 + 1], posiciones[v * 3 + 2]);
       if (col) col.push(colores[v * 3], colores[v * 3 + 1], colores[v * 3 + 2]);
+      if (uv) uv.push(uvs[v * 2], uvs[v * 2 + 1]);
+      if (nor) nor.push(normales[v * 3], normales[v * 3 + 1], normales[v * 3 + 2]);
     }
     return nuevoIndice[v];
   };
@@ -909,7 +923,13 @@ export function recortarMalla({ posiciones, indices, colores = null }, conservar
     if (!(conservar[a] || conservar[b] || conservar[c])) continue;
     ind.push(tomar(a), tomar(b), tomar(c));
   }
-  return { posiciones: new Float32Array(pos), indices: new Uint32Array(ind), colores: col ? new Uint8Array(col) : null };
+  return {
+    posiciones: new Float32Array(pos),
+    indices: new Uint32Array(ind),
+    colores: col ? new Uint8Array(col) : null,
+    uvs: uv ? new Float32Array(uv) : null,
+    normales: nor ? new Float32Array(nor) : null,
+  };
 }
 
 // Suavizado de Taubin: cada vértice se acerca al promedio de sus vecinos
@@ -1202,7 +1222,7 @@ export function cerrarHuecos(malla, { maxAristas = 60, maxPerimetro = 1.2 } = {}
   return { posiciones: pos, indices: ind, colores: col };
 }
 
-export function procesarEscaneo(malla, { carroceria = 'sedan', medidasCatalogo = null, voltear = false, entreEjes = null, puntos = null, suavizar = false } = {}) {
+export function procesarEscaneo(malla, { carroceria = 'sedan', medidasCatalogo = null, voltear = false, entreEjes = null, puntos = null, suavizar = false, luz = null } = {}) {
   // Se mide sobre puntos repartidos por la superficie (muestrearMalla), no
   // sobre los vértices; o sobre la nube original si la hay.
   const fuente = puntos || muestrearMalla(malla);
@@ -1214,14 +1234,22 @@ export function procesarEscaneo(malla, { carroceria = 'sedan', medidasCatalogo =
   const enCarroTodo = transformar(malla.posiciones, orientacion.matriz);
   const m = orientacion.medidas;
   const dentro = new Uint8Array(enCarroTodo.length / 3);
+  // La franja de abajo se corta para botar el piso; pero una malla SIN piso
+  // alrededor (tallada con siluetas, o recortada a mano en la app de escaneo)
+  // perdía ahí los últimos 8 cm de las llantas y el carro quedaba flotando.
+  let pisoAlrededor = 0;
+  for (let v = 0; v < dentro.length; v++) {
+    if (enCarroTodo[v * 3 + 1] < 0.06 && (Math.abs(enCarroTodo[v * 3]) > m.ancho / 2 + 0.12 || Math.abs(enCarroTodo[v * 3 + 2]) > m.largo / 2 + 0.12)) pisoAlrededor++;
+  }
+  const corte = pisoAlrededor > 0.005 * dentro.length ? 0.08 : -0.02;
   for (let v = 0; v < dentro.length; v++) {
     const x = enCarroTodo[v * 3];
     const y = enCarroTodo[v * 3 + 1];
     const z = enCarroTodo[v * 3 + 2];
-    const enCaja = Math.abs(x) < m.ancho / 2 + 0.25 && Math.abs(z) < m.largo / 2 + 0.1 && y > 0.08 && y < m.alto + 0.1;
+    const enCaja = Math.abs(x) < m.ancho / 2 + 0.25 && Math.abs(z) < m.largo / 2 + 0.1 && y > corte && y < m.alto + 0.1;
     dentro[v] = enCaja ? 1 : 0;
   }
-  const cortada = recortarMalla({ posiciones: enCarroTodo, indices: malla.indices, colores: malla.colores || null }, dentro);
+  const cortada = recortarMalla({ posiciones: enCarroTodo, indices: malla.indices, colores: malla.colores || null, uvs: malla.uvs || null }, dentro);
   if (cortada.indices.length < 300) throw new Error('No encontré un carro en el escaneo (quedaron muy pocos triángulos)');
   // El escaneo del celular (el que se suaviza) trae huecos chicos donde la
   // lata se vio de canto; se cierran ANTES de suavizar, para que el
@@ -1230,11 +1258,12 @@ export function procesarEscaneo(malla, { carroceria = 'sedan', medidasCatalogo =
   const enCarro = suavizar ? suavizarMalla(recortada.posiciones, recortada.indices) : recortada.posiciones;
   const medidas = orientacion.medidas;
   const ejes = entreEjes || (medidasCatalogo && medidasCatalogo.entreEjes) || null;
-  const piezas = piezasDelEscaneo(enCarro, carroceria, medidas, ejes, { indices: recortada.indices, colores: recortada.colores });
+  const piezas = piezasDelEscaneo(enCarro, carroceria, medidas, ejes, { indices: recortada.indices, colores: recortada.colores, uvs: recortada.uvs || null, luz });
   return {
     posiciones: enCarro,
     indices: recortada.indices,
     colores: recortada.colores,
+    uvs: recortada.uvs || null,
     ...piezas,
     medidas,
     volteado: Boolean(voltear),
@@ -1254,22 +1283,174 @@ export function procesarEscaneo(malla, { carroceria = 'sedan', medidasCatalogo =
 // lo que es claramente oscuro (plástico negro, llantas, vidrio polarizado)
 // no se cuenta como pieza pintada. Y las etiquetas se limpian por mayoría de
 // vecinos, para que cada pieza tenga un borde limpio y no dientes.
-export function piezasDelEscaneo(enCarro, carroceria, medidas, entreEjes = null, { indices = null, colores = null } = {}) {
+export function piezasDelEscaneo(enCarro, carroceria, medidas, entreEjes = null, { indices = null, colores = null, uvs = null, luz = null, previos = null } = {}) {
   const tipo = normalizarCarroceria(carroceria);
   const pedidas = { largo: medidas.largo, ancho: medidas.ancho, alto: medidas.alto };
   if (entreEjes) pedidas.entreEjes = entreEjes > 100 ? entreEjes / 1000 : entreEjes;
   const medidasDibujo = medidasParaDibujar(tipo, pedidas);
   const fueraDeRango = ['largo', 'ancho', 'alto'].some((c) => Math.abs(medidasDibujo[c] - medidas[c]) > 0.02);
-  const ajustes = ajustesDelEscaneo(enCarro, medidasDibujo);
+  const ajustes = ajustesDelEscaneo(enCarro, medidasDibujo, colores);
+  // Las juntas de las puertas: de la foto, si llegó. La foto no se guarda, así
+  // que al cambiar de carrocería se usan las que ya se leyeron (son del carro).
+  if (luz && uvs && indices) Object.assign(ajustes, puertasDeLaFoto(enCarro, indices, uvs, luz, medidasDibujo, disposicion(tipo, medidasDibujo, ajustes)));
+  else if (previos) {
+    for (const k of ['puertaDel', 'puertaMedia', 'puertaTras']) if (previos[k] != null) ajustes[k] = previos[k];
+  }
+  // La puerta empieza donde se acaba el capó: si la forma no dijo dónde está la
+  // base del parabrisas, la junta sí lo dice.
+  if (ajustes.puertaDel != null && ajustes.capoTras == null) ajustes.capoTras = ajustes.puertaDel + 0.04;
   const generico = construirCarro({ carroceria: tipo, medidas: medidasDibujo, ajustes });
   const muestras = muestrasDelGenerico(generico, { paso: 0.03 });
-  let etiquetas = etiquetarPiezas(enCarro, muestras);
+  let etiquetas = etiquetarPiezas(enCarro, muestras, { normales: indices ? normalesSoldadas(enCarro, indices) : null });
   const pintura = pinturaDelEscaneo(enCarro, colores, medidasDibujo);
   if (pintura) {
     for (let v = 0; v < etiquetas.length; v++) if (!pintura[v]) etiquetas[v] = 0;
   }
-  if (indices) etiquetas = suavizarEtiquetas(indices, etiquetas);
+  if (indices) {
+    // Soldadas: una malla con textura repite los vértices en cada costura de
+    // foto, y sin soldar, la limpieza de bordes no cruza esas costuras.
+    const { grupo, cuantos } = soldarVertices(enCarro);
+    const porGrupo = new Uint8Array(cuantos);
+    for (let v = 0; v < etiquetas.length; v++) porGrupo[grupo[v]] = etiquetas[v];
+    const soldados = Uint32Array.from(indices, (v) => grupo[v]);
+    const limpias = quitarIslas(soldados, suavizarEtiquetas(soldados, porGrupo));
+    etiquetas = Uint8Array.from(etiquetas, (_, v) => limpias[grupo[v]]);
+  }
   return { etiquetas, nombres: muestras.nombres, medidasDibujo, fueraDeRango, carroceria: tipo, ajustes };
+}
+
+// Las juntas reales de las puertas, leídas de la foto. Vistas de lado, son rayas
+// verticales oscuras y angostas que atraviesan toda la lata; un reflejo o una
+// manija no son así. Se pinta el costado como una imagen (5 mm a lo largo, en la
+// mitad de arriba de la puerta, por encima de los pases de rueda), y por cada
+// tajada se mide cuánto más oscura es que lo que tiene al lado, con la mediana
+// de las filas: lo que no atraviesa toda la franja no cuenta. Los dos costados de
+// un carro tienen las juntas en el mismo sitio: se suman, y un reflejo de un solo
+// lado se apaga. Se busca cerca de donde el genérico pone cada junta.
+//
+// `luz`: { datos, ancho, alto }, la foto en grises, un byte por píxel.
+// Devuelve solo las juntas que se ven claras.
+export function puertasDeLaFoto(posiciones, indices, uvs, luz, { largo }, previa) {
+  const paso = 0.005;
+  const z0 = -largo / 2 - 0.1;
+  const nz = Math.ceil((largo + 0.2) / paso);
+  const yBajo = previa.piso + 0.45 * (previa.cintura - previa.piso);
+  const yAlto = previa.cintura - 0.05;
+  if (yAlto - yBajo < 0.1) return {};
+  const filas = 14;
+  const altoFila = (yAlto - yBajo) / filas;
+  const crear = () => new Float32Array(nz * filas).fill(-1);
+  const lados = [crear(), crear()];
+  const P = posiciones;
+  for (let t = 0; t < indices.length; t += 3) {
+    const a = indices[t];
+    const b = indices[t + 1];
+    const c = indices[t + 2];
+    const ya = P[a * 3 + 1];
+    const yb = P[b * 3 + 1];
+    const yc = P[c * 3 + 1];
+    if (Math.max(ya, yb, yc) < yBajo || Math.min(ya, yb, yc) > yAlto) continue;
+    const za = P[a * 3 + 2];
+    const zb = P[b * 3 + 2];
+    const zc = P[c * 3 + 2];
+    const ux = P[b * 3] - P[a * 3];
+    const uy = yb - ya;
+    const uz = zb - za;
+    const wx = P[c * 3] - P[a * 3];
+    const wy = yc - ya;
+    const wz = zc - za;
+    const nx = uy * wz - uz * wy;
+    const ny = uz * wx - ux * wz;
+    const nz_ = ux * wy - uy * wx;
+    // Solo lo que mira hacia el costado.
+    if (nx * nx < 0.5 * (nx * nx + ny * ny + nz_ * nz_) || nx === 0) continue;
+    const lado = lados[P[a * 3] > 0 ? 0 : 1];
+    const f0 = Math.max(0, Math.ceil((Math.min(ya, yb, yc) - yBajo) / altoFila - 0.5));
+    const f1 = Math.min(filas - 1, Math.floor((Math.max(ya, yb, yc) - yBajo) / altoFila - 0.5));
+    const k0 = Math.max(0, Math.ceil((Math.min(za, zb, zc) - z0) / paso - 0.5));
+    const k1 = Math.min(nz - 1, Math.floor((Math.max(za, zb, zc) - z0) / paso - 0.5));
+    const den = (yb - yc) * (za - zc) + (zc - zb) * (ya - yc);
+    if (Math.abs(den) < 1e-12) continue;
+    for (let f = f0; f <= f1; f++) {
+      const y = yBajo + (f + 0.5) * altoFila;
+      for (let k = k0; k <= k1; k++) {
+        const z = z0 + (k + 0.5) * paso;
+        const l0 = ((yb - yc) * (z - zc) + (zc - zb) * (y - yc)) / den;
+        const l1 = ((yc - ya) * (z - zc) + (za - zc) * (y - yc)) / den;
+        const l2 = 1 - l0 - l1;
+        if (l0 < 0 || l1 < 0 || l2 < 0) continue;
+        const u = l0 * uvs[a * 2] + l1 * uvs[b * 2] + l2 * uvs[c * 2];
+        const v = l0 * uvs[a * 2 + 1] + l1 * uvs[b * 2 + 1] + l2 * uvs[c * 2 + 1];
+        const px = Math.min(luz.ancho - 1, Math.max(0, Math.floor(u * luz.ancho)));
+        const py = Math.min(luz.alto - 1, Math.max(0, Math.floor(v * luz.alto)));
+        lado[f * nz + k] = luz.datos[py * luz.ancho + px];
+      }
+    }
+  }
+  // Cuánto más oscura es cada tajada que lo que tiene a ±5 cm, por costado.
+  const radio = 10;
+  const perfil = new Float32Array(nz);
+  const veces = new Float32Array(nz);
+  const fila = new Float32Array(filas);
+  for (const lado of lados) {
+    const resta = new Float32Array(nz * filas).fill(NaN);
+    for (let f = 0; f < filas; f++) {
+      let suma = 0;
+      let cuenta = 0;
+      for (let k = -radio; k < nz; k++) {
+        const entra = k + radio < nz ? lado[f * nz + k + radio] : -1;
+        if (entra >= 0) {
+          suma += entra;
+          cuenta++;
+        }
+        const sale = k - radio - 1 >= 0 ? lado[f * nz + k - radio - 1] : -1;
+        if (sale >= 0) {
+          suma -= sale;
+          cuenta--;
+        }
+        if (k >= 0 && lado[f * nz + k] >= 0 && cuenta > radio) {
+          const media = suma / cuenta;
+          resta[f * nz + k] = (media - lado[f * nz + k]) / (media + 12);
+        }
+      }
+    }
+    for (let k = 0; k < nz; k++) {
+      let m = 0;
+      for (let f = 0; f < filas; f++) if (!Number.isNaN(resta[f * nz + k])) fila[m++] = resta[f * nz + k];
+      if (m < filas * 0.6) continue;
+      const orden = fila.subarray(0, m).sort();
+      perfil[k] += orden[Math.floor(m / 2)];
+      veces[k]++;
+    }
+  }
+  for (let k = 0; k < nz; k++) if (veces[k]) perfil[k] /= veces[k];
+  // El pico de cada ventana; la raya tiene que resaltar sobre el ruido de su
+  // propia ventana.
+  const buscar = (desde, hasta) => {
+    const k0 = Math.max(0, Math.round((desde - z0) / paso));
+    const k1 = Math.min(nz - 1, Math.round((hasta - z0) / paso));
+    let mejor = -1;
+    const abs = [];
+    for (let k = k0; k <= k1; k++) {
+      abs.push(Math.abs(perfil[k]));
+      if (mejor < 0 || perfil[k] > perfil[mejor]) mejor = k;
+    }
+    if (mejor < 0) return null;
+    abs.sort((p, q) => p - q);
+    const ruido = abs[Math.floor(abs.length / 2)];
+    return perfil[mejor] > 0.025 && perfil[mejor] > 2.5 * ruido ? z0 + (mejor + 0.5) * paso : null;
+  };
+  // Primero la del medio, que es la más marcada (el pilar, con su caucho). Las
+  // otras dos se buscan a partir de ella, por lo que mide una puerta: el genérico
+  // las pone a ojo, a veces 40 cm al lado (en el Moskvitch, la delantera).
+  const medio = buscar(previa.puertaMedia - 0.35, previa.puertaMedia + 0.35);
+  const salida = {};
+  if (medio !== null) salida.puertaMedia = medio;
+  const del = medio !== null ? buscar(medio - 1.25, medio - 0.75) : buscar(previa.puertaDel - 0.3, previa.puertaDel + 0.3);
+  const tras = medio !== null ? buscar(medio + 0.6, medio + 1.15) : buscar(previa.puertaTras - 0.3, previa.puertaTras + 0.3);
+  if (del !== null) salida.puertaDel = del;
+  if (tras !== null) salida.puertaTras = tras;
+  return salida;
 }
 
 // ---------- Acomodar el genérico a lo medido ----------
@@ -1284,13 +1465,14 @@ export function piezasDelEscaneo(enCarro, carroceria, medidas, entreEjes = null,
 //    las dos llantas.
 //  - La CINTURA (dónde termina la lata y empieza el vidrio): por alturas, el
 //    ancho de la carrocería en la mitad del carro (percentil 70, para que los
-//    espejos no cuenten). La cabina es más angosta que la lata: la cintura
-//    es la primera altura, por encima de lo más ancho, donde el carro se
-//    angosta 8 cm.
+//    espejos no cuenten). La lata baja casi recta y la cabina se cierra hacia
+//    adentro: la cintura es el codo de esa curva.
+//  - El PERFIL de arriba: el codo entre el capó y el parabrisas (capoTras),
+//    dónde se llega al techo (parabrisasAlto) y dónde se acaba (techoTras).
 // Lo que no se pueda leer con confianza no se devuelve, y el genérico usa lo
 // típico. Medido en el Kona escaneado: ejes a -1,23 y +1,53 m, piso a 20 cm,
 // cintura a 1,00 m (el genérico SUV ponía 42 cm y 86 cm).
-export function ajustesDelEscaneo(posiciones, medidas) {
+export function ajustesDelEscaneo(posiciones, medidas, colores = null) {
   const { largo, ancho, alto } = medidas;
   const n = posiciones.length / 3;
   const ajustes = {};
@@ -1304,14 +1486,18 @@ export function ajustesDelEscaneo(posiciones, medidas) {
     const y = posiciones[i * 3 + 1];
     if (b >= 0 && b < nz && y < bajo[b]) bajo[b] = y;
   }
-  let suelo = Infinity;
-  for (const y of bajo) if (y < suelo) suelo = y;
-  if (Number.isFinite(suelo)) {
+  const conDato = Array.from(bajo).filter(Number.isFinite).sort((p, q) => p - q);
+  if (conDato.length > 10) {
+    // Una llanta llega al menos 5 cm más abajo que el bajo de la carrocería
+    // (la mediana); no se compara con el punto más bajo de todos, porque un
+    // piso apenas inclinado deja una de las dos llantas sin contar.
+    const mediana = conDato[Math.floor(conDato.length / 2)];
+    const suelo = Math.min(mediana - 0.05, conDato[0] + 0.1);
     const tramos = [];
     let ini = -1;
     let ult = -1;
     for (let b = 0; b < nz; b++) {
-      if (bajo[b] < suelo + 0.08) {
+      if (bajo[b] < suelo) {
         if (ini < 0) ini = b;
         ult = b;
       } else if (ini >= 0 && b - ult > 2) {
@@ -1322,7 +1508,7 @@ export function ajustesDelEscaneo(posiciones, medidas) {
     if (ini >= 0) tramos.push([ini, ult]);
     const centro = ([a, b]) => z0 + ((a + b + 1) / 2) * paso;
     const ancho_ = ([a, b]) => (b - a + 1) * paso;
-    const llantas = tramos.filter((t) => ancho_(t) >= 0.12 && ancho_(t) <= 1.1);
+    const llantas = tramos.filter((t) => ancho_(t) >= 0.12 && ancho_(t) <= 1.3);
     const mayor = (lista) => lista.sort((p, q) => ancho_(q) - ancho_(p))[0];
     const del = mayor(llantas.filter((t) => centro(t) < -largo * 0.1));
     const tras = mayor(llantas.filter((t) => centro(t) > largo * 0.1));
@@ -1345,6 +1531,7 @@ export function ajustesDelEscaneo(posiciones, medidas) {
       }
     }
   }
+  // La cintura: el codo del ancho por altura, en la mitad del largo.
   const pasoY = 0.05;
   const ny = Math.ceil(alto / pasoY) + 1;
   const xs = Array.from({ length: ny }, () => []);
@@ -1353,29 +1540,158 @@ export function ajustesDelEscaneo(posiciones, medidas) {
     const b = Math.floor(posiciones[i * 3 + 1] / pasoY);
     if (b >= 0 && b < ny) xs[b].push(Math.abs(posiciones[i * 3]));
   }
-  const anchoEn = xs.map((a) => {
-    if (a.length < 20) return NaN;
-    a.sort((p, q) => p - q);
-    return 2 * a[Math.floor(a.length * 0.7)];
-  });
-  let maximo = -1;
-  let enMaximo = -1;
+  const alturas = [];
+  const anchos = [];
   for (let b = 0; b < ny; b++) {
-    const y = b * pasoY;
-    if (y < 0.3 || y > 0.75 * alto || !(anchoEn[b] > maximo)) continue;
-    maximo = anchoEn[b];
-    enMaximo = b;
+    const y = (b + 0.5) * pasoY;
+    if (y < 0.35 * alto || y > 0.93 * alto || xs[b].length < 20) continue;
+    xs[b].sort((p, q) => p - q);
+    alturas.push(y);
+    anchos.push(2 * xs[b][Math.floor(xs[b].length * 0.7)]);
   }
-  if (enMaximo >= 0) {
-    for (let b = enMaximo + 1; b < ny; b++) {
-      if (anchoEn[b] < maximo - 0.08) {
-        const cintura = b * pasoY;
-        if (cintura >= 0.45 * alto && cintura <= 0.85 * alto && cintura > (ajustes.piso ?? 0.3) + 0.35) ajustes.cintura = cintura;
-        break;
-      }
+  const quiebre = codo(alturas, anchos);
+  if (quiebre && quiebre.x >= 0.45 * alto && quiebre.x <= 0.85 * alto) {
+    const promedio = (lista) => lista.reduce((a, b) => a + b, 0) / Math.max(lista.length, 1);
+    const abajo = promedio(anchos.filter((_, i) => alturas[i] < quiebre.x));
+    const arriba = promedio(anchos.filter((_, i) => alturas[i] >= quiebre.x));
+    if (abajo - arriba >= 0.06) ajustes.cintura = quiebre.x;
+  }
+  // Con fotos, la pintura lo dice mejor que la forma: una malla tallada con
+  // siluetas no ve el entrante entre el hombro de la puerta y el techo (en el
+  // Kona, la forma decía 1,15 m y la línea de ventanas está a 1 m).
+  const porColor = cinturaPorColor(posiciones, colores, medidas);
+  if (porColor) ajustes.cintura = porColor;
+  // El perfil de arriba, por tajadas a lo largo y por el centro del carro (sin
+  // espejos ni costados): de adelante hacia atrás sube el capó, sube más el
+  // parabrisas, y luego el techo casi plano hasta que cae la cola.
+  const techoEn = new Float32Array(nz).fill(-Infinity);
+  for (let i = 0; i < n; i++) {
+    if (Math.abs(posiciones[i * 3]) > ancho * 0.3) continue;
+    const b = Math.floor((posiciones[i * 3 + 2] - z0) / paso);
+    if (b >= 0 && b < nz && posiciones[i * 3 + 1] > techoEn[b]) techoEn[b] = posiciones[i * 3 + 1];
+  }
+  let cima = -Infinity;
+  for (const y of techoEn) if (y > cima) cima = y;
+  const nivelTecho = cima - 0.05;
+  let bInicio = -1;
+  let bFin = -1;
+  for (let b = 0; b < nz; b++) {
+    if (techoEn[b] >= nivelTecho) {
+      if (bInicio < 0) bInicio = b;
+      bFin = b;
     }
   }
+  if (bInicio > 0) {
+    const inicioTecho = z0 + (bInicio + 0.5) * paso;
+    const finTecho = z0 + (bFin + 0.5) * paso;
+    const ejeRef = ajustes.ejeDel ?? -largo / 2 + (largo - medidas.entreEjes) * 0.55;
+    // La base del parabrisas: el codo entre el capó y el parabrisas.
+    const zs = [];
+    const ys = [];
+    for (let b = 0; b < bInicio; b++) {
+      const z = z0 + (b + 0.5) * paso;
+      if (z >= ejeRef - 0.15 && Number.isFinite(techoEn[b])) {
+        zs.push(z);
+        ys.push(techoEn[b]);
+      }
+    }
+    const base = codo(zs, ys);
+    if (base && base.despues > base.antes + 0.25) {
+      const capoTras = base.x;
+      if (capoTras > ejeRef + 0.3 && capoTras < ejeRef + 1.35 && inicioTecho > capoTras + 0.3 && inicioTecho < capoTras + 1.3) {
+        ajustes.capoTras = capoTras;
+        ajustes.parabrisasAlto = inicioTecho;
+      }
+    }
+    if (finTecho > inicioTecho + 0.5 && finTecho < largo / 2 - 0.15) ajustes.techoTras = finTecho;
+  }
   return ajustes;
+}
+
+// La línea de ventanas por el color: en los costados, a la mitad del largo, la
+// altura donde deja de haber pintura. La pintura es el color de la franja media
+// (35-60 % del alto). Con pintura sin color (plateado, blanco, negro) no se sabe.
+function cinturaPorColor(posiciones, colores, { largo, ancho, alto }) {
+  if (!colores) return null;
+  const n = posiciones.length / 3;
+  const rojos = [];
+  const verdes = [];
+  const azules = [];
+  const lado = ancho * 0.28;
+  for (let i = 0; i < n; i++) {
+    const y = posiciones[i * 3 + 1];
+    if (y < 0.35 * alto || y > 0.6 * alto || Math.abs(posiciones[i * 3 + 2]) > largo * 0.2 || Math.abs(posiciones[i * 3]) < lado) continue;
+    rojos.push(colores[i * 3]);
+    verdes.push(colores[i * 3 + 1]);
+    azules.push(colores[i * 3 + 2]);
+  }
+  if (rojos.length < 50) return null;
+  const mediana = (a) => a.sort((p, q) => p - q)[Math.floor(a.length / 2)];
+  const r = mediana(rojos);
+  const g = mediana(verdes);
+  const b = mediana(azules);
+  const maximo = Math.max(r, g, b);
+  if (maximo < 20 || (maximo - Math.min(r, g, b)) / maximo < 0.25) return null;
+  const suma = r + g + b;
+  const pasoY = 0.04;
+  const ny = Math.ceil(alto / pasoY) + 1;
+  const pintura = new Float32Array(ny);
+  const total = new Float32Array(ny);
+  for (let i = 0; i < n; i++) {
+    if (Math.abs(posiciones[i * 3 + 2]) > largo * 0.22 || Math.abs(posiciones[i * 3]) < lado) continue;
+    const k = Math.floor(posiciones[i * 3 + 1] / pasoY);
+    if (k < 0 || k >= ny) continue;
+    const cr = colores[i * 3];
+    const cg = colores[i * 3 + 1];
+    const cb = colores[i * 3 + 2];
+    const cs = cr + cg + cb + 1;
+    // Misma cromaticidad (el reflejo aclara u oscurece, no cambia tanto el tono).
+    const dist = Math.abs(cr / cs - r / suma) + Math.abs(cg / cs - g / suma) + Math.abs(cb / cs - b / suma);
+    total[k]++;
+    if (dist < 0.16 && Math.max(cr, cg, cb) > 0.4 * maximo) pintura[k]++;
+  }
+  const fraccion = (k) => (total[k] >= 10 ? pintura[k] / total[k] : 0);
+  for (let k = Math.ceil((0.5 * alto) / pasoY); k < ny - 2; k++) {
+    if (fraccion(k) < 0.45 && fraccion(k + 1) < 0.5) {
+      const y = k * pasoY;
+      return y <= 0.85 * alto ? y : null;
+    }
+  }
+  return null;
+}
+
+// Dónde quiebra una curva: la recta partida en dos que mejor la sigue. Devuelve
+// la x del quiebre y las pendientes de antes y de después.
+function codo(xs, ys) {
+  const n = xs.length;
+  if (n < 6) return null;
+  const recta = (a, b) => {
+    let sx = 0;
+    let sy = 0;
+    let sxx = 0;
+    let sxy = 0;
+    const m = b - a;
+    for (let i = a; i < b; i++) {
+      sx += xs[i];
+      sy += ys[i];
+      sxx += xs[i] * xs[i];
+      sxy += xs[i] * ys[i];
+    }
+    const den = m * sxx - sx * sx;
+    const pendiente = den > 1e-12 ? (m * sxy - sx * sy) / den : 0;
+    const corte = (sy - pendiente * sx) / m;
+    let error = 0;
+    for (let i = a; i < b; i++) error += (ys[i] - pendiente * xs[i] - corte) ** 2;
+    return { pendiente, error };
+  };
+  let mejor = null;
+  for (let k = 3; k <= n - 3; k++) {
+    const a = recta(0, k);
+    const b = recta(k, n);
+    const error = a.error + b.error;
+    if (!mejor || error < mejor.error) mejor = { error, x: (xs[k - 1] + xs[k]) / 2, antes: a.pendiente, despues: b.pendiente };
+  }
+  return mejor;
 }
 
 // Qué vértices son PINTURA, por el color (solo si el escaneo trae color).
@@ -1396,24 +1712,30 @@ export function pinturaDelEscaneo(posiciones, colores, medidas) {
     const min = Math.min(colores[i * 3], colores[i * 3 + 1], colores[i * 3 + 2]) / 255;
     return [max > 0 ? (max - min) / max : 0, max];
   };
-  const sat = [];
-  const val = [];
+  // Por costado: un lado puede estar a contraluz y dar tres veces menos brillo. Con
+  // una sola referencia, todo ese lado era "plástico oscuro" y sus puertas salían a
+  // huecos.
+  const sat = [[], []];
+  const val = [[], []];
   for (let i = 0; i < n; i++) {
     const y = posiciones[i * 3 + 1];
     if (y < 0.35 * alto || y > 0.6 * alto || Math.abs(posiciones[i * 3 + 2]) > largo * 0.2 || Math.abs(posiciones[i * 3]) < ancho / 2 - 0.25) continue;
     const [s, v] = hsv(i);
-    sat.push(s);
-    val.push(v);
+    const lado = posiciones[i * 3] > 0 ? 0 : 1;
+    sat[lado].push(s);
+    val[lado].push(v);
   }
-  if (sat.length < 50) return null;
+  if (sat[0].length + sat[1].length < 50) return null;
   const mediana = (a) => a.sort((p, q) => p - q)[Math.floor(a.length / 2)];
-  const satPintura = mediana(sat);
-  const valPintura = mediana(val);
-  if (satPintura < 0.25) return null;
+  if (mediana([...sat[0], ...sat[1]]) < 0.25) return null;
+  // Un costado casi sin muestras usa las del otro.
+  const satPintura = [0, 1].map((k) => mediana(sat[k].length >= 30 ? sat[k] : sat[1 - k]));
+  const valPintura = [0, 1].map((k) => mediana(val[k].length >= 30 ? val[k] : val[1 - k]));
   const pintura = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
     const [s, v] = hsv(i);
-    pintura[i] = v < 0.5 * valPintura || (s < 0.4 * satPintura && v < 0.75 * valPintura) ? 0 : 1;
+    const lado = posiciones[i * 3] > 0 ? 0 : 1;
+    pintura[i] = v < 0.5 * valPintura[lado] || (s < 0.4 * satPintura[lado] && v < 0.75 * valPintura[lado]) ? 0 : 1;
   }
   return pintura;
 }
@@ -1458,13 +1780,74 @@ export function suavizarEtiquetas(indices, etiquetas, vueltas = 3) {
   return actual;
 }
 
+// Lo que queda de pecas: un pedacito de pieza suelto (el guardafango en cuatro
+// trozos alrededor de la llanta), o un hueco dentro de una puerta donde un reflejo
+// oscuro pareció plástico. Un pedazo conectado de menos de `minimo` vértices (a
+// 2 cm, unos 15 × 15 cm) toma la etiqueta que más tiene alrededor. Lo que no es
+// pieza (etiqueta 0) rodeado casi del todo por UNA sola pieza es un reflejo dentro
+// de esa lata, aunque sea más grande (hasta `minimoHueco`, unos 50 × 50 cm); una
+// ventana no: toca el resto del vidrio y varias piezas.
+export function quitarIslas(indices, etiquetas, minimo = 60, minimoHueco = 600) {
+  const n = etiquetas.length;
+  const grado = new Uint32Array(n + 1);
+  for (let t = 0; t < indices.length; t++) grado[indices[t] + 1] += 2;
+  for (let i = 0; i < n; i++) grado[i + 1] += grado[i];
+  const vecinos = new Uint32Array(grado[n]);
+  const lleno = grado.slice(0, n);
+  for (let t = 0; t < indices.length; t += 3) {
+    for (let k = 0; k < 3; k++) {
+      const a = indices[t + k];
+      vecinos[lleno[a]++] = indices[t + ((k + 1) % 3)];
+      vecinos[lleno[a]++] = indices[t + ((k + 2) % 3)];
+    }
+  }
+  const salida = Uint8Array.from(etiquetas);
+  const visto = new Uint8Array(n);
+  const pila = [];
+  const pedazo = [];
+  const cuenta = new Uint32Array(256);
+  for (let v = 0; v < n; v++) {
+    if (visto[v] || grado[v] === grado[v + 1]) continue;
+    const propia = salida[v];
+    pedazo.length = 0;
+    pila.push(v);
+    visto[v] = 1;
+    cuenta.fill(0);
+    while (pila.length) {
+      const u = pila.pop();
+      pedazo.push(u);
+      for (let k = grado[u]; k < grado[u + 1]; k++) {
+        const w = vecinos[k];
+        if (salida[w] === propia) {
+          if (!visto[w]) {
+            visto[w] = 1;
+            pila.push(w);
+          }
+        } else {
+          cuenta[salida[w]]++;
+        }
+      }
+    }
+    let mejor = -1;
+    let borde = 0;
+    for (let e = 0; e < 256; e++) {
+      borde += cuenta[e];
+      if (cuenta[e] > 0 && (mejor < 0 || cuenta[e] > cuenta[mejor])) mejor = e;
+    }
+    if (mejor < 0) continue;
+    const hueco = propia === 0 && pedazo.length < minimoHueco && cuenta[mejor] > 0.85 * borde;
+    if (pedazo.length < minimo || hueco) for (const u of pedazo) salida[u] = mejor;
+  }
+  return salida;
+}
+
 // Volver a poner las piezas de un escaneo con otra carrocería (la persona
 // la corrigió en la ficha): la malla ya está en el marco del carro, así que
 // solo cambian las etiquetas. Devuelve un escaneo nuevo; el de entrada no
 // se toca.
 export function reetiquetarEscaneo(escaneo, carroceria) {
   const ejes = escaneo.medidasDibujo && escaneo.medidasDibujo.entreEjes;
-  return { ...escaneo, ...piezasDelEscaneo(escaneo.posiciones, carroceria, escaneo.medidas, ejes, { indices: escaneo.indices, colores: escaneo.colores }) };
+  return { ...escaneo, ...piezasDelEscaneo(escaneo.posiciones, carroceria, escaneo.medidas, ejes, { indices: escaneo.indices, colores: escaneo.colores, previos: escaneo.ajustes }) };
 }
 
 // ---------- El modelo para el visor ----------
@@ -1483,16 +1866,22 @@ function srgbALineal(c) {
 // de la escena: así marcarlas desde la lista sigue funcionando.
 // Las aristas donde cambia la pieza, como segmentos (THREE.LineSegments con
 // userData.juntas). Una arista la comparten dos triángulos; si son de piezas
-// distintas y al menos uno es pieza, es junta.
-export function juntasDelEscaneo(posiciones, indices, deTriangulo, nombres) {
-  const nv = posiciones.length / 3;
+// distintas y al menos uno es pieza, es junta. Sobre triángulos de 2 cm la
+// línea sale en escalera: cada tramo se alisa con sus vecinos (los cruces de
+// tres piezas se quedan quietos), y se botan las islas de pocos tramos, que
+// son pecas y no juntas. Va 3 mm por encima de la lata, para que no parpadee.
+export function juntasDelEscaneo(posiciones, indices, deTriangulo, nombres, normales = null) {
+  const { grupo, cuantos } = soldarVertices(posiciones);
+  const unVertice = new Int32Array(cuantos).fill(-1);
+  for (let v = 0; v < grupo.length; v++) if (unVertice[grupo[v]] < 0) unVertice[grupo[v]] = v;
   const primera = new Map();
-  const segmentos = [];
+  const tramos = [];
   for (let t = 0; t < indices.length / 3; t++) {
     for (let k = 0; k < 3; k++) {
-      const a = indices[t * 3 + k];
-      const b = indices[t * 3 + ((k + 1) % 3)];
-      const clave = a < b ? a * nv + b : b * nv + a;
+      const a = grupo[indices[t * 3 + k]];
+      const b = grupo[indices[t * 3 + ((k + 1) % 3)]];
+      if (a === b) continue;
+      const clave = a < b ? a * cuantos + b : b * cuantos + a;
       const otra = primera.get(clave);
       if (otra === undefined) {
         primera.set(clave, t);
@@ -1500,9 +1889,66 @@ export function juntasDelEscaneo(posiciones, indices, deTriangulo, nombres) {
       }
       const ea = deTriangulo[t];
       const eb = deTriangulo[otra];
-      if (ea !== eb && (nombres[ea] !== 'nada' || nombres[eb] !== 'nada')) {
-        for (const v of [a, b]) segmentos.push(posiciones[v * 3], posiciones[v * 3 + 1], posiciones[v * 3 + 2]);
+      if (ea !== eb && (nombres[ea] !== 'nada' || nombres[eb] !== 'nada')) tramos.push(a, b);
+    }
+  }
+  // Los vecinos de cada punto de junta.
+  const vecinos = new Map();
+  const unir = (a, b) => {
+    let lista = vecinos.get(a);
+    if (!lista) vecinos.set(a, (lista = []));
+    lista.push(b);
+  };
+  for (let i = 0; i < tramos.length; i += 2) {
+    unir(tramos[i], tramos[i + 1]);
+    unir(tramos[i + 1], tramos[i]);
+  }
+  // Las islas: pedazos conectados de pocos puntos.
+  const isla = new Map();
+  const tamano = [];
+  for (const inicio of vecinos.keys()) {
+    if (isla.has(inicio)) continue;
+    const id = tamano.length;
+    let cuenta = 0;
+    const pila = [inicio];
+    isla.set(inicio, id);
+    while (pila.length) {
+      const g = pila.pop();
+      cuenta++;
+      for (const w of vecinos.get(g)) {
+        if (!isla.has(w)) {
+          isla.set(w, id);
+          pila.push(w);
+        }
       }
+    }
+    tamano.push(cuenta);
+  }
+  // Alisar: solo los puntos con exactamente dos vecinos.
+  const pos = new Map();
+  for (const g of vecinos.keys()) {
+    const v = unVertice[g];
+    pos.set(g, [posiciones[v * 3], posiciones[v * 3 + 1], posiciones[v * 3 + 2]]);
+  }
+  for (let vuelta = 0; vuelta < 14; vuelta++) {
+    const nuevas = new Map();
+    for (const [g, lista] of vecinos) {
+      if (lista.length !== 2) continue;
+      const p = pos.get(g);
+      const a = pos.get(lista[0]);
+      const b = pos.get(lista[1]);
+      nuevas.set(g, [0.5 * p[0] + 0.25 * (a[0] + b[0]), 0.5 * p[1] + 0.25 * (a[1] + b[1]), 0.5 * p[2] + 0.25 * (a[2] + b[2])]);
+    }
+    for (const [g, p] of nuevas) pos.set(g, p);
+  }
+  const segmentos = [];
+  for (let i = 0; i < tramos.length; i += 2) {
+    if (tamano[isla.get(tramos[i])] < 8) continue;
+    for (const g of [tramos[i], tramos[i + 1]]) {
+      const p = pos.get(g);
+      const v = unVertice[g];
+      const n = normales ? [normales[v * 3], normales[v * 3 + 1], normales[v * 3 + 2]] : [0, 0, 0];
+      segmentos.push(p[0] + n[0] * 0.003, p[1] + n[1] * 0.003, p[2] + n[2] * 0.003);
     }
   }
   const geo = new THREE.BufferGeometry();
@@ -1516,8 +1962,119 @@ export function juntasDelEscaneo(posiciones, indices, deTriangulo, nombres) {
   return lineas;
 }
 
+// La imagen se abre aparte (decodificar 4096 px toma un momento): mientras
+// tanto se ve el color por vértice, y al llegar la foto entra en cada pieza.
+// `modelo.texturaLista` avisa cuando ya está. En Node (las pruebas) no hay
+// createImageBitmap y se queda con el color por vértice.
+//
+// La foto va sin luces: ya trae las suyas. Con las luces del visor encima, y el
+// tono de cine, salía un carro pálido y sin contraste, justo lo contrario de lo que
+// se ve en la foto. Una pieza marcada se mezcla con su color (`resaltar`, en
+// carro.js).
+function materialDeFoto(textura) {
+  const material = new THREE.ShaderMaterial({
+    uniforms: { mapa: { value: textura }, tinte: { value: new THREE.Color(0xffffff) }, mezcla: { value: 0 } },
+    side: THREE.DoubleSide,
+    toneMapped: false,
+    vertexShader: 'varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform sampler2D mapa; uniform vec3 tinte; uniform float mezcla; varying vec2 vU;
+      void main(){
+        gl_FragColor = vec4(mix(texture2D(mapa, vU).rgb, tinte, mezcla), 1.0);
+        #include <colorspace_fragment>
+      }`,
+  });
+  // Quien cierra el visor suelta material.map: así suelta también la foto.
+  material.map = textura;
+  return material;
+}
+
+function ponerTextura(modelo, blob) {
+  modelo.texturaLista = Promise.resolve(null);
+  if (typeof createImageBitmap !== 'function') return;
+  const textura = new THREE.Texture();
+  textura.flipY = false; // las coordenadas ya vienen con v = 0 arriba en la imagen
+  textura.colorSpace = THREE.SRGBColorSpace;
+  textura.anisotropy = 8;
+  modelo.textura = textura;
+  modelo.texturaLista = createImageBitmap(blob).then(
+    (imagen) => {
+      textura.image = imagen;
+      textura.needsUpdate = true;
+      modelo.grupo.traverse((malla) => {
+        if (!malla.isMesh || !malla.geometry.attributes.uv || !malla.material.isMeshStandardMaterial) return;
+        malla.material.dispose();
+        malla.material = materialDeFoto(textura);
+      });
+      // Con la foto, la junta real ya se ve: la línea dibujada solo la acompaña.
+      const juntas = modelo.grupo.getObjectByName('juntas');
+      if (juntas) juntas.material.opacity = 0.45;
+      return textura;
+    },
+    () => null,
+  );
+}
+
+// Los vértices que están en el mismo sitio (una malla con textura los repite
+// donde cambia de foto) forman un solo grupo.
+function soldarVertices(posiciones) {
+  const n = posiciones.length / 3;
+  const grupo = new Int32Array(n);
+  const vistos = new Map();
+  let cuantos = 0;
+  for (let v = 0; v < n; v++) {
+    // A 0,1 mm, en ±6,5 m: 17 bits por eje caben en un número de 51 bits.
+    const clave = (Math.round(posiciones[v * 3] * 1e4) + 65536) * 17179869184 + (Math.round(posiciones[v * 3 + 1] * 1e4) + 65536) * 131072 + (Math.round(posiciones[v * 3 + 2] * 1e4) + 65536);
+    let g = vistos.get(clave);
+    if (g === undefined) {
+      g = cuantos++;
+      vistos.set(clave, g);
+    }
+    grupo[v] = g;
+  }
+  return { grupo, cuantos };
+}
+
+// Las normales de toda la malla, soldando por posición: una malla con textura
+// repite los vértices donde cambia de foto, y cada pieza se dibuja aparte. Si
+// cada pedazo sacara sus propias normales, en cada costura y en cada junta se
+// vería un quiebre de luz que la lata no tiene.
+export function normalesSoldadas(posiciones, indices) {
+  const n = posiciones.length / 3;
+  const { grupo, cuantos: grupos } = soldarVertices(posiciones);
+  const suma = new Float32Array(grupos * 3);
+  for (let t = 0; t < indices.length; t += 3) {
+    const [a, b, c] = [indices[t], indices[t + 1], indices[t + 2]];
+    const ux = posiciones[b * 3] - posiciones[a * 3];
+    const uy = posiciones[b * 3 + 1] - posiciones[a * 3 + 1];
+    const uz = posiciones[b * 3 + 2] - posiciones[a * 3 + 2];
+    const wx = posiciones[c * 3] - posiciones[a * 3];
+    const wy = posiciones[c * 3 + 1] - posiciones[a * 3 + 1];
+    const wz = posiciones[c * 3 + 2] - posiciones[a * 3 + 2];
+    const nx = uy * wz - uz * wy;
+    const ny = uz * wx - ux * wz;
+    const nz = ux * wy - uy * wx;
+    for (const v of [a, b, c]) {
+      const g = grupo[v] * 3;
+      suma[g] += nx;
+      suma[g + 1] += ny;
+      suma[g + 2] += nz;
+    }
+  }
+  const salida = new Float32Array(n * 3);
+  for (let v = 0; v < n; v++) {
+    const g = grupo[v] * 3;
+    const largo = Math.hypot(suma[g], suma[g + 1], suma[g + 2]) || 1;
+    salida[v * 3] = suma[g] / largo;
+    salida[v * 3 + 1] = suma[g + 1] / largo;
+    salida[v * 3 + 2] = suma[g + 2] / largo;
+  }
+  return salida;
+}
+
 export function modeloDesdeEscaneo(escaneo, { colorBase = 0xcfd4da } = {}) {
-  const { posiciones, indices, colores, etiquetas, nombres } = escaneo;
+  const { posiciones, indices, colores, etiquetas, nombres, textura = null } = escaneo;
+  const uvs = textura ? escaneo.uvs || null : null;
+  const normales = normalesSoldadas(posiciones, indices);
   const grupo = new THREE.Group();
   grupo.name = 'carro-escaneado';
   const porTriangulo = new Map();
@@ -1536,15 +2093,16 @@ export function modeloDesdeEscaneo(escaneo, { colorBase = 0xcfd4da } = {}) {
   const seleccionables = [];
   const porId = new Map();
   for (const [etiqueta, lista] of porTriangulo) {
-    const sub = recortarMalla({ posiciones, indices: Uint32Array.from(lista), colores }, new Uint8Array(posiciones.length / 3).fill(1));
+    const sub = recortarMalla({ posiciones, indices: Uint32Array.from(lista), colores, uvs, normales }, new Uint8Array(posiciones.length / 3).fill(1));
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(sub.posiciones, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(sub.normales, 3));
+    if (sub.uvs) geo.setAttribute('uv', new THREE.BufferAttribute(sub.uvs, 2));
     // Los colores se guardan en sRGB (0-255, como en el archivo) y Three.js
     // espera el color por vértice en lineal: sin pasarlos, el vino tinto
     // salía rosado.
     if (sub.colores) geo.setAttribute('color', new THREE.BufferAttribute(Float32Array.from(sub.colores, (v) => srgbALineal(v / 255)), 3));
     geo.setIndex(new THREE.BufferAttribute(sub.indices, 1));
-    geo.computeVertexNormals();
     const nombre = nombres[etiqueta];
     const esPieza = nombre !== 'nada';
     const material = new THREE.MeshStandardMaterial({
@@ -1568,7 +2126,7 @@ export function modeloDesdeEscaneo(escaneo, { colorBase = 0xcfd4da } = {}) {
   // pieza), como una línea oscura, igual que la luz entre dos latas de un
   // carro de verdad. Sin ellas, en un escaneo gris no se ve dónde termina
   // la puerta y empieza el guardafango (pedido de Joan, 27-oct-2026).
-  grupo.add(juntasDelEscaneo(posiciones, indices, deTriangulo, nombres));
+  grupo.add(juntasDelEscaneo(posiciones, indices, deTriangulo, nombres, normales));
   // Las de adentro, del genérico, sin agregarlas a la escena.
   const ajustes = escaneo.ajustes || {};
   const generico = construirCarro({ colorBase, carroceria: escaneo.carroceria, medidas: escaneo.medidasDibujo, ajustes });
@@ -1576,5 +2134,7 @@ export function modeloDesdeEscaneo(escaneo, { colorBase = 0xcfd4da } = {}) {
     if (!porId.has(malla.userData.piezaId)) porId.set(malla.userData.piezaId, malla);
   }
   grupo.updateMatrixWorld(true);
-  return { grupo, seleccionables, porId, articulaciones: new Map(), disposicion: disposicion(escaneo.carroceria, escaneo.medidasDibujo, ajustes), escaneado: true };
+  const modelo = { grupo, seleccionables, porId, articulaciones: new Map(), disposicion: disposicion(escaneo.carroceria, escaneo.medidasDibujo, ajustes), escaneado: true };
+  if (uvs) ponerTextura(modelo, textura);
+  return modelo;
 }
