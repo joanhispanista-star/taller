@@ -175,6 +175,14 @@ Safari en ese camino, por capas:
 Probado simulando cada falla en la app, con Edge sin ventana
 (`pruebas/datos-externos/iphone/fallas.mjs`, fuera de git). **Falta correrlo en un iPhone.**
 
+**Si algo falla en un celular: `diagnostico.html`.** Desde el PC no se puede correr Safari, así que esa
+página prueba cada paso en el celular de verdad, con el código que ese celular tiene instalado, y dice
+qué falló con las palabras del navegador: la versión instalada contra la publicada, la base, los
+lienzos, cada módulo, el camino de "Abrir en 3D" (también con una foto de la cámara), el 3D, y hasta
+dónde aguanta la memoria de imagen. No va en la precarga, así que sale siempre de la red y sirve
+también cuando el celular se quedó en una versión vieja; por eso trae además un botón para traer la
+versión nueva a la fuerza. Solo lee, y lo que escribe lo borra.
+
 **El 3 de noviembre, carros reales que se ven reales.** Joan pidió ver un carro
 de verdad, no "un carro de juguete", y que cada pieza se lea clara. Lo que entró
 a la app (sirve para cualquier archivo con textura, como el GLB de RealityScan):

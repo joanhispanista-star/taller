@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Diagnóstico del Taller</title>
+<!-- La misma resolución de "three" que usan las páginas de la app. -->
+<script type="importmap">
+{ "imports": { "three": "./js/vendor/three.module.min.js" } }
+</script>
+<style>
+  :root { color-scheme: dark; --fondo: #1a1e24; --panel: #242a32; --texto: #eef1f4; --suave: #a7b0bb; --acento: #ff7a1a; --bien: #3ddc84; --mal: #ff5d5d; --ojo: #ffd23f; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px 16px 48px; background: var(--fondo); color: var(--texto); font: 15px/1.4 system-ui, -apple-system, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { margin: 6px 0; color: var(--suave); }
+  #resumen { margin: 12px 0; padding: 12px; border-radius: 12px; background: var(--panel); }
+  #resumen b { color: var(--texto); }
+  #resumen .falla { color: var(--mal); margin-top: 6px; word-break: break-word; }
+  button { width: 100%; min-height: 46px; margin: 6px 0; border-radius: 12px; border: 1px solid #3a424c; background: var(--panel); color: var(--texto); font: 600 15px system-ui, -apple-system, sans-serif; }
+  button.primario { background: var(--acento); border-color: var(--acento); color: #1a1e24; }
+  button:disabled { opacity: 0.5; }
+  ul { list-style: none; margin: 12px 0; padding: 0; }
+  li { padding: 8px 0; border-top: 1px solid #2f363f; word-break: break-word; }
+  li b { font-weight: 600; }
+  li small { display: block; color: var(--suave); font-size: 12.5px; }
+  li.ok b::before { content: '✓ '; color: var(--bien); }
+  li.mal b::before { content: '✗ '; color: var(--mal); }
+  li.mal small { color: var(--mal); }
+  li.ojo b::before { content: '! '; color: var(--ojo); }
+  li.info b::before { content: '· '; color: var(--suave); }
+  canvas#lienzo3d { width: 100%; height: 200px; display: block; border-radius: 12px; background: #000; margin: 8px 0; }
+</style>
+</head>
+<body>
+<h1>Diagnóstico del Taller</h1>
+<p>Mira qué deja hacer este celular. No cambia tus carros. Cuando termine, mándale un pantallazo a Claude.</p>
+<div id="resumen">Revisando…</div>
+<button id="foto" class="primario" type="button">1. Probar con una foto</button>
+<input id="archivo" type="file" accept="image/*" capture="environment" hidden>
+<button id="tres" type="button">2. Probar el carro en 3D</button>
+<canvas id="lienzo3d" hidden></canvas>
+<button id="lienzos" type="button">3. Medir la memoria de imagen (puede recargar la página)</button>
+<button id="copiar" type="button">Copiar el resultado</button>
+<button id="forzar" type="button">Traer la versión nueva a la fuerza (no borra tus carros)</button>
+<ul id="pasos"></ul>
+
+<script type="module">
+// Por qué existe esta página: el iPhone de Joan falló al crear el carro, y desde el PC no se puede
+// correr Safari. Aquí se prueba cada paso del camino en el celular de verdad, con el código que ese
+// celular tiene instalado, y se dice qué falló con las palabras del navegador. No va en la precarga:
+// sale siempre de la red, así que sirve también cuando el celular se quedó en una versión vieja.
+const ui = {
+  resumen: document.getElementById('resumen'),
+  pasos: document.getElementById('pasos'),
+  foto: document.getElementById('foto'),
+  archivo: document.getElementById('archivo'),
+  tres: document.getElementById('tres'),
+  lienzo3d: document.getElementById('lienzo3d'),
+  lienzos: document.getElementById('lienzos'),
+  copiar: document.getElementById('copiar'),
+  forzar: document.getElementById('forzar'),
+};
+const BD_REGISTRO = 'taller-pintura';
+const BD_ESCANEOS = 'taller-escaneos';
+const BD_PRUEBA = 'taller-diagnostico';
+const PLACA_PRUEBA = 'DIAG01';
+const lineas = [];
+const fallas = [];
+let versionAca = '';
+let versionPublicada = '';
+
+const textoDeError = (e) => (e && (e.name || 'Error') + ': ' + (e.message || e)) || String(e);
+function anotar(clase, titulo, detalle = '') {
+  const li = document.createElement('li');
+  li.className = clase;
+  const b = document.createElement('b');
+  b.textContent = titulo;
+  li.append(b);
+  if (detalle) {
+    const s = document.createElement('small');
+    s.textContent = detalle;
+    li.append(s);
+  }
+  ui.pasos.append(li);
+  lineas.push((clase === 'ok' ? 'OK ' : clase === 'mal' ? 'MAL ' : clase === 'ojo' ? 'OJO ' : '') + titulo + (detalle ? ' :: ' + detalle : ''));
+  if (clase === 'mal') fallas.push(titulo + ': ' + detalle);
+  pintarResumen();
+}
+function pintarResumen() {
+  ui.resumen.replaceChildren();
+  const v = document.createElement('div');
+  const igual = versionAca && versionAca === versionPublicada;
+  v.innerHTML = `<b>Versión en este celular:</b> ${versionAca || 'sin saber'}<br><b>Versión publicada:</b> ${versionPublicada || 'sin saber'}` + (versionAca && versionPublicada ? (igual ? '<br>Está al día.' : '<br><b style="color:var(--ojo)">Este celular sigue con una versión vieja.</b>') : '');
+  ui.resumen.append(v);
+  const t = document.createElement('div');
+  t.style.marginTop = '6px';
+  t.textContent = fallas.length ? 'Pasos con falla: ' + fallas.length : 'Ninguna falla hasta ahora.';
+  ui.resumen.append(t);
+  for (const f of fallas.slice(0, 6)) {
+    const d = document.createElement('div');
+    d.className = 'falla';
+    d.textContent = f;
+    ui.resumen.append(d);
+  }
+}
+window.addEventListener('error', (e) => anotar('mal', 'Error en la página', (e.message || '') + ' ' + (e.filename || '') + ':' + (e.lineno || '')));
+window.addEventListener('unhandledrejection', (e) => anotar('mal', 'Promesa sin atender', textoDeError(e.reason)));
+
+// Algunos Safari dejan una petición a la base sin respuesta: un paso no puede quedarse colgado.
+function conTope(promesa, ms) {
+  let reloj;
+  const vencido = new Promise((_, rechazar) => {
+    reloj = setTimeout(() => rechazar(new DOMException('no respondió en ' + ms / 1000 + ' s', 'TimeoutError')), ms);
+  });
+  return Promise.race([promesa, vencido]).finally(() => clearTimeout(reloj));
+}
+async function paso(titulo, fn, tope = 20000) {
+  const inicio = performance.now();
+  try {
+    const r = await conTope(Promise.resolve().then(fn), tope);
+    const ms = Math.round(performance.now() - inicio);
+    // Solo texto: un paso también puede devolver la base abierta o un módulo, que no se pueden pintar.
+    const detalle = r && typeof r === 'object' ? r.detalle : r;
+    anotar(r && r.ojo ? 'ojo' : 'ok', titulo, [typeof detalle === 'string' || typeof detalle === 'number' ? detalle : '', ms + ' ms'].filter((x) => x !== '').join(' · '));
+    return r === undefined ? true : r;
+  } catch (e) {
+    console.warn(titulo, e);
+    anotar('mal', titulo, textoDeError(e));
+    return null;
+  }
+}
+const pedir = (p) => new Promise((listo, mal) => {
+  p.onsuccess = () => listo(p.result);
+  p.onerror = () => mal(p.error || new Error('la petición falló'));
+});
+function abrirBase(nombre, version, alSubir) {
+  return new Promise((listo, mal) => {
+    const p = version ? indexedDB.open(nombre, version) : indexedDB.open(nombre);
+    p.onupgradeneeded = () => alSubir && alSubir(p.result);
+    p.onsuccess = () => listo(p.result);
+    p.onerror = () => mal(p.error || new Error('no abrió'));
+    p.onblocked = () => mal(new Error('otra pestaña la tiene bloqueada'));
+  });
+}
+const mb = (n) => (n / 1e6).toFixed(n < 1e7 ? 1 : 0) + ' MB';
+
+// ---------- Lo que corre solo ----------
+
+async function versionDelServiceWorker(sw) {
+  return new Promise((listo) => {
+    const escuchar = (e) => {
+      if (!e.data || e.data.tipo !== 'version') return;
+      navigator.serviceWorker.removeEventListener('message', escuchar);
+      clearTimeout(reloj);
+      listo(e.data.version || '');
+    };
+    const reloj = setTimeout(() => {
+      navigator.serviceWorker.removeEventListener('message', escuchar);
+      listo('');
+    }, 2000);
+    navigator.serviceWorker.addEventListener('message', escuchar);
+    sw.postMessage({ tipo: 'version' });
+  });
+}
+
+async function revisarVersion() {
+  await paso('Versión publicada', async () => {
+    const texto = await (await fetch('sw.js?diagnostico=' + Date.now(), { cache: 'no-store' })).text();
+    versionPublicada = (/VERSION = '([^']*)'/.exec(texto) || [])[1] || '';
+    return versionPublicada;
+  });
+  if (!('serviceWorker' in navigator)) {
+    anotar('ojo', 'Este navegador no tiene service worker');
+    return;
+  }
+  await paso('Versión instalada', async () => {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return { detalle: 'la app no está instalada todavía en este navegador', ojo: true };
+    const partes = [];
+    if (reg.active) partes.push('activa ' + reg.active.state);
+    if (reg.waiting) partes.push('una ESPERANDO');
+    if (reg.installing) partes.push('una instalándose');
+    const sw = navigator.serviceWorker.controller || reg.active;
+    if (sw) versionAca = await versionDelServiceWorker(sw);
+    return { detalle: (versionAca || 'no contestó') + ' · ' + partes.join(', ') + (navigator.serviceWorker.controller ? '' : ' · sin controlar esta página'), ojo: Boolean(reg.waiting) };
+  });
+  if (window.caches) await paso('Cachés guardadas', async () => (await caches.keys()).join(', ') || 'ninguna');
+}
+
+async function revisarNavegador() {
+  anotar('info', 'Navegador', navigator.userAgent);
+  anotar('info', 'Pantalla', `${innerWidth} x ${innerHeight} a ${devicePixelRatio}x · instalada: ${Boolean(navigator.standalone) || matchMedia('(display-mode: standalone)').matches}`);
+  if (navigator.storage && navigator.storage.estimate) {
+    await paso('Espacio para la app', async () => {
+      const { usage, quota } = await navigator.storage.estimate();
+      const persistente = navigator.storage.persisted ? await navigator.storage.persisted() : '?';
+      return `usa ${mb(usage || 0)} de ${mb(quota || 0)} · no se borra sola: ${persistente}`;
+    });
+  }
+  await paso('localStorage', () => {
+    localStorage.setItem('taller-diagnostico', '1');
+    if (localStorage.getItem('taller-diagnostico') !== '1') throw new Error('no devolvió lo guardado');
+    localStorage.removeItem('taller-diagnostico');
+  });
+}
+
+let bdAntesDeLaCamara = null;
+async function revisarBase() {
+  const bd = await paso('Base: abrir', async () => abrirBase(BD_PRUEBA, 1, (b) => b.createObjectStore('prueba')));
+  if (!bd) return;
+  bdAntesDeLaCamara = bd;
+  const tienda = (modo) => bd.transaction('prueba', modo).objectStore('prueba');
+  await paso('Base: guardar y leer texto', async () => {
+    await pedir(tienda('readwrite').put({ hola: 'mundo' }, 'texto'));
+    const r = await pedir(tienda('readonly').get('texto'));
+    if (!r || r.hola !== 'mundo') throw new Error('no devolvió lo guardado');
+  });
+  await paso('Base: guardar y leer bytes (como guarda la versión nueva)', async () => {
+    const bytes = new Uint8Array(1e6).fill(7).buffer;
+    await pedir(tienda('readwrite').put({ bytes, tipo: 'image/jpeg' }, 'bytes'));
+    const r = await pedir(tienda('readonly').get('bytes'));
+    if (!r || r.bytes.byteLength !== 1e6 || new Uint8Array(r.bytes)[999] !== 7) throw new Error('no devolvió lo guardado');
+    await pedir(tienda('readwrite').delete('bytes'));
+  });
+  await paso('Base: guardar y leer un Blob (como guardaba la versión vieja)', async () => {
+    const blob = new Blob([new Uint8Array(1e5).fill(9)], { type: 'image/jpeg' });
+    await pedir(tienda('readwrite').put(blob, 'blob'));
+    const r = await pedir(tienda('readonly').get('blob'));
+    const leido = new Uint8Array(await r.arrayBuffer());
+    if (leido.length !== 1e5 || leido[99] !== 9) throw new Error('no devolvió lo guardado');
+    await pedir(tienda('readwrite').delete('blob'));
+  });
+}
+
+async function revisarRegistro() {
+  // Mirar antes de abrir: abrir una base que no existe la crea vacía.
+  let existentes = null;
+  if (indexedDB.databases) {
+    await paso('Bases de la app', async () => {
+      existentes = (await indexedDB.databases()).map((d) => d.name);
+      return existentes.join(', ') || 'ninguna';
+    });
+  }
+  if (existentes && !existentes.includes(BD_REGISTRO)) {
+    anotar('ojo', 'Este navegador todavía no tiene registro', 'se crea al abrir el Garaje');
+    return;
+  }
+  const bd = await paso('Registro: abrir', () => abrirBase(BD_REGISTRO));
+  if (!bd) return;
+  const nombres = [...bd.objectStoreNames];
+  if (!nombres.includes('carros')) {
+    anotar('ojo', 'El registro todavía no tiene carros', nombres.join(', '));
+    bd.close();
+    return;
+  }
+  await paso('Registro: leer los carros', async () => {
+    const placas = await pedir(bd.transaction('carros').objectStore('carros').getAllKeys());
+    return placas.length + (placas.length ? ': ' + placas.slice(0, 12).join(', ') : '');
+  });
+  await paso('Registro: contar las fotos', async () => String(await pedir(bd.transaction('fotos').objectStore('fotos').count())));
+  await paso('Registro: escribir y borrar en la misma tanda (no deja rastro)', async () => {
+    const tx = bd.transaction('carros', 'readwrite');
+    const fin = new Promise((listo, mal) => {
+      tx.oncomplete = listo;
+      tx.onerror = () => mal(tx.error);
+      tx.onabort = () => mal(tx.error || new Error('se canceló'));
+    });
+    tx.objectStore('carros').put({ placa: 'DIAG00', piezas: {} });
+    tx.objectStore('carros').delete('DIAG00');
+    await fin;
+  });
+  bd.close();
+  if (existentes && !existentes.includes(BD_ESCANEOS)) return;
+  const bdE = await paso('Escaneos: abrir', () => abrirBase(BD_ESCANEOS));
+  if (bdE) {
+    if (bdE.objectStoreNames.contains('escaneos')) await paso('Escaneos: leer', async () => (await pedir(bdE.transaction('escaneos').objectStore('escaneos').getAllKeys())).join(', ') || 'ninguno');
+    bdE.close();
+  }
+}
+
+async function revisarLienzo() {
+  await paso('Lienzo: dibujar y comprimir una foto de 1280 px', async () => {
+    const l = document.createElement('canvas');
+    l.width = 1280;
+    l.height = 960;
+    const ctx = l.getContext('2d');
+    if (!ctx) throw new Error('getContext dio null: la memoria de imagen ya está llena');
+    ctx.fillStyle = '#c33';
+    ctx.fillRect(0, 0, 1280, 960);
+    const blob = await new Promise((listo) => l.toBlob(listo, 'image/jpeg', 0.82));
+    l.width = 0;
+    l.height = 0;
+    if (!blob) throw new Error('toBlob no dio nada');
+    return mb(blob.size);
+  });
+  await paso('OffscreenCanvas', () => (typeof OffscreenCanvas === 'undefined' ? { detalle: 'no lo tiene', ojo: true } : 'sí'));
+  await paso('createImageBitmap', async () => {
+    const l = document.createElement('canvas');
+    l.width = l.height = 8;
+    l.getContext('2d').fillRect(0, 0, 8, 8);
+    const blob = await new Promise((listo) => l.toBlob(listo, 'image/png'));
+    const a = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+    a.close();
+    const b = await createImageBitmap(blob, { resizeWidth: 4, resizeHeight: 4, resizeQuality: 'medium' });
+    b.close();
+  });
+}
+
+async function revisarCodigo() {
+  for (const modulo of ['fotos', 'estado', 'garaje', 'escaneos', 'carrocerias', 'carro', 'piezas', 'encuadre', 'piso-vitrina', 'escaneo-velo', 'escaneo', 'hoja', 'logo']) {
+    await paso('Código: ' + modulo + '.js', async () => {
+      await import('./js/' + modulo + '.js');
+    }, 30000);
+  }
+}
+
+// El camino de "Abrir en 3D", con el código que este celular tiene instalado.
+async function revisarCrear(archivo = null) {
+  const g = await paso('Crear: cargar el registro de la app', async () => import('./js/garaje.js'));
+  if (!g) return;
+  const almacen = await paso('Crear: abrir el registro', () => g.abrirAlmacen());
+  if (!almacen) return;
+  await paso('Crear: abrirOCrear', async () => {
+    await almacen.borrar(PLACA_PRUEBA);
+    const { carro } = await almacen.abrirOCrear(PLACA_PRUEBA, { marca: 'Prueba', carroceria: 'suv', color: '#808080' });
+    return carro.placa;
+  });
+  await paso('Crear: preguntar por la portada', async () => String(await almacen.portada(PLACA_PRUEBA)));
+  let reducida = null;
+  if (archivo) {
+    const f = await paso('Crear: cargar la reducción de fotos', async () => import('./js/fotos.js'));
+    if (f) {
+      reducida = await paso('Crear: reducir la foto', async () => {
+        const r = await f.reducirFoto(archivo);
+        return { ...r, detalle: `${r.ancho} x ${r.alto}, ${mb(r.foto.size)} y miniatura de ${mb(r.miniatura.size)}` };
+      }, 60000);
+    }
+  } else {
+    const blob = new Blob([new Uint8Array(2e5).fill(3)], { type: 'image/jpeg' });
+    reducida = { foto: blob, miniatura: blob, ancho: 1, alto: 1 };
+  }
+  if (reducida) {
+    await paso('Crear: guardar la foto', async () => {
+      await almacen.guardarFoto({ placa: PLACA_PRUEBA, pieza: 'carro', foto: reducida.foto, miniatura: reducida.miniatura, ancho: reducida.ancho, alto: reducida.alto });
+    }, 30000);
+    await paso('Crear: leer la foto', async () => {
+      const p = await almacen.portada(PLACA_PRUEBA);
+      if (!p) throw new Error('no está');
+      return mb(p.foto.size) + ' · ' + p.foto.type;
+    });
+  }
+  await paso('Crear: quitar el carro de prueba', () => almacen.borrar(PLACA_PRUEBA));
+  almacen.cerrar();
+}
+
+// ---------- Los botones ----------
+
+ui.foto.addEventListener('click', () => ui.archivo.click());
+ui.archivo.addEventListener('change', async () => {
+  const archivo = ui.archivo.files[0];
+  if (!archivo) return;
+  ui.foto.disabled = true;
+  anotar('info', 'La foto', `${archivo.name || 'sin nombre'} · ${archivo.type || 'sin tipo'} · ${mb(archivo.size)}`);
+  // La conexión que se abrió antes de la cámara: si iOS mató la base, aquí se ve.
+  if (bdAntesDeLaCamara) {
+    await paso('¿La base sobrevivió a la cámara?', async () => {
+      await pedir(bdAntesDeLaCamara.transaction('prueba').objectStore('prueba').get('texto'));
+      return 'sí';
+    });
+  }
+  await paso('La foto se puede leer', async () => {
+    const b = await createImageBitmap(archivo, { imageOrientation: 'from-image' });
+    const texto = `${b.width} x ${b.height}`;
+    b.close();
+    return texto;
+  }, 30000);
+  await revisarCrear(archivo);
+  ui.foto.disabled = false;
+  ui.archivo.value = '';
+  window.scrollTo(0, 0);
+});
+
+ui.tres.addEventListener('click', async () => {
+  ui.tres.disabled = true;
+  ui.lienzo3d.hidden = false;
+  const errores = [];
+  await paso('3D: WebGL2', () => {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    if (!gl) throw new Error('este navegador no dio WebGL2');
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    const nombre = info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    return `${nombre} · textura máxima ${gl.getParameter(gl.MAX_TEXTURE_SIZE)}`;
+  });
+  await paso('3D: dibujar el carro con su piso', async () => {
+    const THREE = await import('three');
+    const { RoomEnvironment } = await import('./js/vendor/RoomEnvironment.js');
+    const { construirCarro } = await import('./js/carro.js');
+    const { crearPisoVitrina } = await import('./js/piso-vitrina.js');
+    const r = new THREE.WebGLRenderer({ canvas: ui.lienzo3d, antialias: true });
+    r.debug.onShaderError = (gl, programa) => errores.push(gl.getProgramInfoLog(programa) || 'un sombreador no compiló');
+    r.setPixelRatio(Math.min(devicePixelRatio, 2));
+    r.setSize(ui.lienzo3d.clientWidth, ui.lienzo3d.clientHeight, false);
+    r.toneMapping = THREE.ACESFilmicToneMapping;
+    const escena = new THREE.Scene();
+    const pmrem = new THREE.PMREMGenerator(r);
+    escena.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    escena.add(new THREE.HemisphereLight(0xffffff, 0x3a4048, 0.6));
+    const camara = new THREE.PerspectiveCamera(30, ui.lienzo3d.clientWidth / ui.lienzo3d.clientHeight, 0.1, 80);
+    camara.position.set(-5.5, 2, -6);
+    camara.lookAt(0, 0.6, 0);
+    const carro = construirCarro({ carroceria: 'sedan' });
+    escena.add(carro.grupo);
+    const piso = crearPisoVitrina(r, escena);
+    escena.add(piso.malla);
+    piso.ponerHuella(carro.grupo, carro.disposicion);
+    piso.actualizar(camara, carro.disposicion);
+    r.render(escena, camara);
+    const gl = r.getContext();
+    const error = gl.getError();
+    if (errores.length) throw new Error(errores[0].slice(0, 300));
+    if (error) throw new Error('WebGL dio el error ' + error);
+    return `${r.info.render.triangles} triángulos · se ve arriba`;
+  }, 60000);
+  ui.tres.disabled = false;
+});
+
+// Hasta dónde llega el tope de lienzos de Safari en este iPhone: es lo que tumba getContext.
+ui.lienzos.addEventListener('click', async () => {
+  ui.lienzos.disabled = true;
+  await paso('Memoria de imagen: cuánto aguanta', async () => {
+    const vivos = [];
+    let total = 0;
+    let topado = false;
+    for (let i = 0; i < 120; i++) {
+      const l = document.createElement('canvas');
+      l.width = 1600;
+      l.height = 1200;
+      const ctx = l.getContext('2d');
+      if (!ctx) {
+        topado = true;
+        break;
+      }
+      ctx.fillRect(0, 0, 1600, 1200);
+      vivos.push(l);
+      total += 1600 * 1200 * 4;
+      if (i % 8 === 0) await new Promise((listo) => setTimeout(listo, 0));
+    }
+    for (const l of vivos) {
+      l.width = 0;
+      l.height = 0;
+    }
+    return { detalle: topado ? `se llenó en ${mb(total)}: de ahí en adelante getContext da null` : `aguantó ${mb(total)} sin llenarse`, ojo: topado };
+  }, 60000);
+  ui.lienzos.disabled = false;
+});
+
+ui.copiar.addEventListener('click', async () => {
+  const texto = lineas.join('\n');
+  try {
+    await navigator.clipboard.writeText(texto);
+    ui.copiar.textContent = 'Copiado: pégalo en el chat';
+  } catch (e) {
+    ui.copiar.textContent = 'No se pudo copiar: manda un pantallazo';
+  }
+});
+
+// Para un celular que se quedó con una versión vieja: se quita el service worker y lo que guardó de
+// la app (el motor del reconocedor se queda, pesa 39 MB). Los carros viven en IndexedDB: no se tocan.
+ui.forzar.addEventListener('click', async () => {
+  ui.forzar.disabled = true;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg) await reg.unregister();
+    for (const n of await caches.keys()) if (n.startsWith('taller-') && !n.includes('motor')) await caches.delete(n);
+    location.href = 'garaje.html?nueva=' + Date.now();
+  } catch (e) {
+    ui.forzar.disabled = false;
+    anotar('mal', 'No se pudo traer la versión nueva', textoDeError(e));
+  }
+});
+
+// ---------- En marcha ----------
+
+pintarResumen();
+await revisarVersion();
+await revisarNavegador();
+await revisarBase();
+await revisarRegistro();
+await revisarLienzo();
+await revisarCodigo();
+await revisarCrear();
+anotar('info', 'Revisión terminada', new Date().toLocaleString('es-CO'));
+</script>
+</body>
+</html>
