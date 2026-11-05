@@ -3,7 +3,7 @@
 // cobró) e Indicadores (todo junto, para el dueño). Los números los calcula
 // tablero.js (puro y probado); aquí solo se lee el almacén y se pinta. Sin
 // Three.js: esta pantalla tiene que abrir al instante.
-import { NOMBRE_ROL, TARIFA_PIEZA, abrirAlmacen, fechaCorta, nombreCompletoDelCarro, resumen } from './garaje.js';
+import { NOMBRE_ROL, TARIFA_PIEZA, abrirAlmacen, fechaCorta, mensajeParaLaPantalla, nombreCompletoDelCarro, resumen } from './garaje.js';
 import { CARROCERIAS, nombreDePiezaEn, normalizarCarroceria } from './carrocerias.js';
 import { nombreDeColor } from './color-foto.js';
 import { etiquetaDeSemana, historial, indicadores, nominaSemanal, pesos, semanaDe } from './tablero.js';
@@ -226,7 +226,7 @@ ui.nuevoEmpleado.addEventListener('submit', async (e) => {
     ui.empleadoNombre.value = '';
     await recargar();
   } catch (error) {
-    avisar('No se pudo guardar: ' + error.message);
+    avisar('No se pudo guardar: ' + mensajeParaLaPantalla(error, 'vuelve a intentarlo.'));
   }
 });
 
@@ -422,7 +422,7 @@ ui.demoBoton.addEventListener('click', async () => {
     }
     await recargar();
   } catch (e) {
-    avisar('No se pudo: ' + e.message);
+    avisar('No se pudo: ' + mensajeParaLaPantalla(e, 'vuelve a intentarlo.'));
   } finally {
     ui.demoBoton.disabled = false;
   }
@@ -452,7 +452,7 @@ async function arrancar() {
   try {
     almacen = await abrirAlmacen();
   } catch (e) {
-    avisar('Este navegador no guarda el registro (' + e.message + '). Aquí no hay nada que mostrar.');
+    avisar('Este navegador no guarda el registro: ' + mensajeParaLaPantalla(e, 'puede ser una ventana de incógnito o que falte espacio') + '. Aquí no hay nada que mostrar.');
   }
   await cargar();
   await mostrar(new URL(location.href).searchParams.get('p') || 'empleados');

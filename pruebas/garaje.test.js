@@ -3,9 +3,12 @@
 // del navegador (transacciones, índices, autoincremento, Blobs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import * as THREE from 'three';
 import { IDBFactory } from 'fake-indexeddb';
 import { PIEZAS } from '../js/piezas.js';
 import { textoParaAsistente } from '../js/estado.js';
+import { avisoDeLargo, crearEscaneoPantalla } from '../js/escaneo-pantalla.js';
 import {
   ESTADOS,
   NOMBRE_ESTADO,
@@ -14,9 +17,11 @@ import {
   crearCarro,
   deserializarCarro,
   estadoParaOrden,
+  faltaFotoDeVerdad,
   fechaCorta,
   fijarEstado,
   fijarTrabajo,
+  mensajeParaLaPantalla,
   nombreCompletoDelCarro,
   nombreDePiezaEnOrden,
   nombreDelCarro,
@@ -416,4 +421,333 @@ test('el catálogo que usa el registro es el de piezas.js', () => {
   const carro = crearCarro();
   for (const p of PIEZAS) assert.equal(alternarPieza(carro, p.id), true);
   assert.equal(resumen(carro).total, PIEZAS.length);
+});
+
+test('la portada automática del escaneo cede el puesto a una foto de verdad', async () => {
+  const almacen = await abrirAlmacen({ indexedDB: new IDBFactory(), nombre: 'portada-' + Math.random() });
+  const foto = new Blob(['x']);
+  await almacen.guardar(crearCarro({ placa: 'POR123' }));
+  await almacen.guardarFoto({ placa: 'POR123', pieza: 'carro', foto, automatica: true });
+  assert.equal((await almacen.portada('POR123')).automatica, true);
+  await almacen.guardarFoto({ placa: 'POR123', pieza: 'carro', foto });
+  assert.equal((await almacen.portada('POR123')).automatica, false);
+});
+
+// La prueba de arriba llama a guardarFoto directo y pasaba en verde con el camino real roto:
+// «Nuevo carro con foto» preguntaba si había portada, y la automática decía que sí.
+test('«Nuevo carro con foto» le gana a la portada automática, no a una foto de verdad', async () => {
+  const almacen = await almacenLimpio();
+  const foto = fotoFalsa();
+  await almacen.guardar(crearCarro({ placa: 'POR124' }));
+  assert.equal(faltaFotoDeVerdad(await almacen.portada('POR124')), true, 'sin portada');
+  await almacen.guardarFoto({ placa: 'POR124', pieza: 'carro', foto, automatica: true });
+  assert.equal(faltaFotoDeVerdad(await almacen.portada('POR124')), true, 'con la automática');
+  await almacen.guardarFoto({ placa: 'POR124', pieza: 'carro', foto });
+  assert.equal(faltaFotoDeVerdad(await almacen.portada('POR124')), false, 'con una de verdad');
+  almacen.cerrar();
+});
+
+test('la pantalla del Garaje decide con esa misma pregunta', () => {
+  const fuente = fs.readFileSync(new URL('../js/garaje-pantalla.js', import.meta.url), 'utf8');
+  assert.match(fuente, /if \(faltaFotoDeVerdad\(await almacen\.portada\(carro\.placa\)\)\)/);
+});
+
+test('quitar el escaneo se lleva su portada automática, escondida o no, y nada más', async () => {
+  const almacen = await almacenLimpio();
+  const foto = fotoFalsa();
+  await almacen.guardarFoto({ placa: 'AUT111', pieza: 'carro', foto, automatica: true });
+  await almacen.borrarPortadasAutomaticas('AUT111');
+  assert.equal(await almacen.portada('AUT111'), null);
+
+  // Con una de verdad encima, la automática no se ve; si se quedara, volvería al borrar esa.
+  await almacen.guardarFoto({ placa: 'AUT222', pieza: 'carro', foto, automatica: true });
+  const real = await almacen.guardarFoto({ placa: 'AUT222', pieza: 'carro', foto });
+  const dePieza = await almacen.guardarFoto({ placa: 'AUT222', pieza: 'capo', foto });
+  await almacen.guardarFoto({ placa: 'OTR333', pieza: 'carro', foto, automatica: true });
+  await almacen.borrarPortadasAutomaticas('AUT222');
+  assert.deepEqual((await almacen.listarFotos('AUT222')).map((f) => f.id), [real, dePieza]);
+  await almacen.borrarFoto(real);
+  assert.equal(await almacen.portada('AUT222'), null);
+  assert.equal((await almacen.portada('OTR333')).automatica, true, 'la de otro carro no se toca');
+  almacen.cerrar();
+});
+
+// ---------- Lo que se le dice a la persona ----------
+
+test('un error técnico en inglés nunca llega a la pantalla', (t) => {
+  t.mock.method(console, 'warn', () => {}); // ahí sí va, para quien lo vaya a arreglar
+  const SI_NO = 'vuelve a intentarlo';
+  const tecnicos = [
+    'invalid zip data',
+    'THREE.GLTFLoader: No DRACOLoader instance provided.',
+    'Failed to load buffer "scene.bin".',
+    "Cannot read properties of null (reading 'indexOf')",
+    'Array buffer allocation failed',
+    'The source image could not be decoded.',
+    'The quota has been exceeded.',
+    'Failed to fetch dynamically imported module: http://localhost:8310/js/escaneo.js',
+    "Unexpected token '<', \"<!doctype \"... is not valid JSON",
+    'Maximum call stack size exceeded',
+    'Internal error',
+    'NetworkError when attempting to fetch resource.',
+    'No space left on device',
+    'A mutation operation was attempted on a database that did not allow mutations.',
+    'WebGL context lost',
+    'Unsupported file format',
+  ];
+  for (const mensaje of tecnicos) assert.equal(mensajeParaLaPantalla(new Error(mensaje), SI_NO), SI_NO, mensaje);
+  assert.equal(mensajeParaLaPantalla(new Error(''), SI_NO), SI_NO);
+  assert.equal(mensajeParaLaPantalla(null, SI_NO), SI_NO);
+  assert.equal(mensajeParaLaPantalla(undefined, SI_NO), SI_NO);
+});
+
+test('lo que escribió la app en español sí llega, tal cual: todos los Error del código', () => {
+  const SI_NO = 'CAMBIADO';
+  const carpeta = new URL('../js/', import.meta.url);
+  const mensajes = [];
+  for (const nombre of fs.readdirSync(carpeta)) {
+    if (!nombre.endsWith('.js')) continue;
+    const fuente = fs.readFileSync(new URL(nombre, carpeta), 'utf8');
+    for (const [, texto] of fuente.matchAll(/new (?:Error|ArchivoNoSirve)\('([^']+)'/g)) {
+      // Los que no llevan espacios son códigos ('sin-profundidad'): el que los recibe los
+      // compara y escribe su propio texto. Nunca se muestran. Y con 'WebGL no disponible' el
+      // visor solo se detiene, con su propio texto ya puesto en la pantalla.
+      if (texto.trim().includes(' ') && texto !== 'WebGL no disponible') mensajes.push(texto.trim());
+    }
+  }
+  assert.ok(mensajes.length > 15, 'el barrido no encontró los errores: ' + mensajes.length);
+  for (const mensaje of mensajes) assert.equal(mensajeParaLaPantalla(new Error(mensaje), SI_NO), mensaje);
+});
+
+test('el largo medido contra el catálogo: se avisa desde 25 cm, en metros o en milímetros', () => {
+  const catalogo = { largo: 4200, ancho: 1800, alto: 1550 };
+  assert.equal(avisoDeLargo({ largo: 4.2 }, catalogo), '');
+  assert.equal(avisoDeLargo({ largo: 4.45 }, catalogo), '', 'justo 25 cm no');
+  assert.equal(avisoDeLargo({ largo: 3.95 }, catalogo), '');
+  const mas = avisoDeLargo({ largo: 4.51 }, catalogo);
+  assert.match(mas, /31 cm más/);
+  assert.match(mas, /parte del piso o del entorno/);
+  const menos = avisoDeLargo({ largo: 3.8 }, { largo: 4.2, ancho: 1.8, alto: 1.55 });
+  assert.match(menos, /40 cm menos/);
+  assert.match(menos, /parte del piso o del entorno/);
+  assert.doesNotMatch(mas + menos, /error|culpa|mal/i);
+  assert.equal(avisoDeLargo({ largo: 9 }, null), '', 'sin catálogo no hay contra qué');
+  assert.equal(avisoDeLargo(null, catalogo), '');
+});
+
+// ---------- La pantalla del escaneo ----------
+
+// crearEscaneoPantalla solo le pide al DOM botones con su texto y si están escondidos. Lo demás
+// es de verdad: el importador, escaneo.js y la base (fake-indexeddb). `mostrar` hace de visor,
+// y como el de verdad, si no pudo armar el modelo deja en pantalla lo que había.
+function elementoFalso() {
+  const oyentes = {};
+  return {
+    hidden: false,
+    disabled: false,
+    textContent: '',
+    value: '',
+    files: [],
+    classList: { toggle() {} },
+    addEventListener(tipo, oyente) {
+      (oyentes[tipo] ||= []).push(oyente);
+    },
+    // Con su promesa: un manejador que revienta hace fallar la prueba. En el navegador sería
+    // un error sin atender, y la pantalla a medias.
+    disparar: (tipo) => Promise.all((oyentes[tipo] || []).map((oyente) => oyente({}))),
+    click() {},
+    close() {},
+    showModal() {},
+  };
+}
+
+// Una caja de 4,30 × 1,80 × 1,40 m sobre un piso: el escaneo más barato que el importador
+// reconoce como un carro, y sale a un tamaño normal.
+function archivoDeUnaCaja() {
+  const lineas = [];
+  let base = 1;
+  for (const malla of [new THREE.BoxGeometry(1.8, 1.4, 4.3, 8, 8, 16).translate(0, 0.7, 0), new THREE.PlaneGeometry(8, 8, 16, 16).rotateX(-Math.PI / 2)]) {
+    const { position: p } = malla.attributes;
+    for (let i = 0; i < p.count; i++) lineas.push('v ' + p.getX(i) + ' ' + p.getY(i) + ' ' + p.getZ(i));
+    for (let i = 0; i < malla.index.count; i += 3) lineas.push('f ' + (malla.index.getX(i) + base) + ' ' + (malla.index.getX(i + 1) + base) + ' ' + (malla.index.getX(i + 2) + base));
+    base += p.count;
+  }
+  return new File([lineas.join('\n') + '\n'], 'caja.obj');
+}
+
+function pantallaDeEscaneo(t, carro) {
+  t.mock.method(console, 'warn', () => {});
+  globalThis.indexedDB = new IDBFactory();
+  t.after(() => delete globalThis.indexedDB);
+  const elementos = new Map();
+  const elemento = (clave) => {
+    if (!elementos.has(clave)) elementos.set(clave, elementoFalso());
+    return elementos.get(clave);
+  };
+  const avisos = [];
+  const visor = { visto: null, rechaza: () => false };
+  // Solo mientras se crea: es lo único que lo pide, y lo demás no debe creer que hay navegador.
+  globalThis.document = { getElementById: elemento, querySelector: elemento };
+  const pantalla = crearEscaneoPantalla({
+    obtenerCarro: () => carro,
+    avisar: (texto) => avisos.push(texto),
+    mostrar(escaneo) {
+      if (visor.rechaza(escaneo)) throw new RangeError('Array buffer allocation failed');
+      visor.visto = escaneo || null;
+    },
+  });
+  delete globalThis.document;
+  const accion = (nombre) => elemento(`#previa-escaneo [data-accion="${nombre}"]`);
+  return {
+    pantalla,
+    avisos,
+    visor,
+    panel: elemento('previa-escaneo'),
+    texto: elemento('previa-escaneo-texto'),
+    boton: elemento('escanear'),
+    estado: elemento('escaneo-estado'),
+    guardar: accion('guardar'),
+    voltear: accion('voltear'),
+    descartar: accion('descartar'),
+    subir() {
+      elemento('archivo-escaneo').files = [archivoDeUnaCaja()];
+      return elemento('archivo-escaneo').disparar('change');
+    },
+    // «Frente al revés» no devuelve su promesa: mientras trabaja, el botón va apagado.
+    async hastaQueTermine() {
+      for (let i = 0; i < 500 && elemento('escanear').disabled; i++) await new Promise((listo) => setTimeout(listo, 20));
+      assert.equal(elemento('escanear').disabled, false);
+    },
+  };
+}
+
+test('si no se pudo armar el modelo, lo que nadie vio no queda para Guardar', async (t) => {
+  const p = pantallaDeEscaneo(t, crearCarro({ placa: 'MEM001' }));
+  await p.pantalla.cargar('MEM001');
+
+  // Sin vista previa antes: no se ofrece nada.
+  p.visor.rechaza = (escaneo) => Boolean(escaneo);
+  await p.subir();
+  assert.equal(p.pantalla.previa, null);
+  assert.equal(p.panel.hidden, true);
+  assert.equal(p.boton.textContent, 'Escanear');
+  // Y no se le achaca al archivo: el archivo está bueno y exportarlo otra vez no arregla nada.
+  assert.match(p.avisos.at(-1), /memoria/);
+  assert.doesNotMatch(p.avisos.at(-1), /se ve dañado/);
+
+  // Con una buena en pantalla: esa sigue, con sus botones.
+  p.visor.rechaza = () => false;
+  await p.subir();
+  const buena = p.pantalla.previa;
+  assert.ok(buena);
+  assert.equal(p.visor.visto, buena);
+  p.visor.rechaza = (escaneo) => escaneo !== buena;
+  await p.subir();
+  assert.equal(p.pantalla.previa, buena);
+  assert.equal(p.visor.visto, buena);
+  assert.equal(p.guardar.hidden, false);
+
+  // «Frente al revés» que no se pudo mostrar no deja volteado lo que se guardaría.
+  await p.voltear.disparar('click');
+  await p.hastaQueTermine();
+  assert.equal(p.pantalla.previa, buena);
+  assert.equal(p.guardar.hidden, false);
+  assert.match(p.avisos.at(-1), /^No se pudo: /);
+
+  // Lo que se guarda es lo que se ve.
+  p.visor.rechaza = () => false;
+  await p.guardar.disparar('click');
+  assert.equal(p.pantalla.guardado.volteado, false);
+  assert.equal(p.pantalla.guardado.posiciones.length, buena.posiciones.length);
+  assert.equal(p.pantalla.previa, null);
+});
+
+test('corregir la línea en la ficha repinta lo que el panel dice del catálogo', async (t) => {
+  const carro = crearCarro({ placa: 'LIN001', medidas: { largo: 4800, ancho: 1800, alto: 1550, entreEjes: 2700 } });
+  const p = pantallaDeEscaneo(t, carro);
+  await p.pantalla.cargar('LIN001');
+  await p.subir();
+  assert.match(p.texto.textContent, /Mide 50 cm menos de largo/);
+
+  carro.medidas = { largo: 4300, ancho: 1800, alto: 1400, entreEjes: 2700 };
+  await p.pantalla.cargar('LIN001');
+  assert.match(p.texto.textContent, /catálogo: 4,30/);
+  assert.doesNotMatch(p.texto.textContent, /de largo/);
+
+  // A mitad de un Guardar no le devuelve los botones: con la base lenta, tocar uno cambiaba
+  // lo que se estaba guardando.
+  const guardando = p.guardar.disparar('click');
+  await p.pantalla.cargar('LIN001');
+  assert.equal(p.guardar.hidden, true);
+  await guardando;
+  assert.ok(p.pantalla.guardado);
+});
+
+test('poner la placa de un carro que ya tenía otra línea también repinta el panel', async (t) => {
+  const carro = crearCarro({ medidas: { largo: 4800, ancho: 1800, alto: 1550, entreEjes: 2700 } });
+  const p = pantallaDeEscaneo(t, carro);
+  await p.subir();
+  assert.match(p.texto.textContent, /catálogo: 4,80/);
+  carro.placa = 'LIN002';
+  carro.medidas = { largo: 4300, ancho: 1800, alto: 1400, entreEjes: 2700 };
+  await p.pantalla.cargar('LIN002');
+  assert.match(p.texto.textContent, /catálogo: 4,30/);
+  assert.doesNotMatch(p.texto.textContent, /de largo/);
+  assert.equal(p.guardar.hidden, false);
+});
+
+test('con la placa puesta o al descartar, «Ponle placa» ya no queda en pantalla', async (t) => {
+  const carro = crearCarro();
+  const conPlaca = pantallaDeEscaneo(t, carro);
+  await conPlaca.subir();
+  await conPlaca.guardar.disparar('click');
+  assert.match(conPlaca.avisos.at(-1), /^Ponle placa/);
+  carro.placa = 'GUA111';
+  await conPlaca.pantalla.cargar('GUA111');
+  assert.equal(conPlaca.avisos.at(-1), '');
+  assert.ok(conPlaca.pantalla.previa, 'la vista previa sigue, como prometía');
+
+  const sinPlaca = pantallaDeEscaneo(t, crearCarro());
+  await sinPlaca.subir();
+  await sinPlaca.guardar.disparar('click');
+  await sinPlaca.descartar.disparar('click');
+  assert.equal(sinPlaca.avisos.at(-1), '');
+});
+
+test('abrir un carro con placa no se lleva el aviso del arranque', async (t) => {
+  // El visor avisa «Este navegador no guarda el registro…» antes de este primer cargar.
+  const p = pantallaDeEscaneo(t, crearCarro({ placa: 'ARR111' }));
+  await p.pantalla.cargar('ARR111');
+  assert.deepEqual(p.avisos, []);
+});
+
+test('Descartar con un registro dañado debajo avisa, y lo descartado no se queda en pantalla', async (t) => {
+  const p = pantallaDeEscaneo(t, crearCarro({ placa: 'DAN001' }));
+  await p.pantalla.cargar('DAN001');
+  await p.subir();
+  await p.guardar.disparar('click');
+  const danado = p.pantalla.guardado;
+  // Sano, vuelve a lo guardado.
+  await p.subir();
+  await p.descartar.disparar('click');
+  assert.equal(p.visor.visto, danado);
+  // Dañado, a la carrocería de referencia.
+  await p.subir();
+  p.visor.rechaza = (escaneo) => escaneo === danado;
+  await p.descartar.disparar('click');
+  assert.equal(p.visor.visto, null);
+  assert.equal(p.panel.hidden, true);
+  assert.match(p.avisos.at(-1), /^No se pudo abrir el escaneo guardado/);
+});
+
+test('con una vista previa, el diálogo no dice que el 3D es la carrocería de referencia', async (t) => {
+  const p = pantallaDeEscaneo(t, crearCarro({ placa: 'DIA001' }));
+  await p.pantalla.cargar('DIA001');
+  await p.subir();
+  await p.pantalla.abrir();
+  assert.match(p.estado.textContent, /vista previa, sin guardar/);
+  assert.doesNotMatch(p.estado.textContent, /carrocería de referencia/);
+  await p.descartar.disparar('click');
+  await p.pantalla.abrir();
+  assert.match(p.estado.textContent, /carrocería de referencia/);
 });

@@ -51,6 +51,7 @@ export function archivosApp(raiz = RAIZ) {
     // utilidad que usa el de GLB: 180 KB, para que importar funcione sin internet.
     ...listar(raiz, 'js/vendor/loaders', (n) => n.endsWith('.js')),
     ...listar(raiz, 'js/vendor/utils', (n) => n.endsWith('.js')),
+    ...listar(raiz, 'js/vendor/libs', (n) => n.endsWith('.js')),
     ...listar(raiz, 'js/vendor/transformers', (n) => n === 'transformers.min.js'),
     // El cargador del lector de placas (50 KB); el modelo va con el motor.
     ...listar(raiz, 'js/vendor/placa', (n) => n.endsWith('.mjs')),

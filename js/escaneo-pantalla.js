@@ -16,8 +16,9 @@
 // importaciones seguidas se pisaban y el escaneo de un carro podía quedar
 // guardado en otro.
 import { normalizarCarroceria } from './carrocerias.js';
+import { mensajeParaLaPantalla } from './garaje.js';
 
-const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const MESES =['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
 function metros(valor) {
   return (Math.round(valor * 100) / 100).toFixed(2).replace('.', ',');
@@ -45,6 +46,20 @@ function medidasDelCatalogo(medidas) {
   return { largo: aM(medidas.largo), ancho: aM(medidas.ancho), alto: aM(medidas.alto) };
 }
 
+// 25 cm es más de lo que un carro se aparta de su propia línea. Cuando pasa puede ser el
+// escaneo, el archivo o la línea que se eligió en la ficha: no se le echa la culpa a nadie,
+// se dice qué mirar.
+export function avisoDeLargo(medidas, medidasDelCarro) {
+  const catalogo = medidasDelCatalogo(medidasDelCarro);
+  if (!medidas || !catalogo) return '';
+  const diferencia = medidas.largo - catalogo.largo;
+  if (Math.abs(diferencia) <= 0.25) return '';
+  const cuanto = Math.round(Math.abs(diferencia) * 100) + ' cm ';
+  return diferencia > 0
+    ? 'Mide ' + cuanto + 'más de largo que el catálogo: mira si quedó parte del piso o del entorno.'
+    : 'Mide ' + cuanto + 'menos de largo que el catálogo: mira si quedó parte del piso o del entorno, o si le falta un pedazo al carro.';
+}
+
 function fechaCorta(iso) {
   const d = new Date(iso);
   return isNaN(d) ? '' : d.getDate() + '-' + MESES[d.getMonth()];
@@ -54,7 +69,7 @@ function fechaCorta(iso) {
 // cálculo pesado (surface nets y piezas: uno o dos segundos en el celular).
 const pintarYSeguir = () => new Promise((r) => setTimeout(r, 60));
 
-export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
+export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar, alGuardarEscaneo = () => {}, alQuitarEscaneo = () => {} }) {
   const ui = {
     boton: document.getElementById('escanear'),
     dialogo: document.getElementById('dialogo-escaneo'),
@@ -123,10 +138,48 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
     ui.boton.disabled = false;
   }
 
-  function avisarAlVisor() {
-    mostrar(previa ? previa.escaneo : guardado, { previa: Boolean(previa), verPiezas: verPiezas && !previa });
+  function pintarBoton() {
     ui.boton.textContent = guardado || previa ? 'Escaneo' : 'Escanear';
     ui.boton.classList.toggle('con-escaneo', Boolean(guardado));
+  }
+
+  function avisarAlVisor(extra = {}) {
+    pintarBoton();
+    mostrar(previa ? previa.escaneo : guardado, { previa: Boolean(previa), verPiezas: verPiezas && !previa, ...extra });
+  }
+
+  // Una vista previa nueva solo se queda si el visor alcanzó a mostrarla. Armar el modelo puede
+  // reventar (falta de memoria, y al cambiar de escaneo conviven el viejo y el nuevo): sin
+  // esto el panel ofrecía Guardar de un carro que nadie vio, con el genérico en pantalla, y
+  // se guardaba.
+  function ponerPreviaNueva(nueva) {
+    const anterior = [previa, verPiezas];
+    previa = nueva;
+    verPiezas = false;
+    try {
+      avisarAlVisor();
+    } catch (error) {
+      [previa, verPiezas] = anterior;
+      pintarBoton();
+      throw error;
+    }
+  }
+
+  // Pone en pantalla lo guardado. Armar el modelo puede reventar (un registro dañado, falta
+  // de memoria al reservar sus arreglos) y aquí nadie espera ese error: el panel se quedaba
+  // en «Abriendo el escaneo…» para siempre, sin botones ni aviso. `guardado` sigue ahí:
+  // desde el botón Escaneo se puede reintentar, quitarlo o subir otro.
+  async function mostrarGuardado() {
+    try {
+      await revisarCarroceria();
+      avisarAlVisor();
+    } catch (e) {
+      console.warn(e);
+      mostrar(null, { previa: false, verPiezas: false });
+      avisar('No se pudo abrir el escaneo guardado: se ve la carrocería de referencia. Vuelve a abrir el carro; si sigue igual, quita el escaneo y súbelo otra vez.');
+    } finally {
+      if (!previa) ocultarPrevia();
+    }
   }
 
   // El escaneo guardado de una placa (o nada). Lo llama el visor al abrir
@@ -138,14 +191,24 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
   async function cargar(placa) {
     if (placa === placaCargada) {
       await revisarCarroceria();
+      // La línea se pudo corregir en la ficha: el panel seguía con «(catálogo: 4,80…) Mide 60 cm
+      // menos…», y la ficha de arriba ya en Hyundai Kona. Con una operación en curso no: le
+      // devolvería los botones a un Guardar a medias.
+      if (previa && !ui.boton.disabled) pintarPrevia();
       return guardado;
     }
     const mismoCarro = placaCargada === '' && placa !== '';
     const anterior = placaCargada;
     placaCargada = placa;
+    // «Ponle placa…» ya se cumplió. Solo con vista previa: al abrir la app, el primer cargar
+    // de un carro con placa también pasa por aquí, y se llevaba el aviso del arranque («Este
+    // navegador no guarda el registro…»).
+    if (mismoCarro && previa) avisar('');
     if (!mismoCarro) {
       cortarOperaciones();
-      if (previa) avisar('Se descartó el escaneo sin guardar de ' + (anterior || 'el carro sin placa') + '.');
+      // Con otro carro, el aviso anterior ya no es verdad ("el 3D de este carro es el
+      // escaneado"): se borra, si no hay uno nuevo que dar.
+      avisar(previa ? 'Se descartó el escaneo sin guardar de ' + (anterior || 'el carro sin placa') + '.' : '');
       previa = null;
       ocultarPrevia();
     }
@@ -158,13 +221,26 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
       try {
         const leido = await (await abrirAlmacenDeEscaneos()).obtener(placa);
         if (placa !== placaCargada) return null; // cambió de carro mientras leía
+        // Armar el escaneo toma un momento (segundos en un celular, con la pantalla
+        // quieta): que se sepa qué está pasando antes de empezar, si no hay nada que
+        // se le pueda pisar.
+        if (leido && !previa) {
+          mostrarPrevia('Abriendo el escaneo…', false);
+          await pintarYSeguir();
+          if (placa !== placaCargada) {
+            ocultarPrevia();
+            return null; // cambió de carro mientras tanto
+          }
+        }
         guardado = leido;
       } catch (e) {
-        avisar('No se pudo leer el escaneo guardado: ' + e.message);
+        avisar('No se pudo leer el escaneo guardado: ' + mensajeParaLaPantalla(e, 'vuelve a abrir el carro.'));
       }
     }
-    await revisarCarroceria();
-    avisarAlVisor();
+    await mostrarGuardado();
+    // Sigue la vista previa, pero ya es otro catálogo: la placa puede ser la de un carro que
+    // ya estaba en el registro, con su propia línea.
+    if (previa && !ui.boton.disabled) pintarPrevia();
     return guardado;
   }
 
@@ -184,7 +260,7 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
         const registro = await (await abrirAlmacenDeEscaneos()).guardar(placa, nuevo, { origen: guardado.origen, archivo: guardado.archivo, creado: guardado.creado });
         if (placa === placaCargada) guardado = registro;
       } catch (e) {
-        avisar('No se pudieron reacomodar las piezas del escaneo: ' + e.message);
+        avisar('No se pudieron reacomodar las piezas del escaneo: ' + mensajeParaLaPantalla(e, 'vuelve a abrir el carro.'));
       }
     }
     avisarAlVisor();
@@ -198,10 +274,15 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
     if (guardado) {
       ui.estado.textContent =
         'Este carro está escaneado (' + fechaCorta(guardado.creado) + '): ' + textoDeMedidas(guardado) + (catalogo ? '; el catálogo dice ' + medidasComoTexto(catalogo) : '') + '. Puedes escanearlo otra vez o subir otro escaneo.';
+    } else if (previa) {
+      ui.estado.textContent = 'Este carro todavía no tiene un escaneo guardado: lo que ves es la vista previa, sin guardar.';
     } else {
       ui.estado.textContent = 'Este carro no está escaneado: el 3D es una carrocería de referencia' + (catalogo ? ' a las medidas del catálogo (' + medidasComoTexto(catalogo) + ')' : '') + '. Con un escaneo se ve la silueta del carro de verdad, a su tamaño.';
     }
     ui.guardado.hidden = !guardado;
+    // Con una vista previa puesta no cambiaría nada en pantalla: lo único que hacía era
+    // dejar `verPiezas` en true para cuando se guardara, y aparecía el genérico gris.
+    ui.ver.hidden = Boolean(previa);
     ui.ver.textContent = verPiezas ? 'Ver el escaneo' : 'Ver las piezas por dentro';
     ui.celular.disabled = true;
     ui.celularNota.textContent = 'Mirando si este celular puede escanear…';
@@ -214,7 +295,7 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
         ? 'Camina despacio alrededor del carro, a uno o dos metros, moviendo el celular todo el tiempo (quieto no mide): una vuelta a la altura del pecho y otra con el celular levantado, para que vea el techo. Unos dos minutos. Sale la silueta del carro a escala, aproximada: unos 10 cm de error, sin foto (en el color del carro), y vidrios, cromo y pintura negra salen rellenos a ojo. Las piezas se ubican solas, pero aproximadas. Se guarda solo en este celular. Es nuevo: si sale mal, lo descartas.'
         : puede.motivo + ' Usa la opción de abajo.';
     } catch (e) {
-      ui.celularNota.textContent = 'No se pudo preparar el escáner: ' + e.message;
+      ui.celularNota.textContent = 'No se pudo preparar el escáner: ' + mensajeParaLaPantalla(e, 'recarga la página y vuelve a intentar. Si no se puede, usa la opción de abajo.');
     }
   }
 
@@ -260,9 +341,7 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
     };
     const escaneo = reprocesar();
     if (!operacion.vigente()) return;
-    previa = { escaneo, reprocesar, origen: 'celular', archivo: '', ejes: null };
-    verPiezas = false;
-    avisarAlVisor();
+    ponerPreviaNueva({ escaneo, reprocesar, origen: 'celular', archivo: '', ejes: null });
     pintarPrevia();
   }
 
@@ -306,7 +385,7 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
       if (e.name === 'NotSupportedError' || e.name === 'NotAllowedError' || e.name === 'SecurityError') {
         avisar('No se abrió la cámara para escanear. Si le dijiste que no al permiso de cámara y realidad aumentada, o a instalar "Servicios de Google Play para RA", actívalo (en Chrome: el candado junto a la dirección › Permisos) o instálalo y vuelve a intentar. Si no se puede, sube un escaneo hecho con otra app.');
       } else {
-        avisar('No se pudo abrir la cámara para escanear (' + e.message + '). Sube un escaneo hecho con otra app.');
+        avisar('No se pudo abrir la cámara para escanear: ' + mensajeParaLaPantalla(e, 'este navegador no la entregó') + '. Sube un escaneo hecho con otra app.');
       }
       return;
     }
@@ -340,7 +419,7 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
           } else if (e.message === 'interrumpido') {
             avisar('El escaneo se cortó antes de ver el carro (se salió de la cámara). Vuelve a intentar sin salir de la pantalla.');
           } else if (e.message !== 'cancelado') {
-            avisar('El escaneo falló (' + e.message + ').');
+            avisar('El escaneo falló: ' + mensajeParaLaPantalla(e, 'vuelve a intentar; si sigue igual, sube un escaneo hecho con otra app.'));
           }
           return;
         }
@@ -349,8 +428,10 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
       await armarDesdeTSDF(resultado, listos, operacion, textoInicial);
     } catch (err) {
       if (operacion.vigente()) {
-        ocultarPrevia();
-        avisar('No pude armar el 3D: ' + err.message + '.');
+        // Si había una vista previa, sigue ahí con sus botones: lo que falló es lo nuevo.
+        if (previa) pintarPrevia();
+        else ocultarPrevia();
+        avisar('No pude armar el 3D: ' + mensajeParaLaPantalla(err, 'vuelve a escanear; si sigue igual, sube un escaneo hecho con otra app') + '.');
       }
     } finally {
       operacion.terminar();
@@ -361,9 +442,12 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
 
   ui.subir.addEventListener('click', () => ui.archivo.click());
   ui.archivo.addEventListener('change', async () => {
-    const archivo = ui.archivo.files && ui.archivo.files[0];
+    // Varios a la vez: un OBJ con su imagen, sueltos. Manda el modelo, no el primero.
+    const elegidos = Array.from(ui.archivo.files || []);
     ui.archivo.value = '';
-    if (!archivo) return;
+    if (!elegidos.length) return;
+    const archivo = elegidos.find((f) => /\.(glb|gltf|obj|ply|zip)$/i.test(f.name)) || elegidos[0];
+    const otros = elegidos.filter((f) => f !== archivo);
     ui.dialogo.close();
     const operacion = empezar();
     mostrarPrevia('Leyendo el escaneo (' + Math.round(archivo.size / 1e5) / 10 + ' MB)…', false);
@@ -371,7 +455,7 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
       await pintarYSeguir();
       const { importar } = await cargarModulos();
       if (!operacion.vigente()) return;
-      const malla = await importar.leerArchivoDeEscaneo(archivo);
+      const malla = await importar.leerArchivoDeEscaneo(archivo, otros);
       if (!operacion.vigente()) return;
       mostrarPrevia('Buscando el carro y sus piezas…', false);
       await pintarYSeguir();
@@ -382,14 +466,17 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
       };
       const escaneo = reprocesar();
       if (!operacion.vigente()) return;
-      previa = { escaneo, reprocesar, origen: 'archivo', archivo: archivo.name, ejes: importar.EJES_ARRIBA };
-      verPiezas = false;
-      avisarAlVisor();
+      ponerPreviaNueva({ escaneo, reprocesar, origen: 'archivo', archivo: archivo.name, ejes: importar.EJES_ARRIBA });
       pintarPrevia();
     } catch (err) {
       if (operacion.vigente()) {
-        ocultarPrevia();
-        avisar('No pude usar ese archivo: ' + err.message + '.');
+        // Si había una vista previa, sigue ahí con sus botones: sin ellos solo se salía
+        // cambiando de placa.
+        if (previa) pintarPrevia();
+        else ocultarPrevia();
+        // Lo que no sabe decir el importador no se le achaca al archivo: sin memoria, un GLB
+        // bueno salía «dañado», y volver a exportarlo igual fallaba.
+        avisar('No pude usar ese archivo: ' + mensajeParaLaPantalla(err, 'puede faltarle memoria a este celular, o el archivo puede estar dañado. Cierra otras apps y vuelve a subirlo; si sigue igual, expórtalo más liviano') + '.');
       }
     } finally {
       operacion.terminar();
@@ -400,6 +487,10 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
 
   function mostrarPrevia(texto, conBotones) {
     ui.previa.hidden = false;
+    // Con un escaneo por revisar, el CSS esconde lo demás de la hoja para darle sitio al
+    // carro. Solo entonces: en un «Abriendo el escaneo…» los chips desaparecerían un
+    // momento, y el lienzo saltaría dos veces.
+    ui.previa.classList.toggle('con-escaneo-nuevo', Boolean(previa));
     ui.previaTexto.textContent = texto;
     for (const b of [ui.previaGuardar, ui.previaVoltear, ui.previaDescartar]) b.hidden = !conBotones;
     // "Está acostado" solo para lo importado: el escáner del celular sabe
@@ -414,8 +505,14 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
     const e = previa.escaneo;
     const catalogo = medidasDelCatalogo(obtenerCarro().medidas);
     let texto = 'Escaneo nuevo: ' + textoDeMedidas(e) + (catalogo ? ' (catálogo: ' + medidasComoTexto(catalogo) + ')' : '') + '.';
+    // Si el archivo traía foto y no llegó, o no traía, hay que decirlo: si no, parece
+    // que así se ve un escaneo. Por defecto sin afirmar nada del archivo: un ZIP con su foto
+    // en .tif también cae aquí, y "no la trae" sería falso.
+    if (previa.origen === 'archivo' && !e.textura) texto += ' ' + (e.fotoPerdida || 'No encontré la foto del carro en este archivo: se ve sin ella.') + ' ';
     if (e.escalaAjustada && e.escalaAjustada.medido) texto += ' (El archivo ' + e.escalaAjustada.motivo + ': ya está en metros.)';
     else if (e.escalaAjustada) texto += ' Ojo: ' + e.escalaAjustada.motivo + ', así que ese tamaño NO es medido.';
+    const largo = avisoDeLargo(e.medidas, obtenerCarro().medidas);
+    if (largo) texto += ' ' + largo;
     texto += ' Gíralo y mira que el frente quedó adelante; si no, toca «Frente al revés».';
     if (previa.ejes) texto += ' Si quedó acostado o boca abajo, toca «Está acostado» hasta que quede parado.';
     mostrarPrevia(texto, true);
@@ -429,13 +526,20 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
     try {
       await pintarYSeguir();
       if (!operacion.vigente() || previa !== esta) return;
+      const antes = esta.escaneo;
       esta.escaneo = esta.reprocesar(opciones);
-      avisarAlVisor();
+      try {
+        avisarAlVisor();
+      } catch (error) {
+        // En pantalla sigue el de antes, y Guardar guarda lo que se ve.
+        esta.escaneo = antes;
+        throw error;
+      }
       pintarPrevia();
     } catch (err) {
       if (operacion.vigente() && previa === esta) {
         pintarPrevia();
-        avisar('No se pudo: ' + err.message + '.');
+        avisar('No se pudo: ' + mensajeParaLaPantalla(err, 'vuelve a intentarlo') + '.');
       }
     } finally {
       operacion.terminar();
@@ -455,11 +559,15 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
     rehacerPrevia('Parándolo de otro lado…', { voltear: false, ejeArriba: siguiente });
   });
 
-  ui.previaDescartar.addEventListener('click', () => {
+  ui.previaDescartar.addEventListener('click', async () => {
     cortarOperaciones();
     previa = null;
     ocultarPrevia();
-    avisarAlVisor();
+    // «Ponle placa…: la vista previa no se pierde» ya no tendría de qué hablar.
+    avisar('');
+    // Debajo puede haber un registro dañado: sin el try de mostrarGuardado, el carro descartado
+    // se quedaba en pantalla, con la ficha en «escaneo sin guardar» y sin botones.
+    await mostrarGuardado();
   });
 
   ui.previaGuardar.addEventListener('click', async () => {
@@ -471,6 +579,9 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
       return;
     }
     const operacion = empezar();
+    // Sin botones mientras escribe. Con la base lenta, «Frente al revés» volteaba el carro
+    // en pantalla y al terminar volvía solo: la persona vio uno y quedó guardado el otro.
+    mostrarPrevia('Guardando el escaneo…', false);
     try {
       const almacen = await abrirAlmacenDeEscaneos();
       const registro = await almacen.guardar(placa, esta.escaneo, { origen: esta.origen, archivo: esta.archivo });
@@ -484,12 +595,15 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
       placaCargada = placa;
       previa = null;
       ocultarPrevia();
-      avisarAlVisor();
+      avisarAlVisor({ mismaMalla: true });
       // Que el teléfono no lo borre cuando le falte espacio.
       almacen.pedirQueNoSeBorren();
+      alGuardarEscaneo(placa);
       avisar('Escaneo guardado: el 3D de este carro es el escaneado (' + textoDeMedidas(guardado) + ').');
     } catch (err) {
-      avisar('No se pudo guardar el escaneo: ' + err.message + (/quota|cuota|espacio/i.test(err.message) ? ' (el teléfono no tiene espacio)' : '') + '.');
+      if (previa === esta) pintarPrevia();
+      const sinEspacio = /quota|cuota|espacio/i.test(err.name + ' ' + err.message);
+      avisar('No se pudo guardar el escaneo: ' + (sinEspacio ? 'el teléfono no tiene espacio. Libera espacio y vuelve a tocar Guardar.' : mensajeParaLaPantalla(err, 'vuelve a tocar Guardar.')));
     } finally {
       operacion.terminar();
     }
@@ -497,10 +611,16 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
 
   // ---- Con un escaneo guardado ----
 
-  ui.ver.addEventListener('click', () => {
+  ui.ver.addEventListener('click', async () => {
+    if (previa) return;
     verPiezas = !verPiezas;
     ui.dialogo.close();
-    avisarAlVisor();
+    // Volver al escaneo toma un momento: que se sepa.
+    if (!verPiezas && guardado) {
+      mostrarPrevia('Abriendo el escaneo…', false);
+      await pintarYSeguir();
+    }
+    await mostrarGuardado();
   });
 
   ui.quitar.addEventListener('click', async () => {
@@ -508,13 +628,16 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar }) {
     if (!guardado || !confirm('¿Quitar el escaneo de ' + placa + '? El carro vuelve a la carrocería de referencia. Las piezas marcadas no se tocan.')) return;
     try {
       await (await abrirAlmacenDeEscaneos()).borrar(placa);
+      alQuitarEscaneo(placa);
       if (placa !== placaCargada) return;
       guardado = null;
       verPiezas = false;
       ui.dialogo.close();
+      // Lo que hubiera ahí ya no es verdad («el 3D de este carro es el escaneado»).
+      avisar('');
       avisarAlVisor();
     } catch (err) {
-      avisar('No se pudo quitar el escaneo: ' + err.message);
+      avisar('No se pudo quitar el escaneo: ' + mensajeParaLaPantalla(err, 'vuelve a intentarlo.'));
     }
   });
 

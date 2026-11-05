@@ -22,7 +22,7 @@
     { "imports": { "three": "./js/vendor/three.module.min.js" } }
   </script>
 </head>
-<body>
+<body class="pagina-visor">
   <header class="barra">
     <!-- El nombre de la app cede su sitio al camino de vuelta: en 360 px no
          caben los dos y el Garaje es la pantalla de entrada. -->
@@ -48,25 +48,29 @@
     <!-- El carro de verdad: escanearlo con este celular o subir el escaneo
          de otra app (escaneo-pantalla.js). Con escaneo, dice "Escaneo". -->
     <button type="button" id="escanear" class="boton-escanear">Escanear</button>
-    <!-- La vista previa de un escaneo: nada se guarda sin verlo antes. -->
-    <div id="previa-escaneo" class="previa-escaneo" hidden>
-      <p id="previa-escaneo-texto"></p>
-      <div class="acciones">
-        <button type="button" data-accion="descartar">Descartar</button>
-        <button type="button" data-accion="voltear">Frente al revés</button>
-        <button type="button" data-accion="acostado" hidden>Está acostado</button>
-        <button type="button" data-accion="guardar" class="primario">Guardar</button>
-      </div>
-    </div>
-    <nav class="vistas" aria-label="Vistas del carro">
-      <button type="button" data-vista="frente">Frente</button>
-      <button type="button" data-vista="izquierdo">Izquierdo</button>
-      <button type="button" data-vista="derecho">Derecho</button>
-      <button type="button" data-vista="atras">Atrás</button>
-      <button type="button" data-vista="arriba">Arriba</button>
-    </nav>
     <div id="error" class="error" hidden></div>
   </main>
+
+  <!-- Las vistas y la vista previa van debajo del lienzo y no encima: encima tapaban el
+       carro que se está revisando. Así el lienzo se encoge, y el encuadre se ajusta solo. -->
+  <nav class="vistas" aria-label="Vistas del carro">
+    <button type="button" data-vista="frente">Frente</button>
+    <button type="button" data-vista="izquierdo">Izquierdo</button>
+    <button type="button" data-vista="derecho">Derecho</button>
+    <button type="button" data-vista="atras">Atrás</button>
+    <button type="button" data-vista="arriba">Arriba</button>
+  </nav>
+
+  <!-- La vista previa de un escaneo: nada se guarda sin verlo antes. -->
+  <div id="previa-escaneo" class="previa-escaneo" hidden>
+    <p id="previa-escaneo-texto"></p>
+    <div class="acciones">
+      <button type="button" data-accion="descartar">Descartar</button>
+      <button type="button" data-accion="voltear">Frente al revés</button>
+      <button type="button" data-accion="acostado" hidden>Está acostado</button>
+      <button type="button" data-accion="guardar" class="primario">Guardar</button>
+    </div>
+  </div>
 
   <section class="hoja" aria-live="polite">
     <p id="contador">Toca las piezas que necesitan pintura.</p>
@@ -141,11 +145,11 @@
         <p class="ayuda" id="escaneo-celular-nota"></p>
       </div>
       <div class="opcion-escaneo">
-        <button type="button" id="escaneo-subir">Subir un escaneo (GLB, OBJ o PLY)</button>
-        <p class="ayuda">Para iPhone (que no puede escanear desde aquí): escanéalo con RealityScan (gratis, de Epic Games, permite uso comercial), exporta el modelo en OBJ a Archivos y súbelo aquí. Sirve cualquier escaneo en GLB, OBJ o PLY. Ojo: RealityScan sube las fotos (con la placa) a la nube de Epic; pídele permiso al cliente. Las piezas se ubican solas sobre el escaneo, de forma aproximada.</p>
+        <button type="button" id="escaneo-subir">Subir un escaneo (GLB, ZIP, OBJ o PLY)</button>
+        <p class="ayuda">Con la foto del carro de verdad: escanéalo con RealityScan (gratis, de Epic Games, permite uso comercial) y sube aquí lo que exporte, en GLB o ZIP (o el OBJ con su imagen y su .mtl, elegidos juntos). Un OBJ solo sale sin foto. También sirve un PLY. Todavía no lo hemos probado con un archivo sacado de un celular: en Android 11 o más nuevo, el GLB puede quedar en una carpeta que este selector no muestra, y si no te aparece, todavía no sabemos cómo subirlo desde ese teléfono: queda el escáner de arriba (sin foto), si este celular lo permite. Ojo: RealityScan sube las fotos (con la placa) a la nube de Epic; pídele permiso al cliente. Las piezas se ubican solas sobre el escaneo, de forma aproximada, y se guardan solo en este celular.</p>
         <!-- Sin "accept": en Android ese filtro puede dejar grises los .glb.
              El importador reconoce el formato por la cabecera del archivo. -->
-        <input id="archivo-escaneo" type="file" hidden>
+        <input id="archivo-escaneo" type="file" multiple hidden>
       </div>
       <div id="escaneo-guardado" class="opcion-escaneo" hidden>
         <button type="button" id="escaneo-ver">Ver las piezas por dentro</button>

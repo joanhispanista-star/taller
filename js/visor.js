@@ -15,6 +15,7 @@ import { OrbitControls } from './vendor/OrbitControls.js';
 import { RoomEnvironment } from './vendor/RoomEnvironment.js';
 import { construirCarro, resaltar } from './carro.js';
 import { CARROCERIAS, nombreDePiezaEn, normalizarCarroceria } from './carrocerias.js';
+import { ALTURA_DE_LA_MIRA, LENTE, VISTAS, distanciaQueEncuadra, medidasDeEncuadre } from './encuadre.js';
 import { piezaTocada } from './toque.js';
 import { CLAVE_GUARDADO, formatearPlaca, normalizarPlaca, textoParaAsistente } from './estado.js';
 import {
@@ -27,8 +28,10 @@ import {
   fechaCorta,
   fijarEstado,
   fijarTrabajo,
+  mensajeParaLaPantalla,
   nombreCompletoDelCarro,
   nombreDePiezaEnOrden,
+  PIEZA_CARRO,
   nombreDelCarro,
   piezasDelCarro,
   quitarTodas,
@@ -38,6 +41,7 @@ import { crearHoja } from './hoja.js';
 import { crearFichaCarro } from './ficha-carro.js';
 import { reducirFoto } from './fotos.js';
 import { modeloDesdeEscaneo } from './escaneo.js';
+import { crearPisoVitrina } from './piso-vitrina.js';
 import { crearEscaneoPantalla, textoDeMedidas } from './escaneo-pantalla.js';
 
 const COLOR_BASE = 0xcfd4da;
@@ -55,18 +59,6 @@ function leerColoresDeEstado(siFaltan) {
   }
   return colores;
 }
-
-// Posiciones de cámara de los botones de vista. "Izquierdo" es el lado del
-// conductor (-X). "Arriba" no está en la vertical exacta porque OrbitControls
-// no deja pasar de cierto ángulo y la cámara saltaría al soltarla.
-const VISTAS = {
-  inicio: [-4.6, 2.1, -4.9],
-  frente: [0, 1.3, -6.2],
-  izquierdo: [-6.4, 1.4, 0],
-  derecho: [6.4, 1.4, 0],
-  atras: [0, 1.3, 6.2],
-  arriba: [0, 7.3, -1.4],
-};
 
 const ui = {
   escena: document.getElementById('escena'),
@@ -114,7 +106,7 @@ function persistir() {
   carro.actualizado = new Date().toISOString();
   guardarBorrador();
   if (carro.placa && almacen) {
-    almacen.guardar(carro).catch((e) => hoja.avisar('No se pudo guardar en el teléfono: ' + e.message));
+    almacen.guardar(carro).catch((e) => hoja.avisar('No se pudo guardar en el teléfono: ' + mensajeParaLaPantalla(e, 'revisa que tenga espacio libre y vuelve a marcar la pieza.')));
   }
 }
 
@@ -171,16 +163,26 @@ const relleno = new THREE.DirectionalLight(0xffffff, 0.4);
 relleno.position.set(-4, 1.5, 5);
 escena.add(relleno);
 
-const camara = new THREE.PerspectiveCamera(38, 1, 0.1, 60);
+// El plano lejano no sale de un carro sino del archivo más grande que entra como medido (hasta
+// 40 m, ajustarEscala): con 80, uno de 37 m quedaba a 115 m de la cámara y el lienzo salía vacío,
+// con Guardar al lado. Casi no le cuesta precisión al carro normal: esa la decide el plano cercano.
+const camara = new THREE.PerspectiveCamera(LENTE, 1, 0.1, 400);
 
-// Las vistas están medidas para un sedán de 4,5 m en una pantalla
-// apaisada. Una camioneta de 5,3 m, o cualquier carro en un celular en
-// vertical (la pantalla es más alta que ancha), se salía del cuadro: la
-// cámara se aleja en proporción al largo y, en vertical, un 40 % más.
+// Las vistas son direcciones; la distancia se calcula para que el carro quepa en el
+// lienzo de ahora, sea cual sea su tamaño (encuadre.js): el lienzo se encoge cuando se
+// marcan piezas, y en un celular en vertical el que manda es el ancho.
+function distanciaDeEncuadre(direccion) {
+  const medidas = medidasDeEncuadre(escaneoVisto, verPiezasEscaneo, modelo.disposicion);
+  const distancia = distanciaQueEncuadra({ direccion, medidas, mira: controles.target, fov: camara.fov, aspecto: camara.aspect });
+  // OrbitControls recorta la cámara a su tope: un archivo de 12,40 m pide 39 m de costado en
+  // 412×915, y con el tope de 34 volvía a salir cortado. Solo sube: este cálculo también se
+  // hace para la portada, a otra forma de lienzo, con la cámara de la pantalla más lejos.
+  controles.maxDistance = Math.max(controles.maxDistance, distancia);
+  return distancia;
+}
 function posicionDeVista(nombre) {
-  const largo = modelo ? modelo.disposicion.largo : 4.5;
-  const factor = Math.max(1, largo / 4.5) * (camara.aspect < 1 ? 1.4 : 1);
-  return VISTAS[nombre].map((v) => v * factor);
+  const direccion = new THREE.Vector3(...VISTAS[nombre]).sub(controles.target).normalize();
+  return direccion.multiplyScalar(distanciaDeEncuadre(direccion)).add(controles.target).toArray();
 }
 camara.position.set(...VISTAS.inicio);
 
@@ -189,8 +191,8 @@ controles.target.set(0, 0.65, 0);
 controles.enableDamping = true;
 controles.dampingFactor = 0.08;
 controles.enablePan = false;
-controles.minDistance = 3.2;
-controles.maxDistance = 16;
+controles.minDistance = 2.4;
+controles.maxDistance = 34;
 controles.minPolarAngle = 0.15;
 controles.maxPolarAngle = Math.PI / 2 - 0.05; // nunca por debajo del piso
 // En el celular, UN dedo es para las piezas (tocar marca, arrastrar abre) y
@@ -199,7 +201,8 @@ controles.maxPolarAngle = Math.PI / 2 - 0.05; // nunca por debajo del piso
 controles.touches = { ONE: -1, TWO: THREE.TOUCH.DOLLY_ROTATE };
 controles.update();
 
-escena.add(...crearPiso());
+const piso = crearPisoVitrina(renderizador, escena);
+escena.add(piso.malla);
 
 // `modelo` es el carro en 3D; `carro` (arriba) es el registro: placa, marca
 // y el estado de cada pieza. Dos cosas distintas con dos nombres. El modelo
@@ -217,10 +220,16 @@ function opcionesDelModelo() {
     carroceria: escaneoVisto ? escaneoVisto.carroceria : carro.carroceria || 'sedan',
     medidas: escaneoVisto ? escaneoVisto.medidasDibujo : carro.medidas || undefined,
     placa: formatearPlaca(carro.placa),
+    // Con lo medido en el escaneo (ejes, capó, juntas): el genérico de "ver las piezas"
+    // tiene que quedar sobre el mismo carro.
+    ajustes: escaneoVisto ? escaneoVisto.ajustes || {} : undefined,
   };
 }
 function firmaDelModelo() {
-  return JSON.stringify({ ...opcionesDelModelo(), escaneo: escaneoVisto ? versionEscaneo : 0, verPiezas: verPiezasEscaneo });
+  // El escaneo no dibuja la placa: ponérsela no cambia el modelo. El genérico de "ver
+  // las piezas" sí la lleva.
+  const sinPlaca = escaneoVisto && !verPiezasEscaneo ? { placa: '' } : {};
+  return JSON.stringify({ ...opcionesDelModelo(), ...sinPlaca, escaneo: escaneoVisto ? versionEscaneo : 0, verPiezas: verPiezasEscaneo });
 }
 function construirModelo() {
   if (escaneoVisto && !verPiezasEscaneo) {
@@ -230,7 +239,10 @@ function construirModelo() {
     // manchas) hasta el primer toque. Y cambia de material: hay que volver a teñir.
     if (conFoto.texturaLista) {
       conFoto.texturaLista.then((foto) => {
-        if (!foto || modelo !== conFoto) return;
+        if (modelo !== conFoto) return;
+        // El escaneo tiene su foto guardada y no abrió (poca memoria, o la imagen dañada):
+        // sin decirlo, el carro se ve en manchas y parece que así salió el escaneo.
+        if (!foto) hoja.avisar('No se pudo abrir la foto de este escaneo: se ve sin ella. Cierra otras apps y vuelve a abrir el carro; si sigue igual, súbelo otra vez.');
         for (const malla of modelo.seleccionables) tenir(malla.userData.piezaId);
         pedirCuadro();
       });
@@ -242,10 +254,22 @@ function construirModelo() {
 let modelo = construirModelo();
 let firmaModelo = firmaDelModelo();
 escena.add(modelo.grupo);
+apuntarAlCarro();
+piso.ponerHuella(modelo.grupo, modelo.disposicion);
+
+function apuntarAlCarro() {
+  controles.target.set(0, modelo.disposicion.alto * ALTURA_DE_LA_MIRA, 0);
+}
 
 function reconstruirModelo() {
   const firma = firmaDelModelo();
   if (firma === firmaModelo) return;
+  // Primero el nuevo y su huella: armarlos puede reventar (un escaneo dañado, falta de
+  // memoria). Con el viejo ya soltado, la pantalla se quedaba sin carro y sin cómo volver,
+  // porque `firmaModelo` seguía diciendo que el viejo estaba puesto. De aquí en adelante ya
+  // nada revienta: quien llama puede dar por hecho que lo de antes sigue en pantalla.
+  const nuevo = construirModelo();
+  piso.ponerHuella(nuevo.grupo, nuevo.disposicion);
   escena.remove(modelo.grupo);
   // Liberar la GPU: cada carro son unas cuarenta geometrías y materiales.
   // La placa con número lleva un material por cara (una lista): dispose
@@ -258,40 +282,19 @@ function reconstruirModelo() {
       material.dispose();
     }
   });
-  modelo = construirModelo();
+  // La foto del escaneo vive también fuera de la GPU (hasta 64 MB). Solo se cierra al
+  // abandonar el modelo: si se pierde el contexto de WebGL, se vuelve a subir de ahí.
+  modelo.soltado = true;
+  if (modelo.textura && modelo.textura.image && modelo.textura.image.close) modelo.textura.image.close();
+  modelo = nuevo;
   firmaModelo = firma;
   escena.add(modelo.grupo);
+  apuntarAlCarro();
   // Otro carro, otro largo: la cámara vuelve a la vista de inicio a la
   // distancia que le toca, para que no aparezca cortado.
   camara.position.set(...posicionDeVista('inicio'));
   controles.update();
   pedirCuadro();
-}
-
-function crearPiso() {
-  const piso = new THREE.Mesh(
-    new THREE.CircleGeometry(7, 48),
-    new THREE.MeshStandardMaterial({ color: 0x23282f, roughness: 0.95, metalness: 0 }),
-  );
-  piso.rotation.x = -Math.PI / 2;
-
-  // Sombra pintada en un degradado: más barata que una sombra real y en un
-  // celular se ve igual de bien.
-  const lienzo = document.createElement('canvas');
-  lienzo.width = lienzo.height = 256;
-  const ctx = lienzo.getContext('2d');
-  const degradado = ctx.createRadialGradient(128, 128, 24, 128, 128, 128);
-  degradado.addColorStop(0, 'rgba(0,0,0,0.62)');
-  degradado.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = degradado;
-  ctx.fillRect(0, 0, 256, 256);
-  const sombra = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.9, 5.6),
-    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(lienzo), transparent: true, depthWrite: false }),
-  );
-  sombra.rotation.x = -Math.PI / 2;
-  sombra.position.y = 0.01;
-  return [piso, sombra];
 }
 
 // Se dibuja solo cuando algo cambió (un giro, un toque, un cambio de
@@ -306,14 +309,16 @@ let enMovimiento = false; // la cámara cambió en el último cuadro (giro o ine
 function pedirCuadro() {
   cuadroPedido = true;
 }
+function dibujar() {
+  cuadroPedido = false;
+  piso.actualizar(camara, modelo.disposicion);
+  renderizador.render(escena, camara);
+}
 function bucle() {
   requestAnimationFrame(bucle);
   const seMovio = controles.update();
   enMovimiento = seMovio;
-  if (seMovio || cuadroPedido) {
-    cuadroPedido = false;
-    renderizador.render(escena, camara);
-  }
+  if (seMovio || cuadroPedido) dibujar();
 }
 bucle();
 
@@ -322,17 +327,29 @@ function ajustarTamano() {
   const ancho = ui.escena.clientWidth;
   const alto = ui.escena.clientHeight;
   if (!ancho || !alto) return;
+  // Lo que se había acercado o alejado la persona, respecto de lo que da el encuadre.
+  const haciaCamara = camara.position.clone().sub(controles.target);
+  const proporcion = haciaCamara.length() / distanciaDeEncuadre(haciaCamara);
   renderizador.setSize(ancho, alto, false);
   camara.aspect = ancho / alto;
   camara.updateProjectionMatrix();
+  piso.ajustar();
   // La primera vez que se sabe el tamaño real de la pantalla, la vista
-  // inicial se recalcula para ese tamaño y ese carro.
+  // inicial se recalcula para ese tamaño y ese carro. Después, si el lienzo cambia
+  // (al marcar piezas se encoge), la misma vista, para que el carro siga cabiendo.
   if (primerTamano) {
     primerTamano = false;
     camara.position.set(...posicionDeVista('inicio'));
-    controles.update();
+  } else {
+    camara.position.copy(controles.target).addScaledVector(haciaCamara.normalize(), distanciaDeEncuadre(haciaCamara) * proporcion);
   }
-  pedirCuadro();
+  controles.update();
+  // Aquí mismo y no en el cuadro siguiente: este observador corre después del
+  // requestAnimationFrame de este cuadro, y setSize acaba de vaciar el lienzo. Pedirlo
+  // dejaba pintar un cuadro sin carro (la hoja ya en su alto nuevo, el piso y el reflejo
+  // no) cada vez que cambiaba de alto: 4 de 4 al tocar Limpiar, y en un celular dura lo
+  // que tarde en dibujarse el escaneo dos veces.
+  dibujar();
 }
 new ResizeObserver(ajustarTamano).observe(ui.escena);
 ajustarTamano();
@@ -362,19 +379,20 @@ function frenarInercia() {
 
 // Un toque es un dedo que baja y sube casi en el mismo sitio y rápido;
 // cualquier otra cosa es un giro y lo maneja OrbitControls.
+const TOQUE_PX = 10;
+const TOQUE_MS = 400;
 let toque = null;
 let dedos = 0;
 ui.lienzo.addEventListener('pointerdown', (e) => {
   dedos += 1;
-  // Si un botón de vista tiene la cámara en camino, el dedo manda: la
-  // animación termina ya y el arrastre se atiende al instante.
-  if (animacionActiva) terminarAnimacion();
   // Si el carro venía girando por inercia, este dedo es para frenarlo, no
   // para marcar lo que pasaba por debajo: se corta la inercia y el toque
-  // no cuenta.
+  // no cuenta. Pero sigue siendo un toque para el temblor: sin `toque`, sus 2 px le llegaban
+  // a OrbitControls, que le creaba inercia nueva, y el toque siguiente caía otra vez aquí y
+  // no marcaba nada (6 de 6, con 2, 3 y 5 px).
   if (enMovimiento) {
     frenarInercia();
-    toque = null;
+    toque = dedos === 1 ? { x: e.clientX, y: e.clientY, t: performance.now(), freno: true } : null;
     return;
   }
   toque = dedos === 1 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null;
@@ -382,9 +400,9 @@ ui.lienzo.addEventListener('pointerdown', (e) => {
 ui.lienzo.addEventListener('pointerup', (e) => {
   dedos = Math.max(0, dedos - 1);
   if (!toque || !controles.enabled) return;
-  const { x, y, t } = toque;
+  const { x, y, t, freno } = toque;
   toque = null;
-  if (Math.hypot(e.clientX - x, e.clientY - y) < 10 && performance.now() - t < 400) {
+  if (!freno && Math.hypot(e.clientX - x, e.clientY - y) < TOQUE_PX && performance.now() - t < TOQUE_MS) {
     alTocar(e.clientX, e.clientY);
   }
 });
@@ -398,6 +416,42 @@ function alTocar(x, y) {
   if (!id) return;
   alternar(id);
   ui.pista.hidden = true;
+  mostrarNombreDePieza(id, x, y);
+}
+
+// El nombre de la pieza junto al dedo, un momento: se tiñe y aparece un renglón abajo,
+// pero con siete renglones hay que buscarlo, y el dedo tapa lo que acaba de tocar.
+let etiquetaDePieza = null;
+let plazoEtiqueta = 0;
+function mostrarNombreDePieza(id, x, y) {
+  if (!carro.piezas[id]) {
+    if (etiquetaDePieza) etiquetaDePieza.hidden = true;
+    return;
+  }
+  if (!etiquetaDePieza) {
+    etiquetaDePieza = document.createElement('div');
+    etiquetaDePieza.className = 'nombre-de-pieza';
+    ui.escena.append(etiquetaDePieza);
+  }
+  const r = ui.escena.getBoundingClientRect();
+  etiquetaDePieza.textContent = nombreDePiezaEn(carro.carroceria, id);
+  etiquetaDePieza.hidden = false; // visible antes de medirla: escondida mide 0
+  // Su mitad más un margen, y no un tope fijo: «Guardafango delantero izquierdo» mide
+  // 216 px, y con 90 px de tope se leía «uardafango…» al tocar cerca del borde.
+  const margen = etiquetaDePieza.offsetWidth / 2 + 6;
+  etiquetaDePieza.style.left = Math.min(r.width - margen, Math.max(margen, x - r.left)) + 'px';
+  etiquetaDePieza.style.top = Math.max(30, y - r.top - 46) + 'px';
+  clearTimeout(plazoEtiqueta);
+  plazoEtiqueta = setTimeout(() => (etiquetaDePieza.hidden = true), 1600);
+}
+
+// La pista de arriba se va sola: es lo primero que se lee y después solo estorba.
+let plazoPista = 0;
+function ponerPista(texto) {
+  ui.pista.textContent = texto;
+  ui.pista.hidden = false;
+  clearTimeout(plazoPista);
+  plazoPista = setTimeout(() => (ui.pista.hidden = true), 6000);
 }
 
 // ---------- Abrir puertas, capó y compuerta ----------
@@ -464,6 +518,13 @@ function abrirPieza(id, angulo) {
 ui.lienzo.addEventListener(
   'pointerdown',
   (e) => {
+    // Si un botón de vista tiene la cámara en camino, el dedo manda: la animación termina
+    // ya y el arrastre se atiende al instante. Tiene que ser aquí, en la captura: los
+    // controles van apagados durante la animación y OrbitControls recibe el dedo antes
+    // que el manejador de marcar, así que lo tiraba. Medido: la cámara saltaba al destino
+    // y 120 px de arrastre no la movían nada.
+    const veniaEnCamino = Boolean(animacionActiva);
+    if (veniaEnCamino) terminarAnimacion();
     if (gesto) {
       // Llegó otro dedo: el gesto se suelta donde iba y los controles
       // vuelven (será un pellizco para acercar).
@@ -471,7 +532,10 @@ ui.lienzo.addEventListener(
       controles.enabled = !animacionActiva;
       return;
     }
-    if (dedos !== 0 || enMovimiento || animacionActiva) return;
+    if (dedos !== 0 || enMovimiento || veniaEnCamino) return;
+    // Sin bisagras (un escaneo) no hay nada que abrir: no se gastan rayos en preguntar.
+    // Eran la mitad de lo que tardaba un toque.
+    if (!modelo.articulaciones.size) return;
     const id = piezaBajo(e.clientX, e.clientY);
     const art = id && modelo.articulaciones.get(id);
     if (!art) return;
@@ -495,6 +559,25 @@ ui.lienzo.addEventListener(
     const avance = (dx * gesto.direccion.x + dy * gesto.direccion.y) / gesto.direccion.distancia;
     gesto.art.fijar(gesto.angulo0 + avance * gesto.art.max);
     pedirCuadro();
+  },
+  true,
+);
+// Un dedo nunca baja quieto: 2 px de temblor al tocar ya giraban el escaneo 1,1° (9 px,
+// 5,4°) y le dejaban inercia unos 35 cuadros, y el toque siguiente caía en «este dedo es
+// para frenarlo» y no marcaba nada. Mientras pueda ser un toque, OrbitControls no se entera
+// del movimiento. Este manejador va después del de las bisagras, para no quitárselo.
+ui.lienzo.addEventListener(
+  'pointermove',
+  (e) => {
+    if (!toque || dedos !== 1) return;
+    if (Math.hypot(e.clientX - toque.x, e.clientY - toque.y) < TOQUE_PX && performance.now() - toque.t < TOQUE_MS) {
+      e.stopImmediatePropagation();
+      return;
+    }
+    // Ya es un giro, con su inercia de siempre. Arranca desde aquí y no desde donde bajó
+    // el dedo: lo que se le ocultó sería un salto de 14° en un lienzo de 250 px de alto.
+    toque = null;
+    if (controles._rotateStart) controles._rotateStart.set(e.clientX, e.clientY);
   },
   true,
 );
@@ -586,19 +669,39 @@ const hoja = crearHoja({
 const pantallaEscaneo = crearEscaneoPantalla({
   obtenerCarro: () => carro,
   avisar: (texto) => hoja.avisar(texto),
-  mostrar(escaneo, { previa, verPiezas }) {
+  alGuardarEscaneo: (placa) => ponerPortadaDelEscaneo(placa),
+  // Sin el escaneo, su cuadro ya no es este carro: el Garaje seguiría mostrando lo que se
+  // quitó, y la hoja no deja borrarlo a mano porque las automáticas no salen en la lista.
+  // Si falla no se pide reintentar: el escaneo ya no está y no queda un Quitar que tocar.
+  alQuitarEscaneo: (placa) => {
+    if (almacen) almacen.borrarPortadasAutomaticas(placa).catch(() => hoja.avisar('El escaneo se quitó, pero su foto sigue en el Garaje: se va cuando guardes otro escaneo o borres el carro.'));
+  },
+  mostrar(escaneo, { previa, verPiezas, mismaMalla }) {
+    // Guardar y volver a pintar la misma malla no reconstruye nada: rehacerla son 2
+    // soldaduras, abrir otra vez la foto y subirla a la GPU (segundos en un celular), y
+    // además la cámara volvía a la vista de inicio justo después de que la persona giró
+    // el carro para revisarlo.
+    const igual = mismaMalla || (escaneo || null) === escaneoVisto;
+    const antes = [escaneoVisto, escaneoEsPrevia, verPiezasEscaneo, versionEscaneo];
     escaneoVisto = escaneo || null;
     escaneoEsPrevia = Boolean(previa);
     verPiezasEscaneo = Boolean(verPiezas);
-    versionEscaneo += 1;
-    reconstruirModelo();
+    if (!igual) versionEscaneo += 1;
+    // Si no se pudo armar, en pantalla sigue lo de antes, y esto tiene que seguir diciéndolo.
+    try {
+      reconstruirModelo();
+    } catch (error) {
+      [escaneoVisto, escaneoEsPrevia, verPiezasEscaneo, versionEscaneo] = antes;
+      throw error;
+    }
     aplicarSeleccion();
     pintarFicha();
-    // Un escaneo no abre puertas: es una sola superficie.
-    ui.pista.textContent =
-      escaneoVisto && !verPiezasEscaneo
-        ? 'Un dedo: toca una pieza para marcarla · Dos dedos: gira el carro, pellizca para acercar · Para abrir puertas: Escaneo → Ver las piezas por dentro'
-        : 'Un dedo: toca una pieza para marcarla, arrastra una puerta para abrirla · Dos dedos: gira el carro, pellizca para acercar';
+    // Un escaneo no abre puertas: es una sola superficie, así que el dedo que en el
+    // carro genérico arrastra una puerta aquí gira el carro. Es el primer gesto de
+    // cualquiera, y en el taller se tiene una mano ocupada.
+    const esSuperficie = escaneoVisto && !verPiezasEscaneo;
+    controles.touches.ONE = esSuperficie ? THREE.TOUCH.ROTATE : -1;
+    ponerPista(esSuperficie ? 'Toca una pieza para marcarla · Arrastra para girar' : 'Toca una pieza para marcarla · Arrastra una puerta para abrirla · Dos dedos para girar');
   },
 });
 
@@ -612,8 +715,67 @@ const fichaCarro = crearFichaCarro({
 ui.datos.addEventListener('click', () => fichaCarro.abrir(carro));
 ui.ficha.addEventListener('click', () => fichaCarro.abrir(carro));
 
+// Al guardar un escaneo, si el carro no tiene foto en el Garaje, su portada es él mismo:
+// lo que se guarda a la vista no puede ser un cuadro gris al lado de un renglón de texto.
+// El cuadro se saca del lienzo en el mismo turno de dibujarlo: después el navegador ya
+// lo borró.
+//
+// Se dibuja aparte, a 4:3 y con su propio encuadre, y no se recorta de lo que hay en
+// pantalla: con el celular acostado (lienzo 844×195) o en el computador, un recorte del
+// lienzo o aplastaba el carro o le dejaba la trompa afuera (15 % de su largo). Todo va en un
+// solo turno: la pantalla nunca ve ni este tamaño ni esta cámara.
+async function ponerPortadaDelEscaneo(placa) {
+  if (!almacen) return;
+  try {
+    // Una foto de verdad se queda. La que sacó la app de un escaneo anterior, no, ni siquiera
+    // escondida debajo de esa foto: al borrarla volvía a salir, y era otro carro (un Moskvitch
+    // en la tarjeta de un carro cuyo 3D es el Kona).
+    const anterior = await almacen.portada(placa);
+    if (anterior && !anterior.automatica) {
+      await almacen.borrarPortadasAutomaticas(placa);
+      return;
+    }
+    const esteModelo = modelo;
+    if (esteModelo.texturaLista) await esteModelo.texturaLista;
+    // Solo del escaneo: con «ver las piezas» en pantalla el modelo es el genérico gris, y
+    // quedaría de portada algo que no es este carro.
+    if (carro.placa !== placa || modelo !== esteModelo || !modelo.escaneado) return;
+    const salida = Object.assign(document.createElement('canvas'), { width: 480, height: 360 });
+    const lapiz = salida.getContext('2d');
+    const antes = camara.position.clone();
+    const aspectoAntes = camara.aspect;
+    const tamano = renderizador.getSize(new THREE.Vector2());
+    renderizador.setSize(480, 360, false);
+    camara.aspect = 4 / 3;
+    camara.updateProjectionMatrix();
+    camara.position.fromArray(posicionDeVista('inicio'));
+    camara.lookAt(controles.target);
+    piso.ajustar();
+    // La portada es el carro, no el trabajo de hoy: con los velos o el tinte puestos se
+    // quedaba en el Garaje con parches naranja aunque las piezas se terminaran después.
+    for (const malla of modelo.seleccionables) resaltar(malla, null);
+    dibujar();
+    lapiz.drawImage(renderizador.domElement, 0, 0, 480, 360);
+    aplicarSeleccion();
+    renderizador.setSize(tamano.x, tamano.y, false);
+    camara.aspect = aspectoAntes;
+    camara.updateProjectionMatrix();
+    camara.position.copy(antes);
+    camara.lookAt(controles.target);
+    piso.ajustar();
+    dibujar();
+    const foto = await new Promise((listo) => salida.toBlob(listo, 'image/jpeg', 0.85));
+    if (foto) {
+      if (anterior) await almacen.borrarFoto(anterior.id);
+      await almacen.guardarFoto({ placa, pieza: PIEZA_CARRO, foto, miniatura: foto, ancho: 480, alto: 360, automatica: true });
+    }
+  } catch {
+    // Sin portada se sigue viendo el cuadro de color: no vale la pena un aviso.
+  }
+}
+
 function pintarHoja() {
-  hoja.pintar({ carro, fotos, empleados, conRegistro: Boolean(carro.placa && almacen) });
+  hoja.pintar({ carro, fotos: fotos.filter((f) => !f.automatica), empleados, conRegistro: Boolean(carro.placa && almacen) });
   const hayPiezas = Object.keys(carro.piezas).length > 0;
   ui.enviar.disabled = !hayPiezas;
   ui.limpiar.disabled = !hayPiezas;
@@ -629,7 +791,9 @@ function pintarFicha() {
     ui.ficha.hidden = true;
     return;
   }
-  const tipo = CARROCERIAS[normalizarCarroceria(carro.carroceria || 'sedan')].nombre;
+  // Si nadie la ha dicho, no se dice: "Sedán" encima de una camioneta le quita la
+  // confianza a todo lo que viene después.
+  const tipo = carro.carroceria ? CARROCERIAS[normalizarCarroceria(carro.carroceria)].nombre : '';
   const largo = !escaneoVisto && carro.medidas && carro.medidas.largo ? (carro.medidas.largo / 1000).toFixed(2).replace('.', ',') + ' m' : '';
   // Un carro entregado lo dice aquí arriba: lo que se le marque ya no
   // entra en la nómina como trabajo nuevo sin que alguien se dé cuenta.
@@ -667,7 +831,7 @@ async function agregarFoto(id, archivo) {
     hoja.avisar('');
     pintarHoja();
   } catch (e) {
-    hoja.avisar('No se pudo guardar la foto: ' + e.message);
+    hoja.avisar('No se pudo guardar la foto: ' + mensajeParaLaPantalla(e, 'revisa que el teléfono tenga espacio libre y vuelve a tomarla.'));
   }
 }
 
@@ -678,7 +842,7 @@ async function borrarFoto(idFoto) {
     fotos = await almacen.listarFotos(carro.placa);
     pintarHoja();
   } catch (e) {
-    hoja.avisar('No se pudo borrar la foto: ' + e.message);
+    hoja.avisar('No se pudo borrar la foto: ' + mensajeParaLaPantalla(e, 'vuelve a intentarlo.'));
   }
 }
 
@@ -852,13 +1016,19 @@ async function arrancar() {
     almacen = await abrirAlmacen();
     empleados = await almacen.listarEmpleados();
   } catch (e) {
-    hoja.avisar('Este navegador no guarda el registro (' + e.message + '). El carro queda solo como borrador.');
+    hoja.avisar('Este navegador no guarda el registro: ' + mensajeParaLaPantalla(e, 'puede ser una ventana de incógnito o que falte espacio') + '. El carro queda solo como borrador.');
   }
   const placaURL = normalizarPlaca(new URL(location.href).searchParams.get('placa') || '');
-  if (placaURL && placaURL !== carro.placa) {
-    await abrirCarro(placaURL, crearCarro());
-  } else if (carro.placa) {
-    await abrirCarro(carro.placa, carro);
+  try {
+    if (placaURL && placaURL !== carro.placa) {
+      await abrirCarro(placaURL, crearCarro());
+    } else if (carro.placa) {
+      await abrirCarro(carro.placa, carro);
+    }
+  } catch (e) {
+    // Con el teléfono lleno, por ejemplo. Sin esto, el visor quedaba en otro carro, sin
+    // su escaneo y sin decir nada.
+    hoja.avisar('No se pudo abrir el carro del registro: ' + mensajeParaLaPantalla(e, 'revisa que el teléfono tenga espacio libre y vuelve a abrirlo.'));
   }
   refrescar();
 }

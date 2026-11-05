@@ -275,8 +275,14 @@ function perfilGuardafangoDelantero(d) {
     const abajo = d.radioRueda; // el panel termina a la altura del eje; la llanta asoma por debajo
     f.moveTo(a, abajo);
     f.lineTo(d.ejeDel - d.arco, abajo);
-    f.absarc(d.ejeDel, abajo, d.arco, Math.PI, 0, true); // por encima de la llanta
-    f.lineTo(b, abajo);
+    if (b < d.ejeDel + d.arco) {
+      // Una junta leída en la foto puede caer encima del arco: el arco se corta ahí, o
+      // el perfil se cruza consigo mismo.
+      f.absarc(d.ejeDel, abajo, d.arco, Math.PI, Math.acos(Math.max(-1, (b - d.ejeDel) / d.arco)), true);
+    } else {
+      f.absarc(d.ejeDel, abajo, d.arco, Math.PI, 0, true); // por encima de la llanta
+      f.lineTo(b, abajo);
+    }
     // El borde de arriba va 8,5 cm por debajo de la línea del capó para no
     // compartir cara con él (dos caras en el mismo plano titilan en pantalla).
     f.lineTo(b, yCapo(d, b) - 0.085);
@@ -321,10 +327,24 @@ function perfilCostado(d) {
     const b = d.finCostado - H;
     const abajo = d.radioRueda;
     const arriba = d.cintura - 0.01 - H;
-    f.moveTo(a, abajo);
-    f.lineTo(d.ejeTras - d.arco, abajo);
-    f.absarc(d.ejeTras, abajo, d.arco, Math.PI, 0, true);
-    f.lineTo(b, abajo);
+    // Con voladizo corto el costado termina antes que el arco: el arco se corta ahí. Completo, el
+    // perfil se devolvía por dentro del pase de rueda: en un Picanto sobran 17 cm de arco, 472 de
+    // 1.747 muestras pasaban del fin del costado y salía una franja de lata sobre la llanta.
+    const alFinal = b < d.ejeTras + d.arco ? Math.acos(Math.max(-1, (b - d.ejeTras) / d.arco)) : 0;
+    if (a > d.ejeTras - d.arco) {
+      // La junta cae encima del arco (de fábrica en SUV y hatchback, y una leída en la foto
+      // puede caer ahí): el arco arranca en ella, igual que adelante. Con la recta hasta el
+      // arco, el perfil se cruzaba consigo mismo y abrazaba la rueda por delante de la puerta:
+      // en la SUV, 368 de 2.174 muestras del costado, y el pase de rueda salía costado.
+      const inicio = Math.acos(Math.min(1, (a - d.ejeTras) / d.arco));
+      f.moveTo(a, abajo + d.arco * Math.sin(inicio));
+      f.absarc(d.ejeTras, abajo, d.arco, inicio, alFinal, true);
+    } else {
+      f.moveTo(a, abajo);
+      f.lineTo(d.ejeTras - d.arco, abajo);
+      f.absarc(d.ejeTras, abajo, d.arco, Math.PI, alFinal, true);
+    }
+    if (!alFinal) f.lineTo(b, abajo);
     if (d.tipo === 'sedan') {
       f.lineTo(b, d.piso + 0.5 - H);
       f.lineTo(d.baulDel - H, d.piso + 0.5 - H);
@@ -577,12 +597,10 @@ function placa(x, y, z, inclinacion = 0, texto = '', mirandoA = -1) {
 // del carro, pero distinguirse de un vistazo.
 export function resaltar(malla, acento) {
   const material = malla.material;
-  // Con la foto del escaneo no hay color ni brillo que tocar: el acento se mezcla
-  // encima de la foto (multiplicarla dejaba verde sucio un carro azul marcado de
-  // naranja).
-  if (material.uniforms && material.uniforms.mezcla) {
-    if (acento != null) material.uniforms.tinte.value.set(acento);
-    material.uniforms.mezcla.value = acento == null ? 0 : 0.68;
+  // Con la foto del escaneo la pieza no se tiñe: se le pone encima su velo, que deja
+  // ver la lata (escaneo-velo.js).
+  if (malla.userData.pintarVelo) {
+    malla.userData.pintarVelo(acento);
     return;
   }
   const base = malla.userData.colorBase;

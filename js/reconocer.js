@@ -146,7 +146,7 @@ export function prepararReconocedor(alAvanzar = () => {}) {
         } catch {
           // Sin almacenamiento no hay cómo recordarlo; queda el mensaje.
         }
-        throw new Error('el motor con varios hilos falló en este teléfono; cierra la app y vuelve a abrirla (o recarga la página) y usará uno solo (' + e.message + ')');
+        throw new Error('el motor con varios hilos falló en este teléfono; cierra la app y vuelve a abrirla (o recarga la página) y usará uno solo');
       }
       throw e;
     });

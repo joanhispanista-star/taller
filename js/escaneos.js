@@ -1,6 +1,7 @@
 // Dónde viven los escaneos: una base de datos APARTE del registro
-// (garaje.js), en el mismo teléfono. Aparte a propósito: un escaneo pesa
-// de 2 a 20 MB y el registro, kilobytes; tenerlos separados deja abrir el
+// (garaje.js), en el mismo teléfono. Aparte a propósito: la malla de un escaneo
+// pesa de 3,6 MB (136 mil triángulos) a unos 13 MB (el tope de 500 mil), más su
+// foto, y el registro, kilobytes; tenerlos separados deja abrir el
 // Garaje sin leer ni una malla, y no hubo que subir la versión de la base
 // del registro (con carros reales adentro) para agregarlo.
 //

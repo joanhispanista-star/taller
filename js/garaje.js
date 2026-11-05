@@ -296,6 +296,30 @@ export function fechaCorta(iso, ahora = new Date()) {
   return fecha.getFullYear() === ahora.getFullYear() ? dia : dia + ' ' + fecha.getFullYear();
 }
 
+// ¿Le falta a este carro su foto de verdad? La portada que sacó la app de un escaneo
+// (`automatica`) no cuenta: «Nuevo carro con foto» es el único camino que crea la foto del
+// carro, y con solo preguntar si había portada la automática nunca le cedía el puesto y la
+// foto se tiraba sin aviso.
+export function faltaFotoDeVerdad(portada) {
+  return !portada || Boolean(portada.automatica);
+}
+
+// Lo que dicen las librerías y el navegador cuando fallan ("invalid zip data", "THREE.GLTFLoader:
+// No DRACOLoader instance provided", "Cannot read properties of null") no le sirve a nadie en
+// un taller: va en inglés, habla de tripas y no dice qué hacer. Lo que escribe la app va en
+// español. Nada los marca, y una lista de mensajes en inglés nunca estaría completa porque
+// cada navegador tiene los suyos: por eso solo pasa lo que se lee en español y no trae
+// nada de inglés; lo demás se cambia por `siNo`, que dice qué hacer, y el original queda en la
+// consola para quien lo vaya a arreglar.
+const SE_LEE_EN_ESPANOL = /[áéíóúñ¿]|\b(el|la|los|las|un|una|del|de|que|en|con|sin|para|por|ese|esa|este|esta|se|lo|es)\b/i;
+const TRAE_INGLES = /\b(the|of|to|is|was|not|and|for|with|from|this|that|on|in|at|an|be|can|cannot|could|failed|invalid|unexpected|undefined|null|instance|provided)\b|THREE\.|\w+Error\b|https?:/i;
+export function mensajeParaLaPantalla(error, siNo) {
+  const mensaje = String((error && error.message) || '').trim();
+  if (SE_LEE_EN_ESPANOL.test(mensaje) && !TRAE_INGLES.test(mensaje)) return mensaje;
+  console.warn(error);
+  return siNo;
+}
+
 // ---------- Almacén (IndexedDB) ----------
 
 // Una petición de IndexedDB como promesa. Las peticiones de una misma
@@ -423,12 +447,14 @@ function crearAlmacen(bd) {
   // Una foto de una pieza de un carro. `foto` es la imagen reducida (1280 px
   // de lado mayor) y `miniatura` la pequeña para la lista; las dos son
   // Blobs y van tal cual a IndexedDB. Devuelve el id de la foto.
-  async function guardarFoto({ placa, pieza, foto, miniatura, ancho = 0, alto = 0 }, ahora = new Date().toISOString()) {
+  // `automatica`: la saca la app del escaneo, para la portada. No es una foto de nadie: no
+  // va en la lista de fotos del carro, y cede el puesto a una de verdad.
+  async function guardarFoto({ placa, pieza, foto, miniatura, ancho = 0, alto = 0, automatica = false }, ahora = new Date().toISOString()) {
     const clave = normalizarPlaca(placa);
     if (!clave) throw new Error('Una foto necesita la placa del carro');
     if (!PIEZAS_POR_ID.has(pieza) && pieza !== PIEZA_CARRO) throw new Error('Pieza fuera del catálogo: ' + pieza);
     if (!foto) throw new Error('Falta la foto');
-    return pedir(fotos('readwrite').add({ placa: clave, pieza, foto, miniatura: miniatura || foto, ancho, alto, creado: ahora }));
+    return pedir(fotos('readwrite').add({ placa: clave, pieza, foto, miniatura: miniatura || foto, ancho, alto, automatica, creado: ahora }));
   }
 
   // Las fotos de un carro, de la más vieja a la más nueva (el id crece con
@@ -444,10 +470,20 @@ function crearAlmacen(bd) {
     await pedir(fotos('readwrite').delete(id));
   }
 
+  // Quitar el escaneo se lleva el cuadro que la app sacó de él. Todas, y no solo la que dé
+  // portada(): con una foto de verdad encima la automática queda escondida de respaldo, y
+  // volvería a salir, ya sin escaneo, al borrar esa foto.
+  async function borrarPortadasAutomaticas(placa) {
+    for (const foto of await listarFotos(placa)) {
+      if (foto.automatica) await borrarFoto(foto.id);
+    }
+  }
+
   // La foto del carro entero (la del registro), o null si no la hay.
   async function portada(placa) {
     const lista = await listarFotos(placa);
-    return lista.find((f) => f.pieza === PIEZA_CARRO) || null;
+    const delCarro = lista.filter((f) => f.pieza === PIEZA_CARRO);
+    return delCarro.find((f) => !f.automatica) || delCarro[0] || null;
   }
 
   // ---- Empleados ----
@@ -487,6 +523,7 @@ function crearAlmacen(bd) {
     guardarFoto,
     listarFotos,
     borrarFoto,
+    borrarPortadasAutomaticas,
     portada,
     listarEmpleados,
     guardarEmpleado,

@@ -154,21 +154,103 @@ a la app (sirve para cualquier archivo con textura, como el GLB de RealityScan):
   la placa, que el color por vértice (cada 2 cm) volvía una mancha. Las normales
   se sacan soldando por posición (`normalesSoldadas`): una malla con textura
   repite los vértices en cada costura de foto, y se veía un quiebre de luz.
-- **Las piezas caen sobre las juntas reales.** `puertasDeLaFoto` pinta el costado
+- **Las piezas caen sobre las juntas reales.** `puertasDeLaFoto` pinta cada costado
   como una imagen, a 5 mm, y busca las rayas verticales oscuras que atraviesan la
-  lata en los dos lados del carro: una manija no atraviesa, un reflejo no está en
-  los dos lados. Primero la junta del medio (el pilar, la más marcada), y las
-  otras dos a partir de ella. El genérico las ponía hasta 40 cm al lado. Solo se
-  usan las que se ven claras; las leídas se guardan en `ajustes` y sobreviven a
-  un cambio de carrocería, porque son del carro.
+  lata: más oscuras que lo que tienen a cada lado (el borde de un reflejo es un
+  escalón, no una raya), en niveles de gris, y con pareja en el otro costado a menos
+  de 15 cm, salvo que ese costado esté a contraluz y no pueda opinar. Primero la del
+  medio (el pilar, la más marcada), y las otras dos a partir de ella, y nunca dentro
+  de la rueda. El genérico las ponía hasta 40 cm al lado. Cada costado guarda su
+  lectura (`juntasLado`): sobre una malla de siluetas la foto se corre, y en el Kona
+  la misma junta cae 10 cm más allá de un lado que del otro. Se guardan en `ajustes`
+  y sobreviven a un cambio de carrocería. En la app, el Kona lee der -0,729 / 0,326 e
+  izq -0,714 / 0,426 (sin la trasera) y el Moskvitch -0,938 / 0,052 (sin la trasera, que
+  se lee o no según 2 cm de cintura: la raya mide 5 mm y las tajadas también). Los
+  umbrales salen de solo dos carros: hay que volver a medirlos con el primer escaneo de
+  RealityScan (`puertasDeLaFoto` recibe una `traza` para eso).
 - **Bordes rectos y sin pecas.** `etiquetarPiezas` mide a lo largo de la lata
   (con las normales), no en el espacio: si no, una junta recta del genérico salía
   ondulada. `quitarIslas` les da a los pedacitos sueltos y a los huecos chicos la
   etiqueta de alrededor, y la limpieza de bordes trabaja con los vértices
   soldados, para cruzar las costuras de foto.
 - **Una malla sin piso alrededor** ya no pierde los últimos 8 cm de las llantas,
-  y con color, la cintura sale de donde se acaba la pintura (con pintura sin color
-  no se inventa).
+  y con color, la cintura sale de donde se acaba la pintura en cada costado (con
+  pintura sin color no se inventa), y se queda la menor de las dos: el error común es
+  un vidrio que refleja algo del tono de la pintura (Kona: 1,00 y 1,16 m, con la de
+  verdad en 1,02). La pintura se juzga por costado: un lado a contraluz era todo
+  "plástico oscuro", con las puertas a huecos.
+- **La pantalla de trabajo ya se ve como la vitrina.** La foto va sin luces (ya trae
+  las suyas; con las del visor salía pálida), más un brillo muy suave que sí se mueve
+  al girar. Con foto no se dibujan las juntas: encima de la lata se leían como rayones.
+  Una pieza marcada lleva un velo (`escaneo-velo.js`): una línea clara y limpia, que es
+  una curva sobre un valor suavizado y no la orilla de los triángulos, y un relleno del
+  color del estado con la luz de la foto, para que el naranja sea naranja en cualquier
+  carro y se siga viendo el golpe. A 0,70 de relleno, el naranja sobre un carro azul
+  todavía salía café: va a 0,85. Una pieza chica para sus triángulos se sube hasta su
+  propio pico en el velo: se pinta, aunque en una malla rala se salga algo de la pieza.
+  El piso (`piso-vitrina.js`) es de sala de exhibición: reflejo, sombra de la huella real
+  y sin horizonte. En un escaneo, un dedo gira (no hay puertas que arrastrar). Al tocar,
+  el nombre de la pieza sale junto al dedo, sin cortarse contra el borde.
+- **La vista previa ya no tapa el carro.** El panel y las vistas van debajo del lienzo
+  (`#previa-escaneo` y `.vistas` salieron de `#escena`): el lienzo se encoge y el encuadre
+  se recalcula solo. Mientras se revisa un escaneo nuevo, de la hoja solo queda el aviso.
+  Con el celular acostado (alto de 520 px o menos) el carro va a la izquierda y lo demás
+  en una columna, respetando la muesca. La distancia de cámara sale exacta de las 8
+  esquinas de la caja de `disposicion` (`encuadre.js`), con un lente más cerrado: antes,
+  Frente y Atrás cortaban los dos lados del carro. Un escaneo fuera de rango se encuadra
+  por lo que mide (`medidasDeEncuadre`). Un toque con temblor no gira, ni se come el toque
+  siguiente: mientras pueda ser un toque (menos de 10 px y 400 ms) OrbitControls no ve el
+  movimiento. Cambiar de tamaño ya no deja un cuadro vacío. Probado con Edge sin ventana
+  en 360x640, 360x740, 390x844, 412x915 y 844x390, no en un celular de verdad.
+- **Lo que no se vio no se guarda, tampoco si falta memoria.** Si armar el modelo revienta,
+  el visor deja lo que había y la vista previa no cambia (`ponerPreviaNueva`; `mostrar`
+  devuelve su estado): el panel no ofrece Guardar de un carro que no está en pantalla.
+  Mientras se guarda, los botones no están. Si la foto de un escaneo guardado no abre, se
+  dice, y lo ya marcado pasa a velo sobre el color por vértice.
+- **El Garaje muestra el carro.** Al guardar un escaneo, si no hay foto de portada, se
+  saca un cuadro del propio carro (`automatica`: no va en la lista de fotos, y cede el
+  puesto a una foto de verdad). Se dibuja aparte, a 4:3 y sin velos. Al quitar el escaneo
+  se borra, y al guardar otro con una foto de verdad puesta también: al borrar esa foto
+  queda el cuadro de color hasta el próximo escaneo guardado.
+- **Subir el archivo.** Entiende el ZIP de RealityScan en iPhone y el OBJ elegido junto con
+  su imagen y su `.mtl`, y nunca toma la textura normal: manda lo que diga el MTL, y si no
+  hay cómo saber cuál es la foto, no pega ninguna y lo dice. El OBJ se lee sobre los bytes
+  (`escaneo-obj.js`): un vértice por cada par (v, vt), los mismos del GLB y casi su mismo
+  pico de memoria (+328 MB contra +748 MB de OBJLoader, con 546 mil triángulos). OBJLoader
+  queda de respaldo para lo que el lector no sabe (color por vértice, solo puntos), y eso se
+  suelda con valores exactos. Del ZIP solo se infla lo que se usa, y el tope de 60 MB se
+  mira antes de inflar. Un OBJ de varias imágenes se ve con el color por vértice y lo dice,
+  como el GLB. Si el MTL le da imagen a una parte y a otra no, o si hay varios materiales y
+  nada dice si una imagen alcanza, tampoco la pega y lo dice. En un ZIP con dos modelos,
+  cada archivo es del modelo al que está más cerca, aunque se llamen igual. Del GLB solo se
+  decodifica la foto: la normal de 8K costaba 300 MB más. Probado con un ZIP armado a mano:
+  falta uno de verdad, sacado de un iPhone. Un archivo de más de 500.000 triángulos (el tope
+  cuenta lo que queda del carro) ya no pierde la foto: al simplificar, la posición sale de
+  la celda y la coordenada, de la celda y la isla de la foto. Las juntas y la cintura se
+  leen antes de simplificar: pasar del tope no las mueve. Por encima de 2 millones,
+  `procesarImportado` reduce antes y ahí sí dependen de la rejilla. Si de todos modos no hay
+  foto, la vista previa lo dice y no finge que así se ve un escaneo.
+- **Un carro parqueado en pendiente.** Todo lo que busca el piso supone un piso a "y"
+  constante: a 2° el piso se unía al carro y un Kona de 4,20 m medía 5,20, sin aviso.
+  `escaneo-nivel.js` busca un plano casi horizontal en el tercio de abajo (RANSAC con
+  semilla) y gira la escena antes de medir, de 0,3° a 10°. Sin piso en el archivo no se
+  gira nada. Y si el largo medido difiere más de 25 cm del catálogo, la vista previa lo
+  dice: que la persona mire si quedó parte del piso o del entorno.
+- **Las piezas no se pierden.** Las pecas se miden en m² (`quitarIslas`: 0,024 y 0,24), no
+  en vértices a la densidad promedio, y el pedazo mayor de cada pieza se queda desde
+  0,004 m²: una lata rala ya no pierde el guardafango, y aparecen espejos chicos (el del
+  Moskvitch, 0,007 m², cae sobre el espejo de la foto). El costado trasero ya no abraza la
+  rueda por delante de la puerta ni, en los carros de voladizo corto, por detrás del eje:
+  374 de los 1.075 carros del catálogo con medidas tenían ese perfil cruzado. En una
+  pick-up, la luz cabina-platón es la raya de más atrás, y la junta se corrige 12 cm al
+  entrar o salir de pick-up. Con los dos costados oscuros, una junta con pareja sí se lee.
+  Un retazo de piso por fuera de la huella también se bota. Una pieza marcada en un escaneo
+  con color y sin foto lleva velo.
+- **Lo que se sentía lento.** Un toque lanzaba 18 rayos contra todos los triángulos:
+  ahora, sin bisagras, ninguno al bajar el dedo, y el anillo solo pregunta a las piezas
+  delgadas. Guardar y ponerle la placa ya no rehacen el modelo (ni devuelven la cámara).
+  Al abrir, una sola soldadura, las juntas solo miran los triángulos mezclados, y
+  "Abriendo el escaneo…" mientras tanto.
 
 La tubería del PC que hizo los dos carros de muestra también cambió, y **sigue
 siendo del PC, no del celular**: la forma sale de las siluetas del video (un casco
@@ -180,19 +262,28 @@ fotos (`textura.py`). Lo que aprendió, por si se vuelve a tocar:
   las llantas llevan su arco; la panza plana no se guarda, porque `estimarPiso`
   la toma por el piso y corta el carro ahí.
 - Desde la altura del pecho el techo no se ve: lo que hay es reflejo, distinto en
-  cada foto. Va del color de la pintura (**es un relleno, no una lectura**; si el
-  techo es de otro color se pasa a mano) y su borde se funde con la foto.
+  cada foto. Va del color de la pintura de cada costado (**es un relleno, no una
+  lectura**; si el techo es de otro color se pasa a mano) y su borde se funde con la
+  foto. Por eso la cámara de la vitrina no sube a mirarlo.
+- Lo que mira hacia abajo queda casi negro, y lo delgado que cuelga bajo la lata se
+  abre: en el reflejo del piso se veía como papel rasgado. Un video aclarado saca a
+  la luz sus cuadritos de compresión: se difumina solo el color.
 - Corregir la exposición automática de la cámara salió peor: esa exposición es la
   que hace ver bien los dos costados. Solo se aclara el costado a contraluz, poco
   a poco según el ángulo de la cámara; foto por foto salían franjas.
-- `diseno-escaneo/capturar.mjs` dejaba navegadores vivos sin ventana (el proceso
-  que se lanza ya salió: `kill()` no los toca). Llegaron a ser 190 procesos, 5 GB
-  de RAM del PC de Joan y 6 GB de perfiles en temporales. Ahora los mata por el
-  nombre del perfil, al empezar y al terminar.
+- Las capturas dejaban navegadores vivos sin ventana (el proceso que se lanza ya
+  salió: `kill()` no los toca). Llegaron a ser 190 procesos, 5 GB de RAM del PC de
+  Joan y 6 GB de perfiles en temporales. `diseno-escaneo/edge.mjs` los mata por el
+  nombre del perfil, y deja un navegador a la vez con un candado.
+  `diseno-escaneo/probar-app.mjs` prueba la app de verdad: subir un GLB, vista previa,
+  guardar, recargar, marcar piezas.
 
-**Lo que falta medir:** todo esto se probó con videos de otros, no con un escaneo
-de RealityScan hecho en el taller. Importar ese GLB usa este mismo código, pero
-las juntas y la cintura solo se han leído en estos dos carros.
+**Lo que falta medir:** todo esto (y las dos revisiones adversarias del 3 y el 4 de
+noviembre que lo corrigieron) se probó con videos de otros, en un PC, no con un
+escaneo de RealityScan hecho en el taller ni en un celular de verdad. Importar ese GLB
+usa este mismo código, pero las juntas y la cintura solo se han leído en estos dos
+carros. Y el alto no da con la ficha (Kona 1,46 de 1,55; Moskvitch 1,17 de 1,40): los
+rines salen redondos, así que no está aplastado, y la causa sigue sin aclarar.
 
 Las maquetas (holograma, plano técnico, vitrina para el cliente, la base de
 carros) y su simulador están en `pruebas/datos-externos/diseno-escaneo/`
@@ -383,11 +474,11 @@ el de vitrina.
     Cada cuadro trae unos 160 × 120 puntos de profundidad y la pose de la
     cámara; se funde en una TSDF de 3 cm (solo cuando la cámara se movió 10
     cm o giró 5°) y al terminar sale la malla con surface nets, suavizada.
-  - **Subir un escaneo** (GLB, glTF, OBJ o PLY) de otra app, para iPhone:
-    la app adivina qué eje es arriba (el piso es el plano más lleno), pasa
-    centímetros o milímetros a metros, conserva el color (de la textura o
-    por vértice) y simplifica las mallas de más de 500.000 triángulos sin
-    perder el color.
+  - **Subir un escaneo** (GLB, glTF, ZIP, OBJ o PLY) de otra app: el GLB en Android,
+    el ZIP en iPhone. La app adivina qué eje es arriba (el piso es el plano más lleno),
+    pasa centímetros o milímetros a metros, conserva la foto (o el color por vértice) y
+    simplifica las mallas de más de 500.000 triángulos sin perderla. Un OBJ solo, sin su
+    imagen, sale sin foto, y la vista previa lo dice.
   - Con cualquiera de los dos, la app encuentra el piso, se queda con el
     carro (el bloque más grande encima), lo orienta (eje largo por el
     rectángulo de menor área de su huella; frente por dónde queda la
@@ -641,7 +732,7 @@ Claude, la entrada `taller-pintura-celular` de `.claude/launch.json` arranca
 el servidor abierto a la red. El reconocedor de fotos sí necesita internet
 en el teléfono la primera vez (89 MB desde Hugging Face); lo demás no.
 
-Pruebas (185, en Node, sin navegador; el registro se prueba contra
+Pruebas (301, en Node, sin navegador; el registro se prueba contra
 `fake-indexeddb`, una IndexedDB de mentira que se instala con `npm install`):
 
 ```bash
@@ -697,7 +788,12 @@ npm test
 | `js/visor.js` | Escena, luces, cámara, giro con el dedo, el toque que marca, y el pegamento con el registro: qué carro está abierto (por la URL o el último), el 3D con su carrocería, color y medidas (se reconstruye al cambiar de carro), teñir por estado, guardar. Si el carro tiene escaneo, el modelo es el escaneado (`modeloDesdeEscaneo`) o el genérico a sus medidas ("ver piezas"). |
 | `js/escaneo.js` | La tubería pura del escaneo, probada en Node: TSDF dispersa por bloques, de la profundidad a puntos (`puntosDeCuadro`), surface nets (de la TSDF o de la densidad de una nube), piso, aislar el carro, orientarlo y medirlo, suavizado de Taubin, simplificación por agrupamiento de vértices, muestreo de superficie, las piezas por la muestra más cercana del genérico, y el modelo para el visor (una malla por pieza, con el mismo contrato que `construirCarro`). |
 | `js/escaneo-ar.js` | El escáner del celular: WebXR `immersive-ar` con `depth-sensing` opcional (`cpu-optimized`, `luminance-alpha`/`unsigned-short`, `matchDepthView`), un lienzo WebGL propio (no `renderer.xr` de three r169, que revienta), el espacio `local`, el filtro de movimiento y los 12 lados de la vuelta. Probado con un WebXR de mentira; **sin probar en un celular**. |
-| `js/escaneo-importar.js` | Importar un escaneo de otra app: lee GLB/glTF/OBJ/PLY con los cargadores de three, junta las mallas, saca el color de la textura, adivina arriba, corrige la escala y lo pasa por la tubería. |
+| `js/escaneo-importar.js` | Importar un escaneo de otra app: lee GLB/glTF/PLY con los cargadores de three y el ZIP y el OBJ con `escaneo-obj.js`, junta las mallas, saca el color de la textura, adivina arriba, corrige la escala y lo pasa por la tubería. |
+| `js/escaneo-obj.js` | El lector de OBJ sobre los bytes: un vértice por cada (v, vt, material), con arreglos tipados, y `null` si hay algo que no sabe leer (entonces lee OBJLoader). |
+| `js/escaneo-nivel.js` | Nivelar la escena antes de medir: el plano del piso (RANSAC con semilla) y el giro que lo deja a "y" constante, para un carro parqueado en pendiente. |
+| `js/escaneo-velo.js` | Lo que se ve de una pieza marcada sobre un escaneo: la línea (una curva sobre un valor suavizado, no la orilla de los triángulos) y el relleno con la luz de la foto. |
+| `js/piso-vitrina.js` | El piso de sala de exhibición: reflejo en una textura a media resolución, sombra de la huella real del carro y fundido al fondo, sin horizonte. |
+| `js/encuadre.js` | La distancia de cámara para que el carro quepa, exacta, con las 8 esquinas de su caja, y qué medidas usar para encuadrar un escaneo fuera de rango. |
 | `js/escaneos.js` | Los escaneos guardados, en una base de IndexedDB APARTE (`taller-escaneos`): pesan megas y así el Garaje abre sin leerlos, y no hubo que subir la versión de la base de los carros. |
 | `js/escaneo-pantalla.js` | La pantalla del escaneo: el botón, el diálogo, lo que se ve encima de la cámara (dom-overlay), la vista previa con Guardar / Frente al revés / Descartar, ver piezas y quitar. |
 | `js/vendor/loaders/`, `js/vendor/utils/` | GLTFLoader, OBJLoader, PLYLoader y BufferGeometryUtils de three 0.169, copiados tal cual (MIT); están en la precarga para que importar funcione sin internet. |

@@ -131,8 +131,7 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
   touch-action: none; /* el dedo gira el carro, no la página */
 }
 
-/* Qué carro es, arriba a la izquierda del 3D; tocarla abre los datos. La
-   pista baja un renglón. */
+/* Qué carro es, arriba a la izquierda del 3D; tocarla abre los datos. */
 .ficha {
   position: absolute;
   top: 10px;
@@ -150,42 +149,57 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 
 .pista {
   position: absolute;
-  /* 56 y no 44: desde que la ficha deja sitio al botón Escanear, en 360 px
-     ocupa dos líneas y la pista le tapaba la segunda. */
-  top: 56px;
+  /* Abajo y no arriba: la mira deja más aire debajo del carro que encima, y arriba le
+     tapaba el techo durante 6 s en un lienzo bajo (la hoja abierta, el celular acostado). */
+  bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.55);
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: 12px;
   font-size: 12px;
+  /* Sin esto, con left: 50% solo cuenta con la mitad del lienzo y va en dos renglones
+     aunque quepa en uno. */
+  width: max-content;
   max-width: calc(100% - 20px);
   text-align: center;
   pointer-events: none;
 }
 
-.vistas {
+/* El nombre de la pieza que se acaba de tocar, junto al dedo. */
+.nombre-de-pieza {
   position: absolute;
-  bottom: 10px;
-  left: 0;
-  right: 0;
+  transform: translateX(-50%);
+  background: rgba(10, 13, 17, 0.88);
+  color: #fff;
+  padding: 5px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Debajo del lienzo y no encima: encima pisaban las llantas en cuanto el carro lo llena a
+   lo alto (Frente en el computador, cualquier vista en un lienzo ancho). */
+.vistas {
   display: flex;
   justify-content: center;
   gap: 6px;
   flex-wrap: wrap;
-  padding: 0 8px;
-  /* La franja va de borde a borde sobre el lienzo; su espacio vacío tiene
-     que dejar pasar el dedo al carro (llantas, estribos, bómper). */
-  pointer-events: none;
+  padding: 4px 8px 6px;
 }
 
 .vistas button {
-  pointer-events: auto;
-  background: rgba(36, 42, 50, 0.88);
+  /* 44 px de alto: un dedo no le atina a menos, y con el carro al lado errarle marca una
+     pieza. Lo que se le quita a lo ancho es para que quepan en un renglón en 360 px: dos
+     renglones eran 50 px menos de lienzo. */
+  min-height: 44px;
+  padding: 0 9px;
+  background: var(--panel);
   border: 1px solid var(--borde);
   color: var(--texto);
   border-radius: 999px;
-  padding: 7px 12px;
   font-size: 13px;
 }
 
@@ -485,10 +499,11 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 }
 
 /* La foto del carro, o un cuadro de su color, a la izquierda de la fila. */
+/* Grande: es el carro, no un adorno de la lista. */
 .carro-portada {
   grid-row: 1 / span 3;
-  width: 56px;
-  height: 56px;
+  width: 88px;
+  height: 66px;
   border-radius: 8px;
   background: var(--panel-2);
   border: 1px solid var(--borde);
@@ -1055,30 +1070,46 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
   border: 1px solid var(--acento);
   color: var(--texto);
   border-radius: 999px;
-  padding: 7px 12px;
+  min-height: 44px;
+  padding: 0 12px;
   font-size: 13px;
 }
 .boton-escanear.con-escaneo { background: var(--acento); color: #111; }
 
+/* En el flujo, entre el lienzo y la hoja: encima del lienzo tapaba justo lo que se revisa
+   (el 74 % del carro en 360×740, el 98 % en 360×660), y no había cómo apartarlo. Así el
+   lienzo se encoge, el encuadre se recalcula solo y al irse el panel todo vuelve. */
 .previa-escaneo {
-  position: absolute;
-  /* Encima de las vistas: en 360 px las vistas van en dos renglones y le
-     tapaban el borde a Guardar. */
-  z-index: 2;
-  left: 10px;
-  right: 10px;
-  bottom: 56px;
-  background: rgba(20, 24, 30, 0.92);
-  border: 1px solid var(--borde);
-  border-radius: 12px;
+  background: var(--panel);
+  border-top: 1px solid var(--borde);
   padding: 10px 12px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
   font-size: 13px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
+  /* Un texto largo (foto perdida, tamaño que no es medido...) no se come el carro ni los
+     botones: el que se desplaza es él. */
+  max-height: 46vh;
 }
-.previa-escaneo p { margin: 0; }
-.previa-escaneo .acciones { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.previa-escaneo p { margin: 0; min-height: 0; overflow-y: auto; }
+.previa-escaneo .acciones { flex: none; gap: 6px; justify-content: flex-end; }
+/* Una sola fila, aunque el texto de un botón tenga que ir en dos renglones: cada renglón
+   de botones de más era lienzo de menos. */
+.previa-escaneo .acciones button {
+  flex: 1 1 auto;
+  max-width: 220px;
+  min-height: 44px;
+  padding: 4px 6px;
+  font-size: 13px;
+  line-height: 1.15;
+}
+/* Mientras se revisa un escaneo nuevo, en la hoja solo queda el aviso (ahí sale «Ponle
+   placa…»): con piezas marcadas llega a 42vh y entre los dos aplastaban el lienzo. Lo marcado
+   se sigue viendo sobre el carro, y al guardar o descartar la hoja vuelve como estaba. */
+.previa-escaneo.con-escaneo-nuevo:not([hidden]) + .hoja > :not(#aviso) { display: none; }
+.previa-escaneo.con-escaneo-nuevo:not([hidden]) + .hoja:has(#aviso[hidden]) { display: none; }
 
 .opcion-escaneo { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .opcion-escaneo .ayuda { margin: 0; }
@@ -1106,7 +1137,37 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 .hud-escaneo .acciones { display: flex; gap: 10px; justify-content: space-between; }
 .hud-escaneo .acciones button { flex: 1; padding: 14px; font-size: 16px; border-radius: 12px; }
 
-@media (max-width: 480px) {
-  /* Las vistas en dos renglones: la vista previa sube por encima. */
-  .previa-escaneo { bottom: 96px; }
+/* El celular acostado: en 390 px de alto no caben uno encima de otro el lienzo, el panel y
+   la hoja (al lienzo le quedaban 111 px). De lado sí: el carro a la izquierda, a todo lo
+   alto, y lo demás en su columna. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .pagina-visor {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
+    grid-template-rows: auto minmax(0, auto) minmax(0, 1fr) auto;
+  }
+  /* Con la barra del navegador quedan unos 304 px de alto: el panel se comía la fila, y el
+     aviso («Ponle placa…») pasaba 7 px del fondo con su último renglón partido. Que ceda el
+     panel, cuyo texto se desplaza. */
+  .pagina-visor:has(.previa-escaneo.con-escaneo-nuevo:not([hidden])) { grid-template-rows: auto minmax(0, auto) minmax(min-content, 1fr) auto; }
+  .pagina-visor .barra { grid-column: 1 / -1; }
+  .pagina-visor #escena { grid-column: 1; grid-row: 2 / 4; }
+  .pagina-visor .vistas { grid-column: 1; grid-row: 4; }
+  .pagina-visor .previa-escaneo { grid-column: 2; grid-row: 2; max-height: none; border-top: 0; border-left: 1px solid var(--borde); }
+  .pagina-visor .hoja { grid-column: 2; grid-row: 3 / 5; max-height: none; min-height: 0; border-top: 0; border-left: 1px solid var(--borde); }
+  /* A esos 304 px, con fotos y aviso, la lista se aplastaba a 0 px (sin una pieza a la vista ni
+     cómo cambiarles el estado) y «Enviar» pasaba 13 px del fondo. Mejor que se desplace la hoja. */
+  .pagina-visor .hoja { overflow-y: auto; }
+  .pagina-visor #lista:not(:empty) { min-height: 44px; }
+  /* La página pide viewport-fit=cover, así que de lado la muesca cae encima de lo que haya: el
+     botón Guardar quedaba con 35 de sus 62 px debajo. Y la fila de vistas, que solo acostada va
+     pegada al fondo, encima de la barrita del iPhone. */
+  .pagina-visor .barra { padding-left: calc(12px + env(safe-area-inset-left)); padding-right: calc(12px + env(safe-area-inset-right)); }
+  .pagina-visor .previa-escaneo, .pagina-visor .hoja { padding-right: calc(12px + env(safe-area-inset-right)); }
+  .pagina-visor .vistas { padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
+  /* Los cuatro botones no bajan de 268 px, y con la muesca a la derecha quedan 250: se salían
+     por la izquierda, le cortaban la D a Descartar y se metían 6 px en el lienzo. */
+  .pagina-visor .previa-escaneo .acciones { gap: 4px; }
+  .pagina-visor .previa-escaneo .acciones button { padding: 4px; }
+  /* El tope de ancho, corrido lo mismo: si no, una ficha larga le pisa el botón Escanear. */
+  .pagina-visor .ficha { left: calc(10px + env(safe-area-inset-left)); max-width: calc(100% - 120px - env(safe-area-inset-left)); }
 }

@@ -7,7 +7,7 @@
 // motor de 28 MB y su modelo de 89 MB) se carga solo cuando alguien toca
 // "Nuevo carro con foto": el Garaje tiene que abrir al instante.
 import { CLAVE_GUARDADO, normalizarPlaca } from './estado.js';
-import { PIEZA_CARRO, abrirAlmacen, deserializarCarro, fechaCorta, nombreCompletoDelCarro, resumen } from './garaje.js';
+import { PIEZA_CARRO, abrirAlmacen, deserializarCarro, faltaFotoDeVerdad, fechaCorta, mensajeParaLaPantalla, nombreCompletoDelCarro, resumen } from './garaje.js';
 import { CARROCERIAS, normalizarCarroceria } from './carrocerias.js';
 import { catalogoOrdenado, datosDeEntrada, entradaEscrita, familiaDe, marcaDelCatalogo, mejorDeFamilia, nombreDeLinea } from './catalogo.js';
 import { colorDeFoto, nombreDeColor } from './color-foto.js';
@@ -143,7 +143,7 @@ function fila(carro) {
 
   const descripcion = document.createElement('span');
   descripcion.className = 'carro-marca';
-  const partes = [nombreCompletoDelCarro(carro) || 'Sin marca'];
+  const partes = [nombreCompletoDelCarro(carro) || 'Sin datos todavía'];
   if (carro.carroceria) partes.push(CARROCERIAS[normalizarCarroceria(carro.carroceria)].nombre);
   if (carro.color) partes.push(nombreDeColor(carro.color));
   descripcion.textContent = partes.join(' · ');
@@ -211,7 +211,8 @@ async function pintarDemo() {
     ui.demoTexto.textContent = 'Para ver la app con algo adentro puedes cargar 5 carros de demostración (marcas y colores distintos, con piezas arregladas y en reparación) y 3 empleados.';
     ui.demoBoton.textContent = 'Cargar demostración';
     ui.demoBoton.dataset.accion = 'cargar';
-    ui.demo.hidden = false;
+    // Solo con el Garaje vacío: debajo de un carro real, "demostración" hace dudar.
+    ui.demo.hidden = (await almacen.listar()).length > 0;
   }
 }
 
@@ -237,7 +238,7 @@ ui.demoBoton.addEventListener('click', async () => {
     }
     await pintar();
   } catch (e) {
-    avisar('No se pudo: ' + e.message);
+    avisar('No se pudo: ' + mensajeParaLaPantalla(e, 'vuelve a intentarlo.'));
   } finally {
     ui.demoBoton.disabled = false;
   }
@@ -259,7 +260,7 @@ async function borrarCarro(placa) {
     if (borrador && borrador.placa === placa) localStorage.removeItem(CLAVE_GUARDADO);
     await pintar();
   } catch (e) {
-    avisar('No se pudo borrar: ' + e.message);
+    avisar('No se pudo borrar: ' + mensajeParaLaPantalla(e, 'vuelve a intentarlo.'));
   }
 }
 
@@ -283,7 +284,7 @@ ui.formulario.addEventListener('submit', async (e) => {
     const { carro } = await almacen.abrirOCrear(placa, ui.marca.value);
     location.href = enlaceAlVisor(carro.placa);
   } catch (error) {
-    avisar('No se pudo abrir el carro: ' + error.message);
+    avisar('No se pudo abrir el carro: ' + mensajeParaLaPantalla(error, 'revisa que el teléfono tenga espacio libre y vuelve a intentarlo.'));
   }
 });
 
@@ -793,7 +794,7 @@ async function fotoDelLogo(archivo) {
   } catch (err) {
     if (ficha !== sesion) return;
     ui.ficha.pistaLogo.textContent = 'No pude mirar el logo';
-    ui.ficha.marcaTexto.textContent = 'No pude mirar la foto del logo (' + err.message + '). Elige la marca abajo o escríbela.';
+    ui.ficha.marcaTexto.textContent = 'No pude mirar la foto del logo (' + mensajeParaLaPantalla(err, 'algo falló al abrirla') + '). Elige la marca abajo o escríbela.';
   }
 }
 
@@ -831,7 +832,7 @@ async function tocarLogo(e) {
     if (ficha !== sesion) return;
     ui.ficha.toque.classList.remove('mirando');
     ui.ficha.pistaLogo.textContent = 'No pude mirar el logo';
-    ui.ficha.marcaTexto.textContent = 'No pude mirar el logo (' + err.message + '). Elige la marca abajo o escríbela.';
+    ui.ficha.marcaTexto.textContent = 'No pude mirar el logo (' + mensajeParaLaPantalla(err, 'algo falló al leerlo') + '). Elige la marca abajo o escríbela.';
   }
 }
 
@@ -992,7 +993,7 @@ async function abrirFicha(archivo) {
     estadoFicha('Esto propone la app (' + (resultado.milisegundos / 1000).toFixed(1) + ' s). Corrige lo que no sea.', 100);
   } catch (e) {
     if (ficha && ficha.archivo === archivo) anotar('Error del reconocedor: ' + e.message);
-    estadoFicha('No pude reconocer el carro (' + e.message + '). Escribe la marca y la línea.', 100);
+    estadoFicha('No pude reconocer el carro (' + mensajeParaLaPantalla(e, 'algo falló al mirar la foto') + '). Escribe la marca y la línea.', 100);
   }
 }
 
@@ -1056,16 +1057,17 @@ ui.ficha.abrir.addEventListener('click', async () => {
     };
     const { carro } = await almacen.abrirOCrear(placa, datos);
     // La foto del carro se guarda como portada (reducida, como las demás) si
-    // el carro no tenía una.
-    estadoFicha('Guardando la foto…', 100);
-    if (!(await almacen.portada(carro.placa))) {
+    // el carro no tenía una de verdad. La automática no se borra: pesa unos 20 KB
+    // y es la que vuelve a salir si un día se borra esta foto.
+    if (faltaFotoDeVerdad(await almacen.portada(carro.placa))) {
+      estadoFicha('Guardando la foto…', 100);
       const reducida = await reducirFoto(ficha.archivo);
       await almacen.guardarFoto({ placa: carro.placa, pieza: PIEZA_CARRO, ...reducida });
     }
     location.href = enlaceAlVisor(carro.placa);
   } catch (e) {
     ui.ficha.abrir.disabled = false;
-    estadoFicha('No se pudo crear el carro: ' + e.message, 100);
+    estadoFicha('No se pudo crear el carro: ' + mensajeParaLaPantalla(e, 'revisa que el teléfono tenga espacio libre y vuelve a intentarlo.'), 100);
   }
 });
 
@@ -1090,7 +1092,7 @@ async function arrancar() {
   try {
     almacen = await abrirAlmacen();
   } catch (e) {
-    avisar('Este navegador no guarda el registro (' + e.message + '). Los carros no se pueden listar aquí.');
+    avisar('Este navegador no guarda el registro: ' + mensajeParaLaPantalla(e, 'puede ser una ventana de incógnito o que falte espacio') + '. Los carros no se pueden listar aquí.');
   }
   await pintar();
 }

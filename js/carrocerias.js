@@ -66,9 +66,10 @@ export function normalizarCarroceria(valor) {
 const RANGO = {
   largo: [2.6, 6.5],
   ancho: [1.4, 2.3],
-  // Desde 1,1 m: un deportivo mide 1,15 m, y el Moskvitch escaneado, 1,17. Con el
-  // tope en 1,2 el genérico se dibujaba a la altura típica (28 cm de más) y las
-  // piezas caían corridas.
+  // Desde 1,1 m para dibujar: con el tope en 1,2, un escaneo que mide 1,17 (el del
+  // Moskvitch, que de verdad mide 1,40: la tubería del PC lo deja bajo) se dibujaba a la
+  // altura típica, 28 cm de más, y las piezas caían corridas. El aviso de "fuera de lo
+  // normal" sigue en 1,2 (piezasDelEscaneo).
   alto: [1.1, 2.3],
   entreEjes: [1.8, 4.0],
 };
