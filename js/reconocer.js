@@ -21,7 +21,7 @@
 // motor (ONNX Runtime, en js/vendor/transformers) sí viaja con la app.
 import { env, AutoProcessor, CLIPVisionModelWithProjection, RawImage } from './vendor/transformers/transformers.min.js';
 import { normalizarCarroceria } from './carrocerias.js';
-import { CRITERIO_BARRIDO, CRITERIO_ZONA, ESCALAS_RECORTE, FONDO_AL_DECIDIR, REJILLA_BARRIDO as REJILLA, clasificarLogo, decidirBarrido, logoSeguro, recorteAlrededor, rejillaDeBarrido } from './logo.js';
+import { CRITERIO_BARRIDO, CRITERIO_ZONA, ESCALAS_RECORTE, FONDO_AL_DECIDIR, REJILLA_BARRIDO as REJILLA, clasificarLogo, decidirBarrido, logoSeguro, recorteAlrededor, rejillaDeBarrido, recortarPixeles } from './logo.js';
 
 export const MODELO = 'Xenova/clip-vit-base-patch32';
 const ESCALA = 100; // la "temperatura" de CLIP: convierte parecidos en probabilidades
@@ -166,6 +166,11 @@ export function prepararReconocedor(alAvanzar = () => {}) {
 const LADO_MAXIMO = 1600;
 const imagenesLeidas = new WeakMap();
 
+function recortar(imagen, r) {
+  const { data, width, height, channels } = recortarPixeles(imagen, r);
+  return new RawImage(data, width, height, channels);
+}
+
 async function leerFoto(archivo) {
   let pendiente = imagenesLeidas.get(archivo);
   if (!pendiente) {
@@ -268,7 +273,7 @@ export async function reconocerMarcaPorLogo(archivo, { x, y }, alAvanzar) {
   const vectores = [];
   for (const escala of ESCALAS_RECORTE) {
     const r = recorteAlrededor(imagen.width, imagen.height, x, y, escala);
-    const recorte = await imagen.crop([r.x1, r.y1, r.x2, r.y2]);
+    const recorte = recortar(imagen, r);
     vectores.push(await vectorDeImagen(procesador, vision, recorte));
   }
   const marcas = clasificarLogo(vectores, etiquetas.marcas, { escala: ESCALA });
@@ -293,14 +298,14 @@ export async function reconocerMarcaCercaDePlaca(archivo, zona, alAvanzar) {
   let mejor = null;
   for (const punto of zona.puntos) {
     const r = recorteAlrededor(imagen.width, imagen.height, punto.x, punto.y, escalaChica);
-    const vector = await vectorDeImagen(procesador, vision, await imagen.crop([r.x1, r.y1, r.x2, r.y2]));
+    const vector = await vectorDeImagen(procesador, vision, recortar(imagen, r));
     const puntaje = puntajeDeLogo(vector, etiquetas, CRITERIO_ZONA);
     if (!mejor || puntaje > mejor.puntaje) mejor = { punto, puntaje, vector };
   }
   const vectores = [mejor.vector];
   for (const escala of [escalaChica * 1.6, escalaChica * 2.5]) {
     const r = recorteAlrededor(imagen.width, imagen.height, mejor.punto.x, mejor.punto.y, Math.min(0.3, escala));
-    vectores.push(await vectorDeImagen(procesador, vision, await imagen.crop([r.x1, r.y1, r.x2, r.y2])));
+    vectores.push(await vectorDeImagen(procesador, vision, recortar(imagen, r)));
   }
   const marcas = clasificarLogo(vectores, etiquetas.marcas, { escala: ESCALA, fondo: FONDO_AL_DECIDIR ? etiquetas.fondo : [] });
   return { marcas: marcas.slice(0, 5), seguro: logoSeguro(marcas), fondo: marcas.fondo, punto: mejor.punto, milisegundos: Math.round(performance.now() - inicio) };
@@ -341,7 +346,7 @@ export async function reconocerMarcaBarriendo(archivo, { alAvanzar = () => {}, s
   const yaVistos = new Map();
   const vectorDe = async (r) => {
     const clave = r.x1 + ',' + r.y1 + ',' + r.lado;
-    if (!yaVistos.has(clave)) yaVistos.set(clave, await vectorDeImagen(procesador, vision, await imagen.crop([r.x1, r.y1, r.x2, r.y2])));
+    if (!yaVistos.has(clave)) yaVistos.set(clave, await vectorDeImagen(procesador, vision, recortar(imagen, r)));
     return yaVistos.get(clave);
   };
   const candidatos = [];
@@ -383,7 +388,7 @@ export async function reconocerMarcaEnFotoDeCerca(archivo, alAvanzar) {
   const vectores = [await vectorDeImagen(procesador, vision, imagen)];
   for (const escala of [0.7, 0.45]) {
     const r = recorteAlrededor(imagen.width, imagen.height, 0.5, 0.5, escala);
-    vectores.push(await vectorDeImagen(procesador, vision, await imagen.crop([r.x1, r.y1, r.x2, r.y2])));
+    vectores.push(await vectorDeImagen(procesador, vision, recortar(imagen, r)));
   }
   const marcas = clasificarLogo(vectores, etiquetas.marcas, { escala: ESCALA });
   return { marcas: marcas.slice(0, 5), seguro: logoSeguro(marcas), milisegundos: Math.round(performance.now() - inicio) };

@@ -95,8 +95,8 @@ export function crearHoja(acciones) {
           ? '1 pieza marcada'
           : piezas.length + ' piezas marcadas';
     // Sin placa no hay dónde guardar fotos: se dice, no se esconde la cámara
-    // sin más.
-    if (!conRegistro && piezas.length > 0) texto += ' · ponle placa para guardarle fotos';
+    // sin más. Con placa y sin registro (no responde), ponerle placa no arregla nada.
+    if (!conRegistro && piezas.length > 0) texto += carro.placa ? ' · sin registro no se le pueden guardar fotos' : ' · ponle placa para guardarle fotos';
     ui.contador.textContent = texto;
 
     ui.lista.replaceChildren(...piezas.map((p) => chip(p, porPieza.get(p.id) || 0, conRegistro)));

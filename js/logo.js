@@ -93,6 +93,21 @@ export function frasesDeLogo(nombre) {
 // chico; con tres tamaños alguno lo llena.
 export const ESCALAS_RECORTE = [0.1, 0.16, 0.25];
 
+// Los píxeles de un recorte (de x1 a x2 y de y1 a y2, inclusive), sin lienzo. El crop de la librería
+// clona la foto entera en un lienzo por cada recorte: en un barrido son 79 lienzos de 7,7 MB, 608 MB,
+// y Safari en iPhone tiene un tope para la suma de sus lienzos (de 224 a 448 MB). Llegado el tope,
+// getContext da null y de ahí en adelante falla todo lo que dibuje, también guardar la foto del carro.
+export function recortarPixeles({ data, width, channels }, { x1, y1, x2, y2 }) {
+  const ancho = x2 - x1 + 1;
+  const alto = y2 - y1 + 1;
+  const salida = new data.constructor(ancho * alto * channels);
+  for (let fila = 0; fila < alto; fila++) {
+    const desde = ((y1 + fila) * width + x1) * channels;
+    salida.set(data.subarray(desde, desde + ancho * channels), fila * ancho * channels);
+  }
+  return { data: salida, width: ancho, height: alto, channels };
+}
+
 // El cuadrado de recorte alrededor de un punto (fracciones del ancho y del
 // alto), de lado `escala` × el lado mayor, metido dentro de la foto.
 // Devuelve bordes en píxeles, inclusivos (como los pide RawImage.crop).

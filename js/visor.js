@@ -22,12 +22,14 @@ import {
   abrirAlmacen,
   alternarPieza,
   asignarPintor,
+  avisoDeBorrador,
   crearCarro,
   deserializarCarro,
   estadoParaOrden,
   fechaCorta,
   fijarEstado,
   fijarTrabajo,
+  mensajeDelRegistro,
   mensajeParaLaPantalla,
   nombreCompletoDelCarro,
   nombreDePiezaEnOrden,
@@ -83,6 +85,7 @@ const ui = {
 let carro = cargarBorrador();
 let fotos = [];
 let almacen = null; // null hasta que abra; si no abre, se sigue con el borrador
+let registroCaido = false; // abrió o no abrió, y no responde: ya se le dijo a la persona
 let empleados = []; // los del taller, para asignar pintor a cada pieza
 
 function cargarBorrador() {
@@ -106,7 +109,7 @@ function persistir() {
   carro.actualizado = new Date().toISOString();
   guardarBorrador();
   if (carro.placa && almacen) {
-    almacen.guardar(carro).catch((e) => hoja.avisar('No se pudo guardar en el teléfono: ' + mensajeParaLaPantalla(e, 'revisa que tenga espacio libre y vuelve a marcar la pieza.')));
+    almacen.guardar(carro).catch((e) => hoja.avisar('No se pudo guardar en el teléfono: ' + mensajeDelRegistro(e, 'vuelve a marcar la pieza')));
   }
 }
 
@@ -669,6 +672,7 @@ const hoja = crearHoja({
 const pantallaEscaneo = crearEscaneoPantalla({
   obtenerCarro: () => carro,
   avisar: (texto) => hoja.avisar(texto),
+  registroCaido: () => registroCaido,
   alGuardarEscaneo: (placa) => ponerPortadaDelEscaneo(placa),
   // Sin el escaneo, su cuadro ya no es este carro: el Garaje seguiría mostrando lo que se
   // quitó, y la hoja no deja borrarlo a mano porque las automáticas no salen en la lista.
@@ -831,7 +835,7 @@ async function agregarFoto(id, archivo) {
     hoja.avisar('');
     pintarHoja();
   } catch (e) {
-    hoja.avisar('No se pudo guardar la foto: ' + mensajeParaLaPantalla(e, 'revisa que el teléfono tenga espacio libre y vuelve a tomarla.'));
+    hoja.avisar('No se pudo guardar la foto: ' + mensajeDelRegistro(e, 'vuelve a tomarla'));
   }
 }
 
@@ -882,6 +886,15 @@ async function abrirCarro(placa, base) {
     return;
   }
   const existente = await almacen.obtener(placa);
+  // El borrador más nuevo que el registro: se marcaron piezas mientras el registro no respondía
+  // (un iPhone, por ejemplo). Eso pasa al registro, en vez de perderse: son piezas que se pagan.
+  if (existente && base.placa === placa && base.actualizado > existente.actualizado) {
+    carro = crearCarro({ ...existente, ...base, placa });
+    await almacen.guardar(carro);
+    guardarBorrador();
+    fotos = await almacen.listarFotos(placa);
+    return;
+  }
   if (existente) {
     if (esBorrador) {
       for (const [id, pieza] of Object.entries(base.piezas)) {
@@ -1012,11 +1025,13 @@ pintarHoja();
 pintarFicha();
 
 async function arrancar() {
+  const sinFotoAlEntrar = new URL(location.href).searchParams.has('sinfoto');
   try {
     almacen = await abrirAlmacen();
     empleados = await almacen.listarEmpleados();
   } catch (e) {
-    hoja.avisar('Este navegador no guarda el registro: ' + mensajeParaLaPantalla(e, 'puede ser una ventana de incógnito o que falte espacio') + '. El carro queda solo como borrador.');
+    registroCaido = true;
+    hoja.avisar(avisoDeBorrador(e));
   }
   const placaURL = normalizarPlaca(new URL(location.href).searchParams.get('placa') || '');
   try {
@@ -1026,11 +1041,18 @@ async function arrancar() {
       await abrirCarro(carro.placa, carro);
     }
   } catch (e) {
-    // Con el teléfono lleno, por ejemplo. Sin esto, el visor quedaba en otro carro, sin
-    // su escaneo y sin decir nada.
-    hoja.avisar('No se pudo abrir el carro del registro: ' + mensajeParaLaPantalla(e, 'revisa que el teléfono tenga espacio libre y vuelve a abrirlo.'));
+    // El registro no responde ni reconectando. Sin esto, el visor quedaba en otro carro, sin su
+    // escaneo. Se sigue con el que se pidió, como borrador: una sola vez el aviso, y no uno por
+    // cada pieza que se marque.
+    almacen = null;
+    registroCaido = true;
+    if (placaURL && placaURL !== carro.placa) carro = crearCarro({ placa: placaURL });
+    guardarBorrador();
+    hoja.avisar(avisoDeBorrador(e));
   }
   refrescar();
+  // Lo que no se pudo hacer en la pantalla de antes. Va después de refrescar, que limpia la URL.
+  if (sinFotoAlEntrar) hoja.avisar('El carro quedó creado, pero su foto no se pudo guardar en este celular. Para ponerla, vuelve a «Nuevo carro con foto» con esta placa.');
 }
 
 // Gancho para las pruebas automáticas: deja marcar piezas, cambiar estados,

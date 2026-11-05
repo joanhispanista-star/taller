@@ -16,6 +16,7 @@
 // antes), pero sin placa no entra al registro ni puede tener fotos.
 import { PIEZAS, PIEZAS_POR_ID } from './piezas.js';
 import { crearEstado, normalizarPlaca } from './estado.js';
+import { aBlob, aBytes, conTope, conexionViva } from './conexion-bd.js';
 import { normalizarCarroceria } from './carrocerias.js';
 
 // Las fotos van por pieza; esta "pieza" especial es la foto del carro
@@ -320,6 +321,28 @@ export function mensajeParaLaPantalla(error, siNo) {
   return siNo;
 }
 
+// Lo que dijo el navegador, tal cual, para que se pueda arreglar desde lejos con un pantallazo. Es
+// la excepción a lo de arriba, y a propósito: el iPhone de Joan dijo "revisa que el teléfono tenga
+// espacio libre" para un error que no era de espacio, y sin el original no había cómo saber cuál era.
+export function detalleDelError(error) {
+  const nombre = (error && error.name) || 'Error';
+  const mensaje = String((error && error.message) || error || '').trim();
+  return (nombre + ': ' + mensaje).slice(0, 160);
+}
+
+// Por qué no se pudo guardar en el registro. El espacio solo se nombra cuando es el espacio: era el
+// texto de cualquier error, y es falso en un celular con espacio de sobra.
+export function mensajeDelRegistro(error, queHacer) {
+  if (error && error.name === 'QuotaExceededError') return 'este celular no le da más espacio a la app. Libera espacio y ' + queHacer + '.';
+  const siNo = 'el navegador no dejó guardar. Recarga la página y ' + queHacer + '. Dato para revisar: ' + detalleDelError(error);
+  return mensajeParaLaPantalla(error, siNo);
+}
+
+// Cuando el registro no responde ni reconectando, el carro se abre como borrador.
+export function avisoDeBorrador(error) {
+  return 'Este celular no está dejando usar el registro: este carro queda como borrador en este celular, y pasa al registro cuando vuelva a responder. Si sigue igual, reinicia el celular. Dato para revisar: ' + detalleDelError(error);
+}
+
 // ---------- Almacén (IndexedDB) ----------
 
 // Una petición de IndexedDB como promesa. Las peticiones de una misma
@@ -346,7 +369,7 @@ function esperarTransaccion(tx) {
 // el de verdad.
 export function abrirAlmacen({ indexedDB: fabrica = globalThis.indexedDB, nombre = NOMBRE_BD } = {}) {
   if (!fabrica) return Promise.reject(new Error('Este navegador no tiene IndexedDB'));
-  return new Promise((resolver, rechazar) => {
+  const abrir = () => new Promise((resolver, rechazar) => {
     let peticion;
     try {
       peticion = fabrica.open(nombre, VERSION_BD);
@@ -367,20 +390,18 @@ export function abrirAlmacen({ indexedDB: fabrica = globalThis.indexedDB, nombre
         bd.createObjectStore('empleados', { keyPath: 'id' });
       }
     };
-    peticion.onsuccess = () => resolver(crearAlmacen(peticion.result));
+    peticion.onsuccess = () => resolver(peticion.result);
     peticion.onerror = () => rechazar(peticion.error || new Error('No se pudo abrir el registro'));
     peticion.onblocked = () => rechazar(new Error('El registro está abierto en otra pestaña con una versión vieja'));
   });
+  return conTope(abrir(), 10000).then((bd) => crearAlmacen(conexionViva(bd, abrir)));
 }
 
-function crearAlmacen(bd) {
-  // Si otra pestaña sube la versión de la base, esta se cierra para no
-  // bloquearla; la siguiente operación aquí fallará y la pantalla lo dirá.
-  bd.onversionchange = () => bd.close();
-
-  const carros = (modo = 'readonly') => bd.transaction('carros', modo).objectStore('carros');
-  const fotos = (modo = 'readonly') => bd.transaction('fotos', modo).objectStore('fotos');
-  const empleados = (modo = 'readonly') => bd.transaction('empleados', modo).objectStore('empleados');
+function crearAlmacen(conexion) {
+  const transaccion = (almacenes, modo) => conexion.actual.transaction(almacenes, modo);
+  const carros = (modo = 'readonly') => transaccion('carros', modo).objectStore('carros');
+  const fotos = (modo = 'readonly') => transaccion('fotos', modo).objectStore('fotos');
+  const empleados = (modo = 'readonly') => transaccion('empleados', modo).objectStore('empleados');
 
   async function obtener(placa) {
     const clave = normalizarPlaca(placa);
@@ -436,7 +457,7 @@ function crearAlmacen(bd) {
   async function borrar(placa) {
     const clave = normalizarPlaca(placa);
     if (!clave) return;
-    const tx = bd.transaction(['carros', 'fotos'], 'readwrite');
+    const tx = transaccion(['carros', 'fotos'], 'readwrite');
     const fin = esperarTransaccion(tx);
     tx.objectStore('carros').delete(clave);
     const claves = await pedir(tx.objectStore('fotos').index('placa').getAllKeys(clave));
@@ -446,7 +467,7 @@ function crearAlmacen(bd) {
 
   // Una foto de una pieza de un carro. `foto` es la imagen reducida (1280 px
   // de lado mayor) y `miniatura` la pequeña para la lista; las dos son
-  // Blobs y van tal cual a IndexedDB. Devuelve el id de la foto.
+  // Blobs, y a IndexedDB van como bytes (conexion-bd.js). Devuelve el id de la foto.
   // `automatica`: la saca la app del escaneo, para la portada. No es una foto de nadie: no
   // va en la lista de fotos del carro, y cede el puesto a una de verdad.
   async function guardarFoto({ placa, pieza, foto, miniatura, ancho = 0, alto = 0, automatica = false }, ahora = new Date().toISOString()) {
@@ -454,7 +475,10 @@ function crearAlmacen(bd) {
     if (!clave) throw new Error('Una foto necesita la placa del carro');
     if (!PIEZAS_POR_ID.has(pieza) && pieza !== PIEZA_CARRO) throw new Error('Pieza fuera del catálogo: ' + pieza);
     if (!foto) throw new Error('Falta la foto');
-    return pedir(fotos('readwrite').add({ placa: clave, pieza, foto, miniatura: miniatura || foto, ancho, alto, automatica, creado: ahora }));
+    // Los bytes se leen antes de abrir la transacción: esperar otra cosa en medio la cerraría.
+    const grande = await aBytes(foto);
+    const chica = miniatura && miniatura !== foto ? await aBytes(miniatura) : grande;
+    return pedir(fotos('readwrite').add({ placa: clave, pieza, foto: grande, miniatura: chica, ancho, alto, automatica, creado: ahora }));
   }
 
   // Las fotos de un carro, de la más vieja a la más nueva (el id crece con
@@ -463,7 +487,7 @@ function crearAlmacen(bd) {
     const clave = normalizarPlaca(placa);
     if (!clave) return [];
     const lista = await pedir(fotos().index('placa').getAll(clave));
-    return lista.sort((a, b) => a.id - b.id);
+    return lista.sort((a, b) => a.id - b.id).map((f) => ({ ...f, foto: aBlob(f.foto), miniatura: aBlob(f.miniatura) }));
   }
 
   async function borrarFoto(id) {
@@ -514,7 +538,7 @@ function crearAlmacen(bd) {
     return { carros: carrosDemo.length, empleados: empleadosDemo.length };
   }
 
-  return {
+  const operaciones = {
     obtener,
     guardar,
     abrirOCrear,
@@ -529,6 +553,8 @@ function crearAlmacen(bd) {
     guardarEmpleado,
     borrarEmpleado,
     quitarDemo,
-    cerrar: () => bd.close(),
   };
+  const almacen = { cerrar: () => conexion.cerrar() };
+  for (const [nombre, operacion] of Object.entries(operaciones)) almacen[nombre] = conexion.protegida(operacion);
+  return almacen;
 }

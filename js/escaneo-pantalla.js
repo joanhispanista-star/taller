@@ -69,7 +69,7 @@ function fechaCorta(iso) {
 // cálculo pesado (surface nets y piezas: uno o dos segundos en el celular).
 const pintarYSeguir = () => new Promise((r) => setTimeout(r, 60));
 
-export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar, alGuardarEscaneo = () => {}, alQuitarEscaneo = () => {} }) {
+export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar, registroCaido = () => false, alGuardarEscaneo = () => {}, alQuitarEscaneo = () => {} }) {
   const ui = {
     boton: document.getElementById('escanear'),
     dialogo: document.getElementById('dialogo-escaneo'),
@@ -234,7 +234,9 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar, alGuardarE
         }
         guardado = leido;
       } catch (e) {
-        avisar('No se pudo leer el escaneo guardado: ' + mensajeParaLaPantalla(e, 'vuelve a abrir el carro.'));
+        // Con el registro caído el visor ya dijo qué pasa, y lo dice mejor: de un carro nuevo no
+        // hay "escaneo guardado" que leer.
+        if (!registroCaido()) avisar('No se pudo mirar si este carro tiene escaneo guardado: ' + mensajeParaLaPantalla(e, 'vuelve a abrir el carro.'));
       }
     }
     await mostrarGuardado();

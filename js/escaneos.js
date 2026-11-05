@@ -10,6 +10,7 @@
 // y las medidas reales. Al abrir el carro no hay que volver a calcular nada.
 // Los arreglos tipados van tal cual a IndexedDB (los copia el navegador).
 import { normalizarPlaca } from './estado.js';
+import { aBlob, aBytes, conTope, conexionViva } from './conexion-bd.js';
 
 export const NOMBRE_BD_ESCANEOS = 'taller-escaneos';
 const VERSION = 1;
@@ -57,7 +58,7 @@ export function escaneoParaGuardar(placa, escaneo, { origen = 'celular', archivo
 
 export function abrirEscaneos({ indexedDB: fabrica = globalThis.indexedDB, nombre = NOMBRE_BD_ESCANEOS } = {}) {
   if (!fabrica) return Promise.reject(new Error('Este navegador no tiene IndexedDB'));
-  return new Promise((resolver, rechazar) => {
+  const abrir = () => new Promise((resolver, rechazar) => {
     let peticion;
     try {
       peticion = fabrica.open(nombre, VERSION);
@@ -71,42 +72,45 @@ export function abrirEscaneos({ indexedDB: fabrica = globalThis.indexedDB, nombr
     };
     peticion.onerror = () => rechazar(peticion.error || new Error('No se pudo abrir la base de los escaneos'));
     peticion.onblocked = () => rechazar(new Error('La base de los escaneos está abierta en otra pestaña con una versión vieja'));
-    peticion.onsuccess = () => {
-      const bd = peticion.result;
-      bd.onversionchange = () => bd.close();
-      const almacen = (modo = 'readonly') => bd.transaction('escaneos', modo).objectStore('escaneos');
-      resolver({
-        async guardar(placa, escaneo, datos) {
-          const registro = escaneoParaGuardar(placa, escaneo, datos);
-          await pedir(almacen('readwrite').put(registro));
-          return registro;
-        },
-        async obtener(placa) {
-          const clave = normalizarPlaca(placa);
-          if (!clave) return null;
-          return (await pedir(almacen().get(clave))) || null;
-        },
-        // Solo si hay escaneo y de cuándo, sin traer la malla (para la lista
-        // del Garaje).
-        async placas() {
-          return pedir(almacen().getAllKeys());
-        },
-        async borrar(placa) {
-          const clave = normalizarPlaca(placa);
-          if (clave) await pedir(almacen('readwrite').delete(clave));
-        },
-        // Pedirle al navegador que no borre estos datos cuando falte espacio
-        // (Chrome lo concede a las apps instaladas o muy usadas). Si dice que
-        // no, todo sigue igual; solo que el teléfono podría borrarlos.
-        async pedirQueNoSeBorren() {
-          try {
-            return navigator.storage && navigator.storage.persist ? await navigator.storage.persist() : false;
-          } catch {
-            return false;
-          }
-        },
-        cerrar: () => bd.close(),
-      });
+    peticion.onsuccess = () => resolver(peticion.result);
+  });
+  // Un escaneo grande tarda en escribirse en un celular: el tope es para lo que no responde, no para
+  // lo que va despacio.
+  return conTope(abrir(), 10000).then((bd) => {
+    const conexion = conexionViva(bd, abrir, { tope: 60000 });
+    const almacen = (modo = 'readonly') => conexion.actual.transaction('escaneos', modo).objectStore('escaneos');
+    return {
+      guardar: conexion.protegida(async (placa, escaneo, datos) => {
+        const registro = escaneoParaGuardar(placa, escaneo, datos);
+        // Quien llama sigue trabajando con el Blob. A la base, los bytes (conexion-bd.js).
+        const textura = await aBytes(registro.textura);
+        await pedir(almacen('readwrite').put({ ...registro, textura }));
+        return registro;
+      }),
+      obtener: conexion.protegida(async (placa) => {
+        const clave = normalizarPlaca(placa);
+        if (!clave) return null;
+        const registro = await pedir(almacen().get(clave));
+        return registro ? { ...registro, textura: aBlob(registro.textura) } : null;
+      }),
+      // Solo si hay escaneo y de cuándo, sin traer la malla (para la lista
+      // del Garaje).
+      placas: conexion.protegida(async () => pedir(almacen().getAllKeys())),
+      borrar: conexion.protegida(async (placa) => {
+        const clave = normalizarPlaca(placa);
+        if (clave) await pedir(almacen('readwrite').delete(clave));
+      }),
+      // Pedirle al navegador que no borre estos datos cuando falte espacio
+      // (Chrome lo concede a las apps instaladas o muy usadas). Si dice que
+      // no, todo sigue igual; solo que el teléfono podría borrarlos.
+      async pedirQueNoSeBorren() {
+        try {
+          return navigator.storage && navigator.storage.persist ? await navigator.storage.persist() : false;
+        } catch {
+          return false;
+        }
+      },
+      cerrar: () => conexion.cerrar(),
     };
   });
 }

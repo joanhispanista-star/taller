@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CATALOGO } from '../js/catalogo-carros.js';
-import { ESCALAS_RECORTE, clasificarLogo, decidirBarrido, logoQueQueda, logoSeguro, marcasConLogo, puntoEnFoto, recorteAlrededor, rejillaDeBarrido } from '../js/logo.js';
+import { recortarPixeles, ESCALAS_RECORTE, clasificarLogo, decidirBarrido, logoQueQueda, logoSeguro, marcasConLogo, puntoEnFoto, recorteAlrededor, rejillaDeBarrido } from '../js/logo.js';
 
 test('puntoEnFoto descuenta las franjas vacías de una foto mostrada entera, y el toque fuera de la foto es null', () => {
   // Caja de 400 × 200 con una foto 4:3 (1600 × 1200): se ve a 266,67 × 200,
@@ -163,4 +163,36 @@ test('el prior reparte solo la parte de las marcas: el fondo no crece con una ma
   assert.equal(conPrior[0].nombre, 'Rara', 'la rara sigue ganando si su logo es el que se ve');
   const suma = conPrior.reduce((s, m) => s + m.p, 0) + conPrior.fondo;
   assert.ok(Math.abs(suma - 1) < 1e-12, 'marcas más fondo suman 1');
+});
+
+test('el recorte sale sin lienzos y con los mismos píxeles', () => {
+  // Una imagen de 5 × 4 con 4 canales: cada píxel dice dónde está.
+  const data = new Uint8ClampedArray(5 * 4 * 4);
+  for (let y = 0; y < 4; y++) {
+    for (let x = 0; x < 5; x++) {
+      const i = (y * 5 + x) * 4;
+      data[i] = x;
+      data[i + 1] = y;
+      data[i + 2] = 100 + x * 10 + y;
+      data[i + 3] = 255;
+    }
+  }
+  const r = recortarPixeles({ data, width: 5, height: 4, channels: 4 }, { x1: 1, y1: 2, x2: 3, y2: 3 });
+  assert.equal(r.width, 3, 'los bordes van incluidos, como en la librería');
+  assert.equal(r.height, 2);
+  assert.equal(r.channels, 4);
+  assert.ok(r.data instanceof Uint8ClampedArray);
+  assert.equal(r.data.length, 3 * 2 * 4);
+  assert.deepEqual([...r.data.subarray(0, 4)], [1, 2, 112, 255]);
+  assert.deepEqual([...r.data.subarray(8, 12)], [3, 2, 132, 255]);
+  assert.deepEqual([...r.data.subarray(12, 16)], [1, 3, 113, 255]);
+  assert.deepEqual([...r.data.subarray(20, 24)], [3, 3, 133, 255]);
+});
+
+test('el recorte no toca la foto de origen, también con 3 canales', () => {
+  const data = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  const r = recortarPixeles({ data, width: 2, height: 2, channels: 3 }, { x1: 1, y1: 1, x2: 1, y2: 1 });
+  assert.deepEqual([...r.data], [10, 11, 12]);
+  r.data[0] = 99;
+  assert.equal(data[9], 10);
 });

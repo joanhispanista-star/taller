@@ -449,7 +449,7 @@ test('«Nuevo carro con foto» le gana a la portada automática, no a una foto d
 
 test('la pantalla del Garaje decide con esa misma pregunta', () => {
   const fuente = fs.readFileSync(new URL('../js/garaje-pantalla.js', import.meta.url), 'utf8');
-  assert.match(fuente, /if \(faltaFotoDeVerdad\(await almacen\.portada\(carro\.placa\)\)\)/);
+  assert.match(fuente, /if \(!faltaFotoDeVerdad\(await almacen\.portada\(carro\.placa\)\)\) return true;/);
 });
 
 test('quitar el escaneo se lleva su portada automática, escondida o no, y nada más', async () => {

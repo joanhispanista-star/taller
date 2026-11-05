@@ -7,7 +7,7 @@
 // motor de 28 MB y su modelo de 89 MB) se carga solo cuando alguien toca
 // "Nuevo carro con foto": el Garaje tiene que abrir al instante.
 import { CLAVE_GUARDADO, normalizarPlaca } from './estado.js';
-import { PIEZA_CARRO, abrirAlmacen, deserializarCarro, faltaFotoDeVerdad, fechaCorta, mensajeParaLaPantalla, nombreCompletoDelCarro, resumen } from './garaje.js';
+import { PIEZA_CARRO, abrirAlmacen, crearCarro, deserializarCarro, detalleDelError, faltaFotoDeVerdad, fechaCorta, mensajeDelRegistro, mensajeParaLaPantalla, nombreCompletoDelCarro, resumen, serializarCarro } from './garaje.js';
 import { CARROCERIAS, normalizarCarroceria } from './carrocerias.js';
 import { catalogoOrdenado, datosDeEntrada, entradaEscrita, familiaDe, marcaDelCatalogo, mejorDeFamilia, nombreDeLinea } from './catalogo.js';
 import { colorDeFoto, nombreDeColor } from './color-foto.js';
@@ -71,6 +71,19 @@ function avisar(texto) {
 
 function enlaceAlVisor(placa) {
   return 'index.html?placa=' + encodeURIComponent(placa);
+}
+
+// El registro no responde ni reconectando (en un iPhone pasa, y a veces solo se arregla
+// reiniciándolo). El 3D es lo que la persona vino a ver: el carro se deja como borrador, que es de
+// donde lee el visor cuando no hay registro, y el visor dice lo que pasó. Da false si tampoco hay
+// dónde dejar el borrador (ventana de incógnito).
+function dejarBorrador(placa, datos) {
+  try {
+    localStorage.setItem(CLAVE_GUARDADO, serializarCarro(crearCarro({ ...datos, placa })));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ---------- La lista ----------
@@ -284,7 +297,9 @@ ui.formulario.addEventListener('submit', async (e) => {
     const { carro } = await almacen.abrirOCrear(placa, ui.marca.value);
     location.href = enlaceAlVisor(carro.placa);
   } catch (error) {
-    avisar('No se pudo abrir el carro: ' + mensajeParaLaPantalla(error, 'revisa que el teléfono tenga espacio libre y vuelve a intentarlo.'));
+    console.warn(error);
+    if (dejarBorrador(placa, { marca: ui.marca.value })) location.href = enlaceAlVisor(placa);
+    else avisar('No se pudo abrir el carro: ' + mensajeDelRegistro(error, 'vuelve a intentarlo'));
   }
 });
 
@@ -1031,6 +1046,30 @@ ui.ficha.dialogo.addEventListener('close', () => {
   urlFicha = '';
 });
 
+// La foto de portada: la pone si el carro no tenía una de verdad. La automática no se borra: pesa unos
+// 20 KB y es la que vuelve a salir si un día se borra esta foto. Da false si no quedó guardada: una foto
+// no puede dejar a la persona sin su carro, y el visor le dice que no quedó.
+async function guardarPortada(carro, archivo) {
+  try {
+    if (!faltaFotoDeVerdad(await almacen.portada(carro.placa))) return true;
+    estadoFicha('Guardando la foto…', 100);
+    let reducida;
+    try {
+      reducida = await reducirFoto(archivo);
+    } catch (e) {
+      // Sin memoria de imagen no hay cómo reducirla, pero la foto ya está: se guarda como vino.
+      anotar('No se pudo reducir la foto: ' + detalleDelError(e));
+      reducida = { foto: archivo, miniatura: archivo, ancho: ui.ficha.foto.naturalWidth || 0, alto: ui.ficha.foto.naturalHeight || 0 };
+    }
+    await almacen.guardarFoto({ placa: carro.placa, pieza: PIEZA_CARRO, ...reducida });
+    return true;
+  } catch (e) {
+    anotar('No se pudo guardar la foto: ' + detalleDelError(e));
+    console.warn(e);
+    return false;
+  }
+}
+
 ui.ficha.abrir.addEventListener('click', async () => {
   if (!ficha) return;
   tomarLineaEscrita();
@@ -1041,33 +1080,30 @@ ui.ficha.abrir.addEventListener('click', async () => {
     estadoFicha('Falta la placa.', 100);
     return;
   }
-  if (!almacen) {
-    estadoFicha('Este navegador no guarda el registro; no se puede crear el carro aquí.', 100);
-    return;
-  }
   ui.ficha.abrir.disabled = true;
+  const datos = {
+    marca: ficha.marca,
+    linea: ficha.linea,
+    version: ui.ficha.version.value.trim(),
+    carroceria: ficha.carroceria,
+    color: ficha.color,
+    medidas: ficha.medidas,
+  };
   try {
-    const datos = {
-      marca: ficha.marca,
-      linea: ficha.linea,
-      version: ui.ficha.version.value.trim(),
-      carroceria: ficha.carroceria,
-      color: ficha.color,
-      medidas: ficha.medidas,
-    };
+    // Si no abrió al cargar la página, puede que ahora sí.
+    if (!almacen) almacen = await abrirAlmacen();
     const { carro } = await almacen.abrirOCrear(placa, datos);
-    // La foto del carro se guarda como portada (reducida, como las demás) si
-    // el carro no tenía una de verdad. La automática no se borra: pesa unos 20 KB
-    // y es la que vuelve a salir si un día se borra esta foto.
-    if (faltaFotoDeVerdad(await almacen.portada(carro.placa))) {
-      estadoFicha('Guardando la foto…', 100);
-      const reducida = await reducirFoto(ficha.archivo);
-      await almacen.guardarFoto({ placa: carro.placa, pieza: PIEZA_CARRO, ...reducida });
-    }
-    location.href = enlaceAlVisor(carro.placa);
+    const conFoto = await guardarPortada(carro, ficha.archivo);
+    location.href = enlaceAlVisor(carro.placa) + (conFoto ? '' : '&sinfoto=1');
   } catch (e) {
+    anotar('No se pudo crear el carro en el registro: ' + detalleDelError(e));
+    console.warn(e);
+    if (dejarBorrador(placa, datos)) {
+      location.href = enlaceAlVisor(placa);
+      return;
+    }
     ui.ficha.abrir.disabled = false;
-    estadoFicha('No se pudo crear el carro: ' + mensajeParaLaPantalla(e, 'revisa que el teléfono tenga espacio libre y vuelve a intentarlo.'), 100);
+    estadoFicha('No se pudo crear el carro: ' + mensajeDelRegistro(e, 'vuelve a intentarlo'), 100);
   }
 });
 
@@ -1094,7 +1130,14 @@ async function arrancar() {
   } catch (e) {
     avisar('Este navegador no guarda el registro: ' + mensajeParaLaPantalla(e, 'puede ser una ventana de incógnito o que falte espacio') + '. Los carros no se pueden listar aquí.');
   }
-  await pintar();
+  try {
+    await pintar();
+  } catch (e) {
+    // El registro abrió pero no responde. La pantalla no se puede quedar muda, sin lista y sin
+    // decir por qué; y un carro nuevo se puede seguir creando, como borrador.
+    console.warn(e);
+    avisar('Este celular no está dejando leer el registro, así que los carros no se pueden mostrar ahora. Recarga la página; si sigue igual, reinicia el celular. Dato para revisar: ' + detalleDelError(e));
+  }
 }
 
 // Gancho para las pruebas automáticas.

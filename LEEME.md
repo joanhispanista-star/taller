@@ -144,6 +144,37 @@ media puerta quedaba como "nada" y el estribo era una franja enorme. Ahora:
   luz entre dos latas. El toque del dedo las atraviesa (un rayo de Three.js
   "toca" una línea a un metro por defecto, y tapaban las piezas).
 
+**El 5 de noviembre, el iPhone de Joan.** Joan tomó la foto en su iPhone y "Abrir en 3D"
+dijo "No se pudo crear el carro: revisa que el teléfono tenga espacio libre", con espacio
+de sobra. Ese texto era nuestro: salía para cualquier error en inglés, y tapó la causa
+real. Desde el PC no hay cómo correr Safari, así que se arreglaron las fallas conocidas de
+Safari en ese camino, por capas:
+
+- **Los lienzos: la causa más probable.** Safari en iPhone tiene un tope para la suma de
+  todos los lienzos de la página (de 224 a 448 MB, según el modelo), y llegado el tope
+  `getContext('2d')` da null aunque el teléfono tenga memoria de sobra. El `crop` de la
+  librería clona la foto entera en un lienzo por cada recorte: medido, un barrido de 79
+  recortes pide 476 MB con una foto de 1600 x 900, y serían 608 MB con una de 1600 x 1200.
+  Ahora el recorte es sobre los píxeles (`recortarPixeles`): los mismos píxeles, 0 de
+  diferencia en los 79, y ningún lienzo. `fotos.js` suelta sus lienzos y revisa el null.
+- **La base que se cae.** iOS mata el proceso de la base con la página abierta (basta la
+  cámara o poca memoria), y la conexión queda muerta sin avisar: "UnknownError: Connection
+  to Indexed Database server lost". `conexion-bd.js` la reabre y repite la operación una vez,
+  con un tope de tiempo para lo que nunca responde. Lo usan el registro y los escaneos.
+- **Las imágenes van como bytes, no como Blob.** Safari ha tenido varias fallas con los Blob
+  dentro de IndexedDB, al guardar y al leer. Lo ya guardado como Blob se sigue leyendo.
+- **La foto no frena el carro.** El carro se crea primero. Si no se puede reducir la foto, se
+  guarda como vino; si tampoco, el carro abre igual y el visor dice que la foto no quedó.
+- **Si el registro no responde ni reconectando,** hay iPhones que solo se arreglan
+  reiniciándolos: el 3D abre igual, como borrador (`dejarBorrador`), y lo marcado pasa al
+  registro cuando vuelva a responder (el borrador más nuevo que el registro manda).
+- **Los mensajes.** El espacio solo se nombra con `QuotaExceededError`. Lo demás dice qué hacer
+  y trae lo que dijo el navegador (`detalleDelError`), en inglés y a propósito: sin eso no
+  hay cómo arreglar un teléfono desde lejos. También queda en "Qué vio la app en la foto".
+
+Probado simulando cada falla en la app, con Edge sin ventana
+(`pruebas/datos-externos/iphone/fallas.mjs`, fuera de git). **Falta correrlo en un iPhone.**
+
 **El 3 de noviembre, carros reales que se ven reales.** Joan pidió ver un carro
 de verdad, no "un carro de juguete", y que cada pieza se lea clara. Lo que entró
 a la app (sirve para cualquier archivo con textura, como el GLB de RealityScan):
@@ -732,7 +763,7 @@ Claude, la entrada `taller-pintura-celular` de `.claude/launch.json` arranca
 el servidor abierto a la red. El reconocedor de fotos sí necesita internet
 en el teléfono la primera vez (89 MB desde Hugging Face); lo demás no.
 
-Pruebas (301, en Node, sin navegador; el registro se prueba contra
+Pruebas (320, en Node, sin navegador; el registro se prueba contra
 `fake-indexeddb`, una IndexedDB de mentira que se instala con `npm install`):
 
 ```bash
@@ -789,6 +820,7 @@ npm test
 | `js/escaneo.js` | La tubería pura del escaneo, probada en Node: TSDF dispersa por bloques, de la profundidad a puntos (`puntosDeCuadro`), surface nets (de la TSDF o de la densidad de una nube), piso, aislar el carro, orientarlo y medirlo, suavizado de Taubin, simplificación por agrupamiento de vértices, muestreo de superficie, las piezas por la muestra más cercana del genérico, y el modelo para el visor (una malla por pieza, con el mismo contrato que `construirCarro`). |
 | `js/escaneo-ar.js` | El escáner del celular: WebXR `immersive-ar` con `depth-sensing` opcional (`cpu-optimized`, `luminance-alpha`/`unsigned-short`, `matchDepthView`), un lienzo WebGL propio (no `renderer.xr` de three r169, que revienta), el espacio `local`, el filtro de movimiento y los 12 lados de la vuelta. Probado con un WebXR de mentira; **sin probar en un celular**. |
 | `js/escaneo-importar.js` | Importar un escaneo de otra app: lee GLB/glTF/PLY con los cargadores de three y el ZIP y el OBJ con `escaneo-obj.js`, junta las mallas, saca el color de la textura, adivina arriba, corrige la escala y lo pasa por la tubería. |
+| `js/conexion-bd.js` | Lo que necesita IndexedDB para aguantar en un iPhone: reabrir y repetir cuando la conexión se cae, un tope de tiempo, y las imágenes como bytes. |
 | `js/escaneo-obj.js` | El lector de OBJ sobre los bytes: un vértice por cada (v, vt, material), con arreglos tipados, y `null` si hay algo que no sabe leer (entonces lee OBJLoader). |
 | `js/escaneo-nivel.js` | Nivelar la escena antes de medir: el plano del piso (RANSAC con semilla) y el giro que lo deja a "y" constante, para un carro parqueado en pendiente. |
 | `js/escaneo-velo.js` | Lo que se ve de una pieza marcada sobre un escaneo: la línea (una curva sobre un valor suavizado, no la orilla de los triángulos) y el relleno con la luz de la foto. |

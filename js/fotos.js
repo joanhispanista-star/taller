@@ -67,9 +67,18 @@ function dibujar(imagen, { ancho, alto }, calidad) {
   lienzo.width = ancho;
   lienzo.height = alto;
   const ctx = lienzo.getContext('2d');
+  // Safari en iPhone tiene un tope para la suma de todos los lienzos de la página (de 224 a 448 MB,
+  // según el modelo). Llegado el tope, getContext da null aunque el teléfono tenga memoria de sobra.
+  if (!ctx) throw new Error('Este celular no tiene memoria de imagen libre para reducir la foto');
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(imagen, 0, 0, ancho, alto);
   return new Promise((resolver, rechazar) => {
-    lienzo.toBlob((blob) => (blob ? resolver(blob) : rechazar(new Error('No se pudo comprimir la foto'))), 'image/jpeg', calidad);
+    lienzo.toBlob((blob) => {
+      // Soltarlo ya, y no cuando pase el recolector: son los lienzos vivos los que cuentan para el tope.
+      lienzo.width = 0;
+      lienzo.height = 0;
+      if (blob) resolver(blob);
+      else rechazar(new Error('No se pudo comprimir la foto'));
+    }, 'image/jpeg', calidad);
   });
 }
