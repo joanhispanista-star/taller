@@ -29,7 +29,8 @@
   li.mal small { color: var(--mal); }
   li.ojo b::before { content: '! '; color: var(--ojo); }
   li.info b::before { content: '· '; color: var(--suave); }
-  canvas#lienzo3d { width: 100%; height: 200px; display: block; border-radius: 12px; background: #000; margin: 8px 0; }
+  canvas#lienzo3d, canvas#lienzo-modelo { width: 100%; height: 200px; display: block; border-radius: 12px; background: #000; margin: 8px 0; }
+  canvas[hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -41,6 +42,8 @@
 <button id="tres" type="button">2. Probar el carro en 3D</button>
 <canvas id="lienzo3d" hidden></canvas>
 <button id="lienzos" type="button">3. Medir la memoria de imagen (puede recargar la página)</button>
+<button id="modelo" type="button">4. Probar el modelo de catálogo (baja 4 MB la primera vez, y puede recargar la página)</button>
+<canvas id="lienzo-modelo" hidden></canvas>
 <button id="copiar" type="button">Copiar el resultado</button>
 <button id="forzar" type="button">Traer la versión nueva a la fuerza (no borra tus carros)</button>
 <ul id="pasos"></ul>
@@ -58,6 +61,8 @@ const ui = {
   tres: document.getElementById('tres'),
   lienzo3d: document.getElementById('lienzo3d'),
   lienzos: document.getElementById('lienzos'),
+  modelo: document.getElementById('modelo'),
+  lienzoModelo: document.getElementById('lienzo-modelo'),
   copiar: document.getElementById('copiar'),
   forzar: document.getElementById('forzar'),
 };
@@ -455,6 +460,153 @@ ui.lienzos.addEventListener('click', async () => {
   ui.lienzos.disabled = false;
 });
 
+// El modelo de catálogo, por partes: lo que más puede fallar en un iPhone, y lo único que desde el PC no se puede medir. Cada paso dice
+// cuánto tardó, y con qué palabras falló. Si iOS mata la pestaña no alcanza a decir nada: por eso cada paso deja escrito que va a
+// empezar, y al recargar se sabe en cuál murió. No toca lo que la app recuerda de este celular: es solo para mirar.
+const CLAVE_PASO_DEL_MODELO = 'taller-diagnostico-modelo';
+function pasoDelModelo(titulo, fn, tope) {
+  try {
+    localStorage.setItem(CLAVE_PASO_DEL_MODELO, titulo);
+  } catch {
+    // Sin almacenamiento solo se pierde saber en qué paso murió.
+  }
+  return paso(titulo, fn, tope);
+}
+function revisarPruebaDelModelo() {
+  let enCurso = null;
+  try {
+    enCurso = localStorage.getItem(CLAVE_PASO_DEL_MODELO);
+    localStorage.removeItem(CLAVE_PASO_DEL_MODELO);
+  } catch {
+    // Ver arriba.
+  }
+  if (enCurso) anotar('mal', 'La página se recargó a mitad de la prueba del modelo', 'Iba en «' + enCurso + '». Suele ser que este celular se quedó sin memoria.');
+}
+
+ui.modelo.addEventListener('click', async () => {
+  ui.modelo.disabled = true;
+  const catalogo = await pasoDelModelo('Modelo: los módulos', async () => {
+    const [modulos, { escaneoDeCatalogo }, { ajustesDelEscaneo, modeloDesdeEscaneo }] = await Promise.all([import('./js/modelos-catalogo.js'), import('./js/escaneo-catalogo.js'), import('./js/escaneo.js')]);
+    return { ...modulos, escaneoDeCatalogo, ajustesDelEscaneo, modeloDesdeEscaneo, detalle: 'cupo recordado en este celular: ' + ['foto completa', 'foto liviana', 'no abre solo'][modulos.nivelDeCupo(modulos.MODELOS[0])] };
+  });
+  let bitmap = null;
+  let render = null;
+  try {
+    if (!catalogo) return;
+    const modelo = catalogo.MODELOS[0];
+    const bytes = await pasoDelModelo('Modelo: bajarlo o sacarlo de la caché', async () => {
+      let deLaRed = false;
+      const b = await catalogo.bajarModelo(modelo, { alIrALaRed: () => (deLaRed = true) });
+      return { bytes: b, detalle: mb(b.byteLength) + (deLaRed ? ' · de la red' : ' · de la caché') };
+    }, 90000);
+    if (!bytes) return;
+    const escaneo = await pasoDelModelo('Modelo: leer el archivo y armar sus datos', () => {
+      const e = catalogo.escaneoDeCatalogo(catalogo.leerModeloGlb(bytes.bytes), catalogo.ajustesDelEscaneo);
+      return { escaneo: e, detalle: e.indices.length / 3 + ' triángulos · foto de ' + mb(e.textura.size) };
+    });
+    if (!escaneo) return;
+    bitmap = await pasoDelModelo('Modelo: abrir la foto completa (4096 x 3072)', async () => {
+      const b = await createImageBitmap(escaneo.escaneo.textura);
+      return { imagen: b, detalle: b.width + ' x ' + b.height + ' · ' + mb(b.width * b.height * 4) + ' abierta' };
+    }, 30000);
+    if (!bitmap) {
+      bitmap = await pasoDelModelo('Modelo: abrir la foto liviana (2048 x 1536)', async () => {
+        const b = await createImageBitmap(escaneo.escaneo.textura, catalogo.OPCIONES_LIVIANAS);
+        escaneo.escaneo.opcionesDeFoto = catalogo.OPCIONES_LIVIANAS;
+        return { imagen: b, detalle: b.width + ' x ' + b.height };
+      }, 30000);
+    }
+    if (!bitmap) return;
+    await pasoDelModelo('Modelo: reservar la foto en la GPU', () => {
+      const lienzo = document.createElement('canvas');
+      const gl = lienzo.getContext('webgl2');
+      if (!gl) throw new Error('este navegador no dio WebGL2');
+      const maximo = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+      const { width: w, height: h } = bitmap.imagen;
+      const textura = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, textura);
+      gl.texStorage2D(gl.TEXTURE_2D, Math.floor(Math.log2(Math.max(w, h))) + 1, gl.SRGB8_ALPHA8, w, h);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, bitmap.imagen);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      const error = gl.getError();
+      const perdido = gl.isContextLost();
+      gl.deleteTexture(textura);
+      const soltar = gl.getExtension('WEBGL_lose_context');
+      if (soltar) soltar.loseContext();
+      if (perdido) throw new Error('el contexto de WebGL se cayó al subirla');
+      if (error) throw new Error(error === gl.OUT_OF_MEMORY ? 'OUT_OF_MEMORY: no cabe' : 'WebGL dio el error ' + error);
+      return 'cabe · textura máxima ' + maximo;
+    }, 30000);
+    render = await pasoDelModelo('Modelo: dibujarlo con su piso', async () => {
+      const THREE = await import('three');
+      const { crearPisoVitrina } = await import('./js/piso-vitrina.js');
+      ui.lienzoModelo.hidden = false;
+      const r = new THREE.WebGLRenderer({ canvas: ui.lienzoModelo, antialias: true, powerPreference: 'high-performance' });
+      r.setPixelRatio(Math.min(devicePixelRatio, 2));
+      r.setSize(ui.lienzoModelo.clientWidth, ui.lienzoModelo.clientHeight, false);
+      const escena = new THREE.Scene();
+      escena.background = new THREE.Color(0x1a1e24);
+      const camara = new THREE.PerspectiveCamera(30, ui.lienzoModelo.clientWidth / ui.lienzoModelo.clientHeight, 0.1, 80);
+      camara.position.set(-7, 2.4, -9);
+      camara.lookAt(0, 0.7, 0);
+      const m = catalogo.modeloDesdeEscaneo({ ...escaneo.escaneo, fotoAbierta: bitmap.imagen }, { placa: 'DIA 001' });
+      bitmap = null; // Ya es del modelo.
+      await m.texturaLista;
+      escena.add(m.grupo);
+      const piso = crearPisoVitrina(r, escena);
+      escena.add(piso.malla);
+      piso.ponerHuella(m.grupo, m.disposicion);
+      piso.ajustar();
+      piso.actualizar(camara, m.disposicion);
+      r.render(escena, camara);
+      const gl = r.getContext();
+      const error = gl.getError();
+      if (gl.isContextLost()) throw new Error('el contexto de WebGL se cayó al dibujar');
+      if (error) throw new Error(error === gl.OUT_OF_MEMORY ? 'OUT_OF_MEMORY: no cabe' : 'WebGL dio el error ' + error);
+      return { r, escena, camara, piso, m, THREE, detalle: r.info.render.triangles + ' triángulos · se ve arriba' };
+    }, 60000);
+    if (!render) return;
+    await pasoDelModelo('Modelo: girarlo, a ver si va fluido', async () => {
+      const tramos = [];
+      let antes = performance.now();
+      for (let i = 0; i < 60; i++) {
+        const angulo = i * 0.05;
+        render.camara.position.set(Math.cos(angulo) * 11, 2.4, Math.sin(angulo) * 11);
+        render.camara.lookAt(0, 0.7, 0);
+        render.piso.actualizar(render.camara, render.m.disposicion);
+        render.r.render(render.escena, render.camara);
+        await new Promise((listo) => requestAnimationFrame(listo));
+        const ahora = performance.now();
+        tramos.push(ahora - antes);
+        antes = ahora;
+      }
+      tramos.sort((a, b) => a - b);
+      const cuadros = Math.round(1000 / tramos[tramos.length >> 1]);
+      return { detalle: cuadros + ' cuadros/s (el más lento, ' + Math.round(tramos[tramos.length - 1]) + ' ms)', ojo: cuadros < 20 };
+    }, 60000);
+  } finally {
+    if (bitmap && bitmap.imagen) bitmap.imagen.close();
+    if (render) {
+      render.m.grupo.traverse((o) => {
+        if (o.geometry) o.geometry.dispose();
+      });
+      if (render.m.alSoltar) render.m.alSoltar();
+      if (render.m.textura) {
+        render.m.textura.dispose();
+        if (render.m.textura.image && render.m.textura.image.close) render.m.textura.image.close();
+      }
+      render.piso.liberar();
+      render.r.dispose();
+    }
+    try {
+      localStorage.removeItem(CLAVE_PASO_DEL_MODELO);
+    } catch {
+      // Ver arriba.
+    }
+    ui.modelo.disabled = false;
+  }
+});
+
 ui.copiar.addEventListener('click', async () => {
   const texto = lineas.join('\n');
   try {
@@ -483,6 +635,7 @@ ui.forzar.addEventListener('click', async () => {
 // ---------- En marcha ----------
 
 pintarResumen();
+revisarPruebaDelModelo();
 await revisarVersion();
 await revisarNavegador();
 await revisarBase();

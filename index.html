@@ -48,6 +48,8 @@
     <!-- El carro de verdad: escanearlo con este celular o subir el escaneo
          de otra app (escaneo-pantalla.js). Con escaneo, dice "Escaneo". -->
     <button type="button" id="escanear" class="boton-escanear">Escanear</button>
+    <!-- Lo que pasa con el modelo de la línea mientras se ve el genérico (escaneo-pantalla.js). -->
+    <div id="letrero-modelo" class="letrero-modelo" role="status" hidden></div>
     <div id="error" class="error" hidden></div>
   </main>
 
@@ -138,8 +140,20 @@
 
   <dialog id="dialogo-escaneo" class="ficha-nueva" aria-label="Escanear el carro">
     <div class="ficha-cuerpo">
-      <h2 class="titulo-dialogo">El carro de verdad, en 3D</h2>
+      <h2 class="titulo-dialogo" id="escaneo-titulo">El carro de verdad, en 3D</h2>
       <p class="ayuda" id="escaneo-estado"></p>
+      <!-- El modelo de la línea (modelos-catalogo.js): de quién son las fotos, y qué se puede hacer con él.
+           Va antes de las opciones de escanear: con un modelo puesto, eso ya no es lo primero. -->
+      <div id="escaneo-linea" class="opcion-escaneo" hidden>
+        <div id="escaneo-credito" class="ayuda credito-modelo"></div>
+        <button type="button" id="escaneo-usar-parecido" hidden></button>
+        <button type="button" id="escaneo-reintentar" hidden>Intentar otra vez el modelo</button>
+        <button type="button" id="escaneo-ver-linea">Ver las piezas por dentro</button>
+        <p class="ayuda" id="escaneo-ver-nota" hidden></p>
+        <button type="button" id="escaneo-referencia">Usar la carrocería de referencia</button>
+        <p class="ayuda" id="escaneo-referencia-nota" hidden>Si este carro no se parece al modelo.</p>
+      </div>
+      <p class="ayuda" id="escaneo-lista"></p>
       <div class="opcion-escaneo">
         <button type="button" id="escaneo-celular" class="primario" disabled>Escanear con este celular</button>
         <p class="ayuda" id="escaneo-celular-nota"></p>

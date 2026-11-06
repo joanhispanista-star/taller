@@ -81,8 +81,9 @@ export function crearHoja(acciones) {
 
   // ---------- Chips ----------
 
-  function pintar({ carro, fotos = [], conRegistro = false, empleados: lista = [] }) {
-    carroceria = carro.carroceria || '';
+  // `carroceria`: la que da nombre a las piezas, si no es la del carro (un modelo de catálogo a la vista en un carro que no dice cuál es).
+  function pintar({ carro, carroceria: deLasPiezas, fotos = [], conRegistro = false, empleados: lista = [] }) {
+    carroceria = deLasPiezas ?? (carro.carroceria || '');
     empleados = lista;
     const piezas = piezasDelCarro(carro).map((p) => ({ ...p, nombre: nombreDe(carroceria, p.id) }));
     const porPieza = new Map();

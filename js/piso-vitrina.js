@@ -246,15 +246,20 @@ export function crearPisoVitrina(renderizador, escena, { fondo = 0x1a1e24, piso 
       malla.visible = false;
       panza.visible = true;
       escena.background = null;
-      renderizador.setRenderTarget(destino);
-      renderizador.setClearColor(0x000000, 0);
-      renderizador.clear();
-      renderizador.render(escena, virtual);
-      renderizador.setRenderTarget(anterior);
-      renderizador.setClearColor(claro, alfaAntes);
-      escena.background = fondoAntes;
-      panza.visible = false;
-      malla.visible = true;
+      // Pase lo que pase se deja todo como estaba. Si el contexto de WebGL se cae justo al estrenar un sombreador, three.js revienta
+      // aquí adentro; con el destino puesto, cada cuadro siguiente se dibujaba en él y el lienzo se quedaba vacío hasta recargar.
+      try {
+        renderizador.setRenderTarget(destino);
+        renderizador.setClearColor(0x000000, 0);
+        renderizador.clear();
+        renderizador.render(escena, virtual);
+      } finally {
+        renderizador.setRenderTarget(anterior);
+        renderizador.setClearColor(claro, alfaAntes);
+        escena.background = fondoAntes;
+        panza.visible = false;
+        malla.visible = true;
+      }
     },
     liberar() {
       destino.dispose();

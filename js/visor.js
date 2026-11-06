@@ -10,6 +10,10 @@
 // carro tiene ESCANEO (escaneo-pantalla.js), lo que se ve es el escaneo: el
 // carro real a su tamaño, partido en las piezas del genérico ajustado a sus
 // medidas; "Ver las piezas por dentro" vuelve al genérico, a esas medidas.
+// Desde el 5-nov, si la línea del carro trae modelo de catálogo
+// (modelos-catalogo.js) y no tiene escaneo propio, lo que se ve es ese modelo:
+// lo decide escaneo-pantalla.js, y aquí llega como un escaneo más. Mientras se sabe
+// si ya está en el teléfono, el lienzo va tapado (taparLienzo).
 import * as THREE from 'three';
 import { OrbitControls } from './vendor/OrbitControls.js';
 import { RoomEnvironment } from './vendor/RoomEnvironment.js';
@@ -46,6 +50,7 @@ import { modeloDesdeEscaneo } from './escaneo.js';
 import { crearPisoVitrina } from './piso-vitrina.js';
 import { crearMedidor, iniciarPrueba } from './generico/en-prueba.js';
 import { crearEscaneoPantalla, textoDeMedidas } from './escaneo-pantalla.js';
+import { colorElegido, hexDeColor, modeloDeLaLinea, modeloDelCatalogo, modeloParecido, modeloQueLeToca } from './modelos-catalogo.js';
 
 const COLOR_BASE = 0xcfd4da;
 
@@ -86,7 +91,7 @@ const ui = {
 let carro = cargarBorrador();
 let fotos = [];
 let almacen = null; // null hasta que abra; si no abre, se sigue con el borrador
-let registroCaido = false; // abrió o no abrió, y no responde: ya se le dijo a la persona
+let avisoDelRegistro = ''; // abrió o no abrió, y no responde: ya se le dijo a la persona, y se le sigue diciendo
 let empleados = []; // los del taller, para asignar pintor a cada pieza
 
 function cargarBorrador() {
@@ -120,6 +125,34 @@ function mostrarError(mensaje) {
   ui.pista.hidden = true;
 }
 
+// ---------- El lienzo tapado ----------
+
+// Lo primero que se ve de una Captiva no puede ser el carro de cajas si la de verdad ya está en el teléfono: es justo de lo que se
+// quejó Joan, y salía cada vez que abría el carro, un segundo o más. Debajo se sigue armando como siempre. Se destapa en cuanto llega
+// el modelo, si hay que ir a la red (4 MB pueden tardar, y el genérico sirve para marcar) o a los 3 s, pase lo que pase: sin el carro
+// nada se puede marcar. Al arrancar no se sabe aún qué carro pide la dirección; con el del borrador sí.
+const TOPE_DE_LA_TAPA = 3000;
+let lienzoTapado = false;
+let plazoTapa = 0;
+function taparLienzo() {
+  lienzoTapado = true;
+  ui.lienzo.style.visibility = 'hidden';
+  // La pista habla del carro que se ve, y todavía no se ve ninguno.
+  ui.pista.hidden = true;
+  clearTimeout(plazoTapa);
+  plazoTapa = setTimeout(destaparLienzo, TOPE_DE_LA_TAPA);
+}
+function destaparLienzo() {
+  clearTimeout(plazoTapa);
+  if (!lienzoTapado) return;
+  lienzoTapado = false;
+  ui.lienzo.style.visibility = '';
+  pintarFicha();
+  ponerPistaDeAhora();
+}
+const placaDeLaDireccion = normalizarPlaca(new URL(location.href).searchParams.get('placa') || '');
+if (modeloQueLeToca(carro) || (placaDeLaDireccion && placaDeLaDireccion !== carro.placa)) taparLienzo();
+
 // ---------- Escena ----------
 
 let renderizador;
@@ -151,11 +184,44 @@ crearEntorno();
 // dibujada en la GPU) se pierde y nadie pide un cuadro nuevo. Sin esto el
 // carro volvía negro o mate hasta que la persona arrastrara.
 ui.lienzo.addEventListener('webglcontextrestored', () => {
+  clearTimeout(plazoContexto);
+  if (avisoDeContexto) hoja.avisar('');
+  avisoDeContexto = false;
   crearEntorno();
   pedirCuadro();
 });
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') pedirCuadro();
+  if (document.visibilityState !== 'visible') return;
+  pedirCuadro();
+  if (renderizador.getContext().isContextLost()) velarContexto();
+});
+
+// Si es la GPU la que no da abasto con el modelo de una línea no hay excepción: cada subida tumba el contexto, vuelve, y otra vez, con el
+// lienzo en blanco y nada que lo diga. Dos caídas seguidas con la página a la vista son eso; irse a WhatsApp y volver, no.
+const VENTANA_DE_CAIDAS = 30000;
+const TOPE_PARA_QUE_VUELVA = 6000;
+let caidas = [];
+let plazoContexto = 0;
+let avisoDeContexto = false;
+function velarContexto() {
+  clearTimeout(plazoContexto);
+  plazoContexto = setTimeout(() => {
+    if (!renderizador.getContext().isContextLost()) return;
+    if (escaneoVisto && escaneoVisto.deLinea) pantallaEscaneo.modeloNoCupo(new Error('El contexto de WebGL no volvió'));
+    avisoDeContexto = true;
+    hoja.avisar('El 3D se cayó y este navegador no lo devolvió: recarga la página. Si sigue igual, cierra otras apps.');
+  }, TOPE_PARA_QUE_VUELVA);
+}
+ui.lienzo.addEventListener('webglcontextlost', () => {
+  if (document.visibilityState !== 'visible') return;
+  velarContexto();
+  if (!escaneoVisto || !escaneoVisto.deLinea) return;
+  const ahora = Date.now();
+  caidas = caidas.filter((t) => ahora - t < VENTANA_DE_CAIDAS);
+  caidas.push(ahora);
+  if (caidas.length < 2) return;
+  caidas = [];
+  pantallaEscaneo.modeloNoCupo(new Error('El contexto de WebGL se cayó dos veces en 30 s'));
 });
 escena.add(new THREE.HemisphereLight(0xffffff, 0x3a4048, 0.6));
 const sol = new THREE.DirectionalLight(0xffffff, 1.1);
@@ -216,54 +282,115 @@ let escaneoVisto = null; // el escaneo del carro (guardado o en vista previa), o
 let escaneoEsPrevia = false;
 let verPiezasEscaneo = false;
 let versionEscaneo = 0; // sube cada vez que cambia lo que se ve del escaneo
+// Sin color elegido, un carro de catálogo lleva el de su foto: mientras la foto abre y por dentro.
+function colorDelModelo() {
+  const deLaTabla = escaneoVisto && escaneoVisto.catalogo && !colorElegido(carro) ? modeloDelCatalogo(escaneoVisto.catalogo) : null;
+  return deLaTabla ? deLaTabla.colorFoto : carro.color || COLOR_BASE;
+}
 function opcionesDelModelo() {
   // Con escaneo, el genérico (el de "ver las piezas") va a las medidas
   // medidas y con la carrocería con que se etiquetó el escaneo.
   return {
-    colorBase: carro.color || COLOR_BASE,
+    colorBase: colorDelModelo(),
     carroceria: escaneoVisto ? escaneoVisto.carroceria : carro.carroceria || 'sedan',
     medidas: escaneoVisto ? escaneoVisto.medidasDibujo : carro.medidas || undefined,
     placa: formatearPlaca(carro.placa),
     // Con lo medido en el escaneo (ejes, capó, juntas): el genérico de "ver las piezas"
     // tiene que quedar sobre el mismo carro.
-    ajustes: escaneoVisto ? escaneoVisto.ajustes || {} : undefined,
+    // El carro nuevo, que es el que abre por dentro un carro de catálogo, sale de sus propias medidas: con las juntas de las fotos dejaba rendijas en las puertas
+    // (la trasera todavía no sigue lo medido, ver js/generico/en-prueba.js).
+    ajustes: escaneoVisto ? (escaneoVisto.catalogo ? undefined : escaneoVisto.ajustes || {}) : undefined,
   };
 }
 function firmaDelModelo() {
   // El escaneo no dibuja la placa: ponérsela no cambia el modelo. El genérico de "ver
   // las piezas" sí la lleva.
-  const sinPlaca = escaneoVisto && !verPiezasEscaneo ? { placa: '' } : {};
-  return JSON.stringify({ ...opcionesDelModelo(), ...sinPlaca, escaneo: escaneoVisto ? versionEscaneo : 0, verPiezas: verPiezasEscaneo });
+  const sinPlaca = escaneoVisto && !verPiezasEscaneo && !escaneoVisto.catalogo ? { placa: '' } : {};
+  // Un carro de catálogo cambia de color y de placa sin volver a armarse (reconstruirModelo).
+  const sinPintura = escaneoVisto && !verPiezasEscaneo && escaneoVisto.catalogo ? { placa: '', colorBase: 0 } : {};
+  return JSON.stringify({ ...opcionesDelModelo(), ...sinPlaca, ...sinPintura, escaneo: escaneoVisto ? versionEscaneo : 0, verPiezas: verPiezasEscaneo });
 }
 // El carro nuevo se enciende con un enlace, solo en el teléfono de quien lo abre (js/generico/en-prueba.js).
 let prueba = null;
 let medidor = null;
+let carroPorDentro = null;
+let pedidoPorDentro = null;
+function pedirCarroPorDentro() {
+  if (!pedidoPorDentro) {
+    pedidoPorDentro = import('./generico/carro-nuevo.js').then(
+      (m) => {
+        carroPorDentro = m.construirCarroNuevo;
+        if (!escaneoVisto || !escaneoVisto.catalogo || !verPiezasEscaneo) return;
+        firmaModelo = '';
+        reconstruirModelo();
+        aplicarSeleccion();
+      },
+      // Sin esos módulos (sin señal, sin caché) se queda el de hoy: abre igual. La próxima vez se vuelve a pedir.
+      (e) => {
+        console.warn(e);
+        pedidoPorDentro = null;
+      },
+    );
+  }
+  return pedidoPorDentro;
+}
 function construirModelo() {
   if (escaneoVisto && !verPiezasEscaneo) {
-    const conFoto = modeloDesdeEscaneo(escaneoVisto, { colorBase: carro.color || COLOR_BASE });
+    const deLinea = Boolean(escaneoVisto.deLinea);
+    const deCatalogo = Boolean(escaneoVisto.catalogo);
+    const conFoto = modeloDesdeEscaneo(escaneoVisto, { colorBase: colorDelModelo(), color: colorElegido(carro), placa: formatearPlaca(carro.placa) });
+    // La reserva de la foto puede no caber sin que el contexto se caiga: three.js no mira getError, y salía un carro negro con la placa
+    // amarilla, sin ningún aviso. Se mira al subirla, y se responde después: esto corre en medio de un dibujo.
+    if (deLinea && conFoto.textura) {
+      conFoto.textura.onUpdate = () => {
+        const gl = renderizador.getContext();
+        // Da un error a la vez: tras una reserva que no cupo, también el de subir a una textura que no existe.
+        let sinMemoria = false;
+        for (let error = gl.getError(), n = 0; error && n < 8; error = gl.getError(), n++) sinMemoria = sinMemoria || error === gl.OUT_OF_MEMORY;
+        if (!sinMemoria) return;
+        setTimeout(() => {
+          if (modelo === conFoto) pantallaEscaneo.modeloNoCupo(new Error('La GPU dio OUT_OF_MEMORY al subir la foto'));
+        }, 0);
+      };
+    }
     // La foto llega un momento después, y aquí solo se dibuja cuando algo cambia:
     // sin pedir el cuadro, el carro se quedaba en su color por vértice (pálido y a
     // manchas) hasta el primer toque. Y cambia de material: hay que volver a teñir.
     if (conFoto.texturaLista) {
       conFoto.texturaLista.then((foto) => {
-        if (modelo !== conFoto) return;
+        if (modelo !== conFoto) {
+          if (deLinea) pantallaEscaneo.modeloDibujado();
+          return;
+        }
+        // El modelo de una línea no es de esta placa y sin foto no es nada: vuelve el genérico, y se dice.
+        if (!foto && deLinea) {
+          pantallaEscaneo.modeloSinFoto(conFoto.errorDeFoto);
+          return;
+        }
         // El escaneo tiene su foto guardada y no abrió (poca memoria, o la imagen dañada):
         // sin decirlo, el carro se ve en manchas y parece que así salió el escaneo.
-        if (!foto) hoja.avisar('No se pudo abrir la foto de este escaneo: se ve sin ella. Cierra otras apps y vuelve a abrir el carro; si sigue igual, súbelo otra vez.');
+        if (!foto) hoja.avisar('No se pudo abrir la foto de ' + (deCatalogo ? 'este modelo' : 'este escaneo') + ': se ve sin ella. Cierra otras apps y vuelve a abrir el carro; si sigue igual, súbelo otra vez.');
         for (const malla of modelo.seleccionables) tenir(malla.userData.piezaId);
         pedirCuadro();
+        // Dos cuadros después ya subió a la GPU: si la falta de memoria iba a matar la pestaña por esto, ya lo hizo.
+        if (deLinea) requestAnimationFrame(() => requestAnimationFrame(() => pantallaEscaneo.modeloDibujado()));
       });
     }
     return conFoto;
   }
   // Con escaneo se queda el de hoy: sus piezas tienen que quedar sobre lo medido, y la junta
   // trasera del nuevo todavía no sigue esas medidas (el arco la frena).
-  const armar = !escaneoVisto && prueba && prueba.construir ? prueba.construir : construirCarro;
+  if (escaneoVisto && escaneoVisto.catalogo && !carroPorDentro) pedirCarroPorDentro();
+  const armar = escaneoVisto && escaneoVisto.catalogo && carroPorDentro ? carroPorDentro : !escaneoVisto && prueba && prueba.construir ? prueba.construir : construirCarro;
   const inicio = performance.now();
   const armado = armar(opcionesDelModelo());
   if (medidor) medidor.armado(performance.now() - inicio);
   return armado;
 }
+// Hasta dónde se deja acercar: un modelo hecho de fotos, a 2,4 m, es una pared borrosa y, por detrás, la placa llena la pantalla. Se mide
+// desde la mira, que va en el centro del carro: lo que cuenta es lo que queda de la punta a la cámara.
+const DISTANCIA_MINIMA = 2.4;
+const AIRE_ANTE_UN_MODELO_DE_FOTOS = 1.3;
 let modelo = construirModelo();
 let firmaModelo = firmaDelModelo();
 escena.add(modelo.grupo);
@@ -272,11 +399,26 @@ piso.ponerHuella(modelo.grupo, modelo.disposicion);
 
 function apuntarAlCarro() {
   controles.target.set(0, modelo.disposicion.alto * ALTURA_DE_LA_MIRA, 0);
+  controles.minDistance = modelo.escaneado && escaneoVisto && escaneoVisto.catalogo ? modelo.disposicion.largo / 2 + AIRE_ANTE_UN_MODELO_DE_FOTOS : DISTANCIA_MINIMA;
+}
+
+// Cuando llega el modelo, nadie tocó nada: si la persona ya había movido la cámara (un botón de vista, el dedo todavía puesto), que siga
+// donde iba. Con un escaneo de verdad o con otro carro se vuelve a Inicio: otro largo, y aparecería cortado.
+let camaraMovida = false;
+let placaDelModelo = carro.placa;
+let escaneoDelModelo = null;
+const esEscaneoDeVerdad = (e) => Boolean(e && !e.catalogo);
+function camaraSeQueda() {
+  const delCatalogo = Boolean((escaneoVisto && escaneoVisto.catalogo) || (escaneoDelModelo && escaneoDelModelo.catalogo));
+  return camaraMovida && delCatalogo && placaDelModelo === carro.placa && !esEscaneoDeVerdad(escaneoVisto) && !esEscaneoDeVerdad(escaneoDelModelo);
 }
 
 function reconstruirModelo() {
   const firma = firmaDelModelo();
-  if (firma === firmaModelo) return;
+  if (firma === firmaModelo) {
+    if (modelo.repintar && modelo.repintar({ color: colorElegido(carro), placa: formatearPlaca(carro.placa) })) pedirCuadro();
+    return;
+  }
   // Primero el nuevo y su huella: armarlos puede reventar (un escaneo dañado, falta de
   // memoria). Con el viejo ya soltado, la pantalla se quedaba sin carro y sin cómo volver,
   // porque `firmaModelo` seguía diciendo que el viejo estaba puesto. De aquí en adelante ya
@@ -298,14 +440,21 @@ function reconstruirModelo() {
   // La foto del escaneo vive también fuera de la GPU (hasta 64 MB). Solo se cierra al
   // abandonar el modelo: si se pierde el contexto de WebGL, se vuelve a subir de ahí.
   modelo.soltado = true;
+  if (modelo.alSoltar) modelo.alSoltar();
   if (modelo.textura && modelo.textura.image && modelo.textura.image.close) modelo.textura.image.close();
+  const seQueda = camaraSeQueda();
+  placaDelModelo = carro.placa;
+  escaneoDelModelo = escaneoVisto;
   modelo = nuevo;
   firmaModelo = firma;
   escena.add(modelo.grupo);
   apuntarAlCarro();
   // Otro carro, otro largo: la cámara vuelve a la vista de inicio a la
   // distancia que le toca, para que no aparezca cortado.
-  camara.position.set(...posicionDeVista('inicio'));
+  if (!seQueda) {
+    camara.position.set(...posicionDeVista('inicio'));
+    camaraMovida = false;
+  }
   controles.update();
   pedirCuadro();
 }
@@ -324,8 +473,17 @@ function pedirCuadro() {
 }
 function dibujar() {
   cuadroPedido = false;
-  piso.actualizar(camara, modelo.disposicion);
-  renderizador.render(escena, camara);
+  // Sin contexto no hay nada que dibujar, y three.js solo lo sabe cuando llega el evento: estrenar un sombreador en ese momento revienta.
+  // Al volver, webglcontextrestored pide el cuadro.
+  const gl = renderizador.getContext();
+  if (gl.isContextLost()) return;
+  try {
+    piso.actualizar(camara, modelo.disposicion);
+    renderizador.render(escena, camara);
+  } catch (e) {
+    // También se puede caer en medio del dibujo.
+    if (!gl.isContextLost()) throw e;
+  }
 }
 function bucle(ahora) {
   requestAnimationFrame(bucle);
@@ -344,6 +502,7 @@ iniciarPrueba().then((pedida) => {
   if (!pedida) return;
   prueba = pedida;
   medidor = crearMedidor(ui.escena, pedida.estado);
+  medidor.rotular(rotuloDelMedidor());
   if (!pedida.construir || escaneoVisto) return;
   try {
     firmaModelo = '';
@@ -446,6 +605,10 @@ ui.lienzo.addEventListener('pointercancel', () => {
   toque = null;
 });
 
+// Para que la cámara no salte cuando llegue el modelo. La rueda del mouse también la mueve.
+ui.lienzo.addEventListener('pointerdown', () => (camaraMovida = true), true);
+ui.lienzo.addEventListener('wheel', () => (camaraMovida = true), { capture: true, passive: true });
+
 function alTocar(x, y) {
   const id = piezaBajo(x, y);
   if (!id) return;
@@ -469,7 +632,7 @@ function mostrarNombreDePieza(id, x, y) {
     ui.escena.append(etiquetaDePieza);
   }
   const r = ui.escena.getBoundingClientRect();
-  etiquetaDePieza.textContent = nombreDePiezaEn(carro.carroceria, id);
+  etiquetaDePieza.textContent = nombreDePiezaEn(carroceriaDeLasPiezas(), id);
   etiquetaDePieza.hidden = false; // visible antes de medirla: escondida mide 0
   // Su mitad más un margen, y no un tope fijo: «Guardafango delantero izquierdo» mide
   // 216 px, y con 90 px de tope se leía «uardafango…» al tocar cerca del borde.
@@ -687,6 +850,13 @@ function aplicarSeleccion() {
 
 // ---------- Panel de abajo ----------
 
+// Cómo se llama cada pieza. Un carro creado por placa no tiene carrocería, y con un modelo de catálogo a la vista la hoja y la orden le
+// decían «Baúl» a la compuerta de una camioneta. Si el carro dice la suya, manda la suya.
+function carroceriaDeLasPiezas() {
+  return carro.carroceria || (escaneoVisto && escaneoVisto.catalogo ? escaneoVisto.carroceria : '');
+}
+let carroceriaEnLaHoja = '';
+
 const hoja = crearHoja({
   alAlternar: alternar,
   alFijarEstado: fijar,
@@ -704,7 +874,18 @@ const hoja = crearHoja({
 const pantallaEscaneo = crearEscaneoPantalla({
   obtenerCarro: () => carro,
   avisar: (texto) => hoja.avisar(texto),
-  registroCaido: () => registroCaido,
+  registroCaido: () => avisoDelRegistro,
+  // Usar o no el modelo de la línea se recuerda por carro: va con los demás campos, al registro y al borrador.
+  alCambiarCarro: () => persistir(),
+  // "Es de esos años: usar ese modelo". Como guardar la ficha.
+  alCambiarDatos: (datos) => {
+    carro = crearCarro({ ...carro, ...datos });
+    persistir();
+    refrescar();
+  },
+  taparLienzo,
+  destaparLienzo,
+  prepararPorDentro: pedirCarroPorDentro,
   alGuardarEscaneo: (placa) => ponerPortadaDelEscaneo(placa),
   // Sin el escaneo, su cuadro ya no es este carro: el Garaje seguiría mostrando lo que se
   // quitó, y la hoja no deja borrarlo a mano porque las automáticas no salen en la lista.
@@ -731,15 +912,31 @@ const pantallaEscaneo = crearEscaneoPantalla({
       throw error;
     }
     aplicarSeleccion();
+    // Con el modelo a la vista, las piezas ya tienen el nombre que les toca. Solo si cambió: pintarla cierra el menú de una pieza.
+    if (carroceriaDeLasPiezas() !== carroceriaEnLaHoja) pintarHoja();
     pintarFicha();
+    if (medidor) medidor.rotular(rotuloDelMedidor());
     // Un escaneo no abre puertas: es una sola superficie, así que el dedo que en el
     // carro genérico arrastra una puerta aquí gira el carro. Es el primer gesto de
     // cualquiera, y en el taller se tiene una mano ocupada.
     const esSuperficie = escaneoVisto && !verPiezasEscaneo;
     controles.touches.ONE = esSuperficie ? THREE.TOUCH.ROTATE : -1;
-    ponerPista(esSuperficie ? 'Toca una pieza para marcarla · Arrastra para girar' : 'Toca una pieza para marcarla · Arrastra una puerta para abrirla · Dos dedos para girar');
+    if (escaneoVisto) destaparLienzo();
+    if (!lienzoTapado) ponerPistaDeAhora();
   },
 });
+
+function ponerPistaDeAhora() {
+  const esSuperficie = escaneoVisto && !verPiezasEscaneo;
+  ponerPista(esSuperficie ? 'Toca una pieza para marcarla · Arrastra para girar' : 'Toca una pieza para marcarla · Arrastra una puerta para abrirla · Dos dedos para girar');
+}
+
+// Lo que mide de verdad el enlace de prueba: sin esto, con la Captiva en pantalla seguía diciendo "Carro nuevo".
+function rotuloDelMedidor() {
+  if (!escaneoVisto) return null;
+  if (verPiezasEscaneo) return escaneoVisto.catalogo ? 'Por dentro, en prueba' : 'Piezas del escaneo, en prueba';
+  return escaneoVisto.catalogo ? 'Modelo de catálogo, en prueba' : 'Escaneo, en prueba';
+}
 
 const fichaCarro = crearFichaCarro({
   alGuardar(datos) {
@@ -748,8 +945,17 @@ const fichaCarro = crearFichaCarro({
     refrescar();
   },
 });
-ui.datos.addEventListener('click', () => fichaCarro.abrir(carro));
-ui.ficha.addEventListener('click', () => fichaCarro.abrir(carro));
+function abrirFicha() {
+  const conFoto = escaneoVisto && escaneoVisto.catalogo && !colorElegido(carro) ? modeloDelCatalogo(escaneoVisto.catalogo) : null;
+  fichaCarro.abrir(carro, { colorDelModelo: conFoto ? hexDeColor(conFoto.colorFoto) : null });
+}
+ui.datos.addEventListener('click', abrirFicha);
+// Ese renglón dice qué es el 3D. Con una línea que tiene modelo, tocarlo lleva a lo que se puede hacer con él: quien ve que el carro no se
+// parece no va a buscar debajo de «Escanear» cómo dejar de usar un modelo. Los datos siguen en su botón, arriba.
+ui.ficha.addEventListener('click', () => {
+  if (modeloDeLaLinea(carro) || modeloParecido(carro)) pantallaEscaneo.abrir();
+  else abrirFicha();
+});
 
 // Al guardar un escaneo, si el carro no tiene foto en el Garaje, su portada es él mismo:
 // lo que se guarda a la vista no puede ser un cuadro gris al lado de un renglón de texto.
@@ -761,7 +967,8 @@ ui.ficha.addEventListener('click', () => fichaCarro.abrir(carro));
 // lienzo o aplastaba el carro o le dejaba la trompa afuera (15 % de su largo). Todo va en un
 // solo turno: la pantalla nunca ve ni este tamaño ni esta cámara.
 async function ponerPortadaDelEscaneo(placa) {
-  if (!almacen) return;
+  // Un carro de catálogo no es la foto de este carro: en el Garaje quedaba una Captiva café encima de un Renault Logan.
+  if (!almacen || (escaneoVisto && escaneoVisto.catalogo)) return;
   try {
     // Una foto de verdad se queda. La que sacó la app de un escaneo anterior, no, ni siquiera
     // escondida debajo de esa foto: al borrarla volvía a salir, y era otro carro (un Moskvitch
@@ -811,7 +1018,8 @@ async function ponerPortadaDelEscaneo(placa) {
 }
 
 function pintarHoja() {
-  hoja.pintar({ carro, fotos: fotos.filter((f) => !f.automatica), empleados, conRegistro: Boolean(carro.placa && almacen) });
+  carroceriaEnLaHoja = carroceriaDeLasPiezas();
+  hoja.pintar({ carro, carroceria: carroceriaEnLaHoja, fotos: fotos.filter((f) => !f.automatica), empleados, conRegistro: Boolean(carro.placa && almacen) });
   const hayPiezas = Object.keys(carro.piezas).length > 0;
   ui.enviar.disabled = !hayPiezas;
   ui.limpiar.disabled = !hayPiezas;
@@ -830,16 +1038,22 @@ function pintarFicha() {
   // Si nadie la ha dicho, no se dice: "Sedán" encima de una camioneta le quita la
   // confianza a todo lo que viene después.
   const tipo = carro.carroceria ? CARROCERIAS[normalizarCarroceria(carro.carroceria)].nombre : '';
-  const largo = !escaneoVisto && carro.medidas && carro.medidas.largo ? (carro.medidas.largo / 1000).toFixed(2).replace('.', ',') + ' m' : '';
+  let largo = !escaneoVisto && carro.medidas && carro.medidas.largo ? (carro.medidas.largo / 1000).toFixed(2).replace('.', ',') + ' m' : '';
   // Un carro entregado lo dice aquí arriba: lo que se le marque ya no
   // entra en la nómina como trabajo nuevo sin que alguien se dé cuenta.
   const entrega = carro.entregado ? 'entregado ' + fechaCorta(carro.entregado) : '';
   // Lo que es el 3D, sin adornarlo: la carrocería de referencia, el
-  // escaneo (con lo que midió), o las piezas a las medidas del escaneo.
-  let queEs = 'carrocería de referencia';
+  // escaneo (con lo que midió), o las piezas a las medidas del escaneo. Con el lienzo tapado no se ve nada de qué hablar.
+  let queEs = lienzoTapado ? '' : 'carrocería de referencia';
   if (escaneoVisto) {
     const medidas = textoDeMedidas(escaneoVisto);
     queEs = escaneoEsPrevia ? 'escaneo sin guardar: ' + medidas : verPiezasEscaneo ? 'piezas a las medidas del escaneo (' + medidas + ')' : 'escaneado: ' + medidas;
+    // Corto, como el del genérico: con las tres medidas iba en tres renglones y en la vista Arriba pisaba la cola del carro. Siguen en el
+    // diálogo. Y por dentro se dice qué es: otra carrocería, no la forma de este modelo.
+    if (escaneoVisto.catalogo) {
+      largo = verPiezasEscaneo ? '' : (Math.round(escaneoVisto.medidas.largo * 100) / 100).toFixed(2).replace('.', ',') + ' m';
+      queEs = verPiezasEscaneo ? 'carrocería de referencia, por dentro' : 'modelo de catálogo';
+    }
   }
   ui.ficha.textContent = [nombre, tipo, largo, entrega, queEs].filter(Boolean).join(' · ');
   ui.ficha.hidden = false;
@@ -889,7 +1103,7 @@ async function borrarFoto(idFoto) {
 // directo a WhatsApp por wa.me. Las dos llevan la misma orden. Cuando haya
 // registro en la nube, esto será además un aviso dentro de la app.
 ui.enviar.addEventListener('click', async () => {
-  const texto = textoParaAsistente(estadoParaOrden(carro), (id) => nombreDePiezaEnOrden(carro, id, nombreDePiezaEn(carro.carroceria, id)));
+  const texto = textoParaAsistente(estadoParaOrden(carro), (id) => nombreDePiezaEnOrden(carro, id, nombreDePiezaEn(carroceriaDeLasPiezas(), id)));
   if (navigator.share) {
     try {
       await navigator.share({ text: texto });
@@ -994,6 +1208,7 @@ let animacion = 0;
 let animacionActiva = null;
 function irA(nombre) {
   if (!VISTAS[nombre]) return;
+  camaraMovida = true;
   const destino = posicionDeVista(nombre);
   const objetivo = controles.target.clone();
   const desde = new THREE.Spherical().setFromVector3(camara.position.clone().sub(objetivo));
@@ -1062,10 +1277,10 @@ async function arrancar() {
     almacen = await abrirAlmacen();
     empleados = await almacen.listarEmpleados();
   } catch (e) {
-    registroCaido = true;
-    hoja.avisar(avisoDeBorrador(e));
+    avisoDelRegistro = avisoDeBorrador(e);
+    hoja.avisar(avisoDelRegistro);
   }
-  const placaURL = normalizarPlaca(new URL(location.href).searchParams.get('placa') || '');
+  const placaURL = placaDeLaDireccion;
   try {
     if (placaURL && placaURL !== carro.placa) {
       await abrirCarro(placaURL, crearCarro());
@@ -1077,12 +1292,14 @@ async function arrancar() {
     // escaneo. Se sigue con el que se pidió, como borrador: una sola vez el aviso, y no uno por
     // cada pieza que se marque.
     almacen = null;
-    registroCaido = true;
     if (placaURL && placaURL !== carro.placa) carro = crearCarro({ placa: placaURL });
     guardarBorrador();
-    hoja.avisar(avisoDeBorrador(e));
+    avisoDelRegistro = avisoDeBorrador(e);
+    hoja.avisar(avisoDelRegistro);
   }
   refrescar();
+  // Un carro sin modelo no espera por nadie.
+  if (!modeloQueLeToca(carro)) destaparLienzo();
   // Lo que no se pudo hacer en la pantalla de antes. Va después de refrescar, que limpia la URL.
   if (sinFotoAlEntrar) hoja.avisar('El carro quedó creado, pero su foto no se pudo guardar en este celular. Para ponerla, vuelve a «Nuevo carro con foto» con esta placa.');
 }
@@ -1116,7 +1333,7 @@ window.__visor = {
     return empleados;
   },
   abrirPieza,
-  abrirDatos: () => fichaCarro.abrir(carro),
+  abrirDatos: abrirFicha,
   agregarFoto,
   borrarFoto,
   irA,

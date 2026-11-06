@@ -6,6 +6,7 @@
 import { NOMBRE_ROL, TARIFA_PIEZA, abrirAlmacen, fechaCorta, mensajeParaLaPantalla, nombreCompletoDelCarro, resumen } from './garaje.js';
 import { CARROCERIAS, nombreDePiezaEn, normalizarCarroceria } from './carrocerias.js';
 import { nombreDeColor } from './color-foto.js';
+import { colorQueSeVe } from './modelos-catalogo.js';
 import { etiquetaDeSemana, historial, indicadores, nominaSemanal, pesos, semanaDe } from './tablero.js';
 import { cargarDemo, estadoDemo } from './demo.js';
 
@@ -85,7 +86,8 @@ function insigniaDemo() {
 function descripcionDe(carro) {
   const partes = [nombreCompletoDelCarro(carro) || 'Sin marca'];
   if (carro.carroceria) partes.push(CARROCERIAS[normalizarCarroceria(carro.carroceria)].nombre);
-  if (carro.color) partes.push(nombreDeColor(carro.color));
+  const color = colorQueSeVe(carro);
+  if (color) partes.push(nombreDeColor(color));
   return partes.join(' · ');
 }
 
@@ -246,7 +248,8 @@ function cuenta(estado, n, singular, plural) {
 
 function cuadroColor(carro) {
   const portada = elemento('div', 'carro-portada');
-  if (carro.color) portada.style.background = carro.color;
+  const color = colorQueSeVe(carro);
+  if (color) portada.style.background = color;
   return portada;
 }
 

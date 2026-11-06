@@ -49,6 +49,9 @@ function etiquetaDeTriangulo(etiquetas, a, b, c) {
 
 const MARGEN = 0.25; // hasta dónde llega el suavizado por fuera de la pieza, de sobra
 const VUELTAS = 40; // medido: un serrucho de ±4 cm queda en ±3 mm, y las esquinas redondeadas como las de una puerta (14 vueltas dejaban ±1,2 cm; con la línea clara, 26 todavía temblaba a la vista)
+// Un carro de catálogo trae sus etiquetas puestas a mano, sin serrucho que quitar: con 40 el borde se corría (el velo del estribo se salía
+// a las puertas, un 38 % de lo teñido), y son hasta 17 piezas pagadas de un solo golpe en cuanto llega el modelo.
+const VUELTAS_DE_CATALOGO = 10;
 
 // Por vértice del escaneo, qué tan adentro de la pieza está, y los triángulos donde
 // hay algo que dibujar. Solo se trabaja cerca de la pieza: un escaneo de 500 mil
@@ -173,11 +176,20 @@ void main(){
   #include <colorspace_fragment>
 }`;
 
+// Un carro de catálogo es el mismo objeto para todas las Captivas y para cada vez que se vuelve a armar: el campo se calcula una vez.
+const CAMPOS = new WeakMap();
+export function campoGuardado(escaneo, id) {
+  let campos = CAMPOS.get(escaneo);
+  if (!campos) CAMPOS.set(escaneo, (campos = new Map()));
+  if (!campos.has(id)) campos.set(id, campoDePieza(escaneo, id, VUELTAS_DE_CATALOGO));
+  return campos.get(id);
+}
+
 // La malla del velo de una pieza. Sus coordenadas son las del escaneo: va en el mismo
 // grupo del carro. Va encima de la lata (sin escribir profundidad) y el dedo la atraviesa.
 // `foto`: la textura del escaneo. Sin foto, el relleno es el color pleno.
 export function crearVelo(escaneo, id, color, { relleno = 0.85, foto = null } = {}) {
-  const { campo, triangulos } = campoDePieza(escaneo, id);
+  const { campo, triangulos } = escaneo.catalogo ? campoGuardado(escaneo, id) : campoDePieza(escaneo, id);
   if (!triangulos.length) return null;
   const { posiciones: P, indices: I, uvs: UV = null } = escaneo;
   // Solo los vértices que usa: un arreglo por pieza del tamaño del carro entero sería

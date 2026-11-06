@@ -53,6 +53,8 @@ export function escaneoParaGuardar(placa, escaneo, { origen = 'celular', archivo
     textura: escaneo.uvs && escaneo.textura ? escaneo.textura : null,
     etiquetas: Uint8Array.from(escaneo.etiquetas),
     nombres: [...escaneo.nombres],
+    // Un carro de catálogo: lo que dice de sí mismo (escaneo-catalogo.js). Sin esto, al recargar quedaba como un escaneo cualquiera.
+    catalogo: escaneo.catalogo || null,
   };
 }
 

@@ -85,7 +85,10 @@ export function crearFichaCarro({ alGuardar }) {
     }
   }
 
-  function abrir(carro) {
+  // `colorDelModelo`: sin color elegido, un carro de catálogo se ve del color de su modelo, y aquí decía "plateado" con la
+  // Captiva café en pantalla. Se muestra ese y no se guarda: el borrador sigue sin elegir hasta que toquen el color. "Del modelo" y
+  // no "de la foto": en el Garaje esas palabras son las de la foto del carro del cliente, y este no tiene por qué tenerla.
+  function abrir(carro, { colorDelModelo = null } = {}) {
     borrador = {
       marca: carro.marca || '',
       linea: carro.linea || '',
@@ -99,8 +102,8 @@ export function crearFichaCarro({ alGuardar }) {
     ui.marca.value = borrador.marca;
     ui.linea.value = borrador.linea;
     ui.version.value = borrador.version;
-    ui.color.value = borrador.color;
-    ui.colorNombre.textContent = nombreDeColor(borrador.color);
+    ui.color.value = colorDelModelo || borrador.color;
+    ui.colorNombre.textContent = colorDelModelo ? nombreDeColor(colorDelModelo) + ', el del modelo' : nombreDeColor(borrador.color);
     ui.cobro.value = borrador.cobro ? conPuntos(String(borrador.cobro)) : '';
     pintarCarrocerias();
     pintarEntrega();

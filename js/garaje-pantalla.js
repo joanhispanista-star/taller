@@ -9,7 +9,7 @@
 import { CLAVE_GUARDADO, normalizarPlaca } from './estado.js';
 import { PIEZA_CARRO, abrirAlmacen, crearCarro, deserializarCarro, detalleDelError, faltaFotoDeVerdad, fechaCorta, mensajeDelRegistro, mensajeParaLaPantalla, nombreCompletoDelCarro, resumen, serializarCarro } from './garaje.js';
 import { CARROCERIAS, normalizarCarroceria } from './carrocerias.js';
-import { catalogoOrdenado, datosDeEntrada, entradaEscrita, familiaDe, marcaDelCatalogo, mejorDeFamilia, nombreDeLinea } from './catalogo.js';
+import { catalogoOrdenado, datosDeEntrada, entradaEscrita, entradaExacta, familiaDe, marcaDelCatalogo, mejorDeFamilia, nombreDeLinea } from './catalogo.js';
 import { colorDeFoto, nombreDeColor } from './color-foto.js';
 import { reducirFoto } from './fotos.js';
 import { cargarDemo, estadoDemo } from './demo.js';
@@ -17,6 +17,7 @@ import { pesos } from './tablero.js';
 import { logoQueQueda, puntoEnFoto } from './logo.js';
 import { zonaDelLogo } from './placa-foto.js';
 import { versionInstalada } from './instalable.js';
+import { colorQueSeVe } from './modelos-catalogo.js';
 
 const ui = {
   demo: document.getElementById('demo'),
@@ -128,7 +129,8 @@ function fila(carro) {
   // La foto del carro (si la hay) o un cuadro con su color.
   const portada = document.createElement('div');
   portada.className = 'carro-portada';
-  if (carro.color) portada.style.background = carro.color;
+  const color = colorQueSeVe(carro);
+  if (color) portada.style.background = color;
   if (almacen) {
     almacen.portada(carro.placa).then((foto) => {
       if (!foto) return;
@@ -158,7 +160,7 @@ function fila(carro) {
   descripcion.className = 'carro-marca';
   const partes = [nombreCompletoDelCarro(carro) || 'Sin datos todavía'];
   if (carro.carroceria) partes.push(CARROCERIAS[normalizarCarroceria(carro.carroceria)].nombre);
-  if (carro.color) partes.push(nombreDeColor(carro.color));
+  if (color) partes.push(nombreDeColor(color));
   descripcion.textContent = partes.join(' · ');
 
   const cuentas = document.createElement('div');
@@ -294,7 +296,10 @@ ui.formulario.addEventListener('submit', async (e) => {
     return;
   }
   try {
-    const { carro } = await almacen.abrirOCrear(placa, ui.marca.value);
+    // Si lo escrito es una línea del catálogo (el campo la sugiere), se guarda como tal, con su carrocería y sus medidas: como marca
+    // suelta, el carro salía sin carrocería y la hoja llamaba «Baúl» a la compuerta de una camioneta.
+    const delCatalogo = entradaExacta(ui.marca.value);
+    const { carro } = await almacen.abrirOCrear(placa, delCatalogo ? datosDeEntrada(delCatalogo) : ui.marca.value);
     location.href = enlaceAlVisor(carro.placa);
   } catch (error) {
     console.warn(error);

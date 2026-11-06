@@ -42,6 +42,7 @@ import { esInterior } from './piezas.js';
 import { crearVelo, soldarVertices } from './escaneo-velo.js';
 import { giroDeNivel } from './escaneo-nivel.js';
 import { medidasParaDibujar, normalizarCarroceria } from './carrocerias.js';
+import { pinturaDeCatalogo } from './escaneo-catalogo.js';
 
 // ---------- 1. Fusión de profundidad: TSDF dispersa por bloques ----------
 
@@ -2220,6 +2221,7 @@ export function quitarIslas(indices, etiquetas, minimo = 60, minimoHueco = 600, 
 // solo cambian las etiquetas. Devuelve un escaneo nuevo; el de entrada no
 // se toca.
 export function reetiquetarEscaneo(escaneo, carroceria) {
+  if (escaneo.catalogo) return { ...escaneo };
   const ejes = escaneo.medidasDibujo && escaneo.medidasDibujo.entreEjes;
   const previos = juntasParaCarroceria(escaneo.ajustes, escaneo.carroceria, carroceria);
   return { ...escaneo, ...piezasDelEscaneo(escaneo.posiciones, carroceria, escaneo.medidas, ejes, { indices: escaneo.indices, colores: escaneo.colores, previos }) };
@@ -2408,9 +2410,10 @@ export function juntasDelEscaneo(posiciones, indices, deTriangulo, nombres, norm
 // se ve en la foto. Lo único que se le suma es un brillo muy suave que sí depende de
 // desde dónde se mira (el canto que se aclara, una lámpara arriba): los reflejos de la
 // foto están pegados, y al girar eso es lo que delata una foto sobre una forma.
-function materialDeFoto(textura) {
+function materialDeFoto(textura, catalogo = null) {
   const material = new THREE.ShaderMaterial({
-    uniforms: { mapa: { value: textura } },
+    uniforms: { mapa: { value: textura }, ...(catalogo ? catalogo.uniforms : {}) },
+    defines: catalogo ? catalogo.defines : {},
     side: THREE.DoubleSide,
     toneMapped: false,
     vertexShader: `varying vec2 vU; varying vec3 vN; varying vec3 vV; varying float vY;
@@ -2424,8 +2427,22 @@ function materialDeFoto(textura) {
       }`,
     fragmentShader: `precision highp float;
       uniform sampler2D mapa; varying vec2 vU; varying vec3 vN; varying vec3 vV; varying float vY;
+      #ifdef CATALOGO
+      uniform float uConTono; uniform vec3 uTono; uniform vec3 uBase; uniform vec3 uCapa;
+      uniform float uConPlaca; uniform sampler2D uPlaca; uniform vec4 uRectPlaca;
+      #endif
       void main(){
         vec3 c = texture2D(mapa, vU).rgb;
+        #ifdef CATALOGO
+        // Foto = reflejos + capa * color de la foto, en lineal. Se cambia solo lo segundo.
+        // Arriba de 0,7 los reflejos se comprimen en vez de cortarse en 1: en blanco y plateado el capó y los guardafangos perdían la forma.
+        if (uConTono > 0.5) {
+          c = max(c + texture2D(mapa, vec2(vU.x * uCapa.x, uCapa.z + vU.y * uCapa.y)).r * (uTono - uBase), vec3(0.0));
+          vec3 sobra = max(c - 0.7, vec3(0.0));
+          c = min(c, vec3(0.7)) + sobra / (1.0 + sobra / 0.3);
+        }
+        if (uConPlaca > 0.5 && vU.x > uRectPlaca.x && vU.x < uRectPlaca.z && vU.y > uRectPlaca.y && vU.y < uRectPlaca.w) c = texture2D(uPlaca, (vU - uRectPlaca.xy) / (uRectPlaca.zw - uRectPlaca.xy)).rgb;
+        #endif
         vec3 n = normalize(vN);
         if (!gl_FrontFacing) n = -n;
         vec3 v = normalize(vV);
@@ -2443,13 +2460,23 @@ function materialDeFoto(textura) {
   return material;
 }
 
-function ponerTextura(modelo, blob, escaneo) {
+function ponerTextura(modelo, blob, escaneo, { color = null, placa = '' } = {}) {
+  const catalogo = escaneo.catalogo ? pinturaDeCatalogo(escaneo.catalogo, { color, placa }) : null;
+  if (catalogo) {
+    modelo.alSoltar = catalogo.soltar;
+    modelo.repintar = catalogo.pintar;
+  }
   modelo.texturaLista = Promise.resolve(null);
   if (typeof createImageBitmap !== 'function') {
     // Sin con qué abrir la foto se queda el color por vértice, y ahí teñir sale gris.
     if (escaneo.colores) engancharVelos(modelo, escaneo);
     return;
   }
+  // El modelo de una línea llega con la foto ya abierta (escaneo-pantalla.js): así se sabe que abre antes de armar
+  // nada, y del genérico se pasa al carro con su foto, sin ver un cuadro del color plano. Se usa una sola vez: quien
+  // suelta el modelo la cierra.
+  const yaAbierta = escaneo.fotoAbierta || null;
+  escaneo.fotoAbierta = null;
   const textura = new THREE.Texture();
   textura.flipY = false; // las coordenadas ya vienen con v = 0 arriba en la imagen
   textura.colorSpace = THREE.SRGBColorSpace;
@@ -2459,7 +2486,11 @@ function ponerTextura(modelo, blob, escaneo) {
   textura.wrapS = THREE.RepeatWrapping;
   textura.wrapT = THREE.RepeatWrapping;
   modelo.textura = textura;
-  modelo.texturaLista = createImageBitmap(blob).then(
+  // Un carro de catálogo sin su foto es una forma de color plano, sin ventanas ni llantas: mejor nada ese instante, al volver de
+  // "por dentro". Se ve el piso con la sombra. `opcionesDeFoto`: la foto más liviana, en un celular donde la completa no cupo.
+  if (catalogo && !yaAbierta) modelo.grupo.visible = false;
+  const abriendo = yaAbierta ? Promise.resolve(yaAbierta) : escaneo.opcionesDeFoto ? createImageBitmap(blob, escaneo.opcionesDeFoto) : createImageBitmap(blob);
+  modelo.texturaLista = abriendo.then(
     (imagen) => {
       // El visor ya cambió de carro mientras se abría la foto: no se usa, se suelta.
       if (modelo.soltado) {
@@ -2471,7 +2502,7 @@ function ponerTextura(modelo, blob, escaneo) {
       modelo.grupo.traverse((malla) => {
         if (!malla.isMesh || !malla.geometry.attributes.uv || !malla.material.isMeshStandardMaterial) return;
         malla.material.dispose();
-        malla.material = materialDeFoto(textura);
+        malla.material = materialDeFoto(textura, catalogo);
       });
       // Con la foto, la junta real ya se ve: una línea dibujada encima, que además no
       // cae exacto sobre ella, se lee como un rayón. Se quedan en el escaneo sin foto,
@@ -2479,10 +2510,13 @@ function ponerTextura(modelo, blob, escaneo) {
       const juntas = modelo.grupo.getObjectByName('juntas');
       if (juntas) juntas.visible = false;
       engancharVelos(modelo, escaneo, textura);
+      modelo.grupo.visible = true;
       return textura;
     },
-    // Si la foto no abre (al celular no le alcanza la memoria), queda el color por vértice.
-    () => {
+    // Si la foto no abre (al celular no le alcanza la memoria), queda el color por vértice. Lo que dijo el navegador queda a
+    // mano, para ponerlo en el aviso: en un iPhone nadie ve la consola.
+    (error) => {
+      modelo.errorDeFoto = error;
       if (escaneo.colores && !modelo.soltado) {
         // Lo ya marcado se tiñó mientras se esperaba la foto, y con el velo enganchado resaltar
         // ya no toca el material: la puerta seguía en (255, 203, 188) después de desmarcarla, y
@@ -2562,7 +2596,7 @@ export function normalesSoldadas(posiciones, indices, soldado = null) {
   return salida;
 }
 
-export function modeloDesdeEscaneo(escaneo, { colorBase = 0xcfd4da } = {}) {
+export function modeloDesdeEscaneo(escaneo, { colorBase = 0xcfd4da, color = null, placa = '' } = {}) {
   const { posiciones, indices, colores, etiquetas, nombres, textura = null } = escaneo;
   const uvs = textura ? escaneo.uvs || null : null;
   const soldado = soldarVertices(posiciones);
@@ -2627,7 +2661,7 @@ export function modeloDesdeEscaneo(escaneo, { colorBase = 0xcfd4da } = {}) {
   }
   grupo.updateMatrixWorld(true);
   const modelo = { grupo, seleccionables, porId, articulaciones: new Map(), disposicion: disposicion(escaneo.carroceria, escaneo.medidasDibujo, ajustes), escaneado: true };
-  if (uvs) ponerTextura(modelo, textura, escaneo);
+  if (uvs) ponerTextura(modelo, textura, escaneo, { color, placa });
   else if (colores) engancharVelos(modelo, escaneo);
   return modelo;
 }

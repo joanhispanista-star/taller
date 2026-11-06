@@ -71,7 +71,8 @@ export function crearMedidor(contenedor, estado) {
   });
   caja.append(texto, cambiar, salir);
   contenedor.append(caja);
-  const nombre = estado === 'nuevo' ? 'Carro nuevo, en prueba' : 'Carro de hoy, en prueba';
+  const nombreDeLaPrueba = estado === 'nuevo' ? 'Carro nuevo, en prueba' : 'Carro de hoy, en prueba';
+  let nombre = nombreDeLaPrueba;
   texto.textContent = `${nombre} · gíralo para medir`;
   let armado = null;
   let anterior = null;
@@ -80,6 +81,18 @@ export function crearMedidor(contenedor, estado) {
   return {
     armado(ms) {
       armado = Math.round(ms);
+    },
+    // Lo que de verdad se está midiendo: con un modelo de catálogo o un escaneo a la vista, su número no es el del carro nuevo, y con
+    // ese rótulo se habría decidido el carro nuevo con la Captiva. Cambiar de carro ahí no cambia lo que se ve: sin ese botón.
+    rotular(otro = null) {
+      const siguiente = otro || nombreDeLaPrueba;
+      cambiar.hidden = Boolean(otro);
+      if (siguiente === nombre) return;
+      nombre = siguiente;
+      armado = null;
+      anterior = null;
+      tramos = [];
+      texto.textContent = `${nombre} · gíralo para medir`;
     },
     cuadro(ahora, seMovio) {
       if (!seMovio || ahora === undefined) {

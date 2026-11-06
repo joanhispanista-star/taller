@@ -136,6 +136,10 @@ export function crearCarro(datos = {}, ahora = new Date().toISOString()) {
     entregado: fechaValida(datos.entregado) || '',
     // Un carro de demostración se ve igual pero se puede quitar en bloque.
     demo: datos.demo === true,
+    // Para ESTE carro no se usa el modelo de su línea (modelos-catalogo.js), porque no se le parece: se ve el
+    // genérico. Lo decide la persona en el diálogo de Escanear. Tiene que estar aquí: lo que crearCarro no conoce se
+    // pierde al guardar, al leer del registro y en el borrador.
+    sinModeloDeCatalogo: datos.sinModeloDeCatalogo === true,
     creado,
     actualizado: fechaValida(datos.actualizado) || creado,
     piezas: limpiarPiezas(datos.piezas, datos.seleccion, ahora),

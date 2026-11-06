@@ -1,0 +1,25 @@
+Créditos de los modelos de esta carpeta.
+
+Los archivos .glb se pueden bajar sueltos, y un visor de glTF normal no muestra lo que llevan por dentro. Por eso va esto al lado.
+
+chevrolet-captiva-2020.glb
+  Modelo de Chevrolet Captiva LT 2020, hecho para la app Taller de Pintura con siete fotos de Autosdeprimera, de Wikimedia Commons.
+  Licencia de las fotos: CC BY 3.0 - https://creativecommons.org/licenses/by/3.0/
+  Modificadas: recoloreadas y pegadas sobre una forma 3D. El archivo trae las fotos pasadas de rojo a café; en la app salen en el color que diga la ficha.
+  No es un modelo oficial: Chevrolet es marca de General Motors, y ni la marca ni el autor de las fotos tienen relación con esta app.
+
+  Las fotos:
+  - Chevrolet Captiva 2020 (Colombia) front view 1.png
+    https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_front_view_1.png
+  - Chevrolet Captiva 2020 (Colombia) front view 2.png
+    https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_front_view_2.png
+  - Chevrolet Captiva 2020 (Colombia) front view 3.png
+    https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_front_view_3.png
+  - Chevrolet Captiva 2020 (Colombia) front view 4.png
+    https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_front_view_4.png
+  - Chevrolet Captiva 2020 (Colombia) front view 5.png
+    https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_front_view_5.png
+  - Chevrolet Captiva 2020 (Colombia) side view.png
+    https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_side_view.png
+  - Chevrolet Captiva 2020 (Colombia) rear view.png
+    https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_rear_view.png

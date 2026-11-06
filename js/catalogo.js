@@ -6,7 +6,7 @@ import { normalizarCarroceria } from './carrocerias.js';
 
 const PESO_PRESENCIA = { 'muy comun': 0, comun: 1, 'poco comun': 2 };
 
-function sinTildes(texto) {
+export function sinTildes(texto) {
   return String(texto || '')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
@@ -57,6 +57,13 @@ export function entradaDe(marca, linea) {
   const m = sinTildes(marca);
   const l = sinTildes(linea);
   return CATALOGO.find((e) => sinTildes(e.marca) === m && sinTildes(e.linea) === l) || null;
+}
+
+// La entrada cuyo nombre completo es exactamente lo escrito ("Chevrolet Captiva (nueva)"), o null. Sin adivinar nada: lo que hace
+// entradaEscrita con "chevrolet captiva" (la mejor de la familia) aquí sería poner un carro por otro.
+export function entradaExacta(texto) {
+  const q = sinTildes(texto);
+  return (q && CATALOGO.find((e) => sinTildes(nombreDeLinea(e)) === q)) || null;
 }
 
 // La familia de una línea: "Logan I" y "Logan II" son Logan; "Hilux (AN120)

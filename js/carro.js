@@ -561,7 +561,8 @@ function materialPlaca(texto) {
   ctx.font = 'bold 200px "Arial Narrow", Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(texto, 340, 158);
+  // Con tope: sin Arial Narrow (un iPhone no la trae) el número no cabe en el lienzo y sale mocho.
+  ctx.fillText(texto, 340, 158, 620);
   const textura = new THREE.CanvasTexture(lienzo);
   textura.colorSpace = THREE.SRGBColorSpace;
   // Solo la cara que mira hacia afuera lleva el número; las otras cinco

@@ -144,6 +144,95 @@ media puerta quedaba como "nada" y el estribo era una franja enorme. Ahora:
   luz entre dos latas. El toque del dedo las atraviesa (un rayo de Three.js
   "toca" una línea a un metro por defecto, y tapaban las piezas).
 
+**El 5 de noviembre por la noche, los modelos de catálogo: la Captiva.** Joan abrió en su iPhone su
+JPX248, Chevrolet Captiva (nueva), y vio el carro de cajas: "sigue apareciendo así como de juguete, y yo
+quiero que tengamos los modelos de muchos de los carros de Colombia en una versión 3D, empieza con la
+Captiva LT 2020 color café". Ahora una línea del catálogo puede traer su modelo, y sale solo al abrir un
+carro de esa línea, sin subir ni escanear nada. Por ahora es una sola: Chevrolet Captiva (nueva).
+
+- **Qué es un modelo de catálogo.** Un GLB con `extras.taller` (`origen: 'catalogo'`) en el nodo y `_PIEZA` por
+  vértice no es un escaneo: la app no le mide nada ni le adivina las piezas (`js/escaneo-catalogo.js`). Trae las
+  piezas leídas a mano de las juntas de las fotos, sus medidas de ficha y, en la misma imagen, debajo del mosaico,
+  una capa con cuánta pintura se ve en cada píxel: cambiar el color de la ficha es sumar capa × (color − color de
+  la foto), y los reflejos, el cromo y los stops no se enteran. Se hace sobre el mismo modelo, sin volver a armarlo ni a
+  abrir el JPEG (`repintar`), y arriba de 0,7 en lineal los reflejos se comprimen para que el blanco no se queme. Sin
+  color elegido se queda el de la foto, y lo dicen la ficha de datos ("café, el del modelo", sin guardarlo como
+  elegido), el Garaje y el Historial (`colorQueSeVe`). La placa se dibuja con el número del carro, con tope de ancho:
+  Arial Narrow está en un PC y no en un iPhone. La tubería que los hace vive fuera del repo (`fg-trabajo/captiva/foto`).
+- **Uno por línea, no por placa** (`js/modelos-catalogo.js`). El archivo va en `modelos/`, fuera de la precarga: 4 MB
+  por línea no se le bajan a todos los teléfonos. Se baja la primera vez que se abre un carro de esa línea y queda
+  en una caché propia, `modelos-de-carros`; el nombre no empieza por `taller-` porque esas las borra `sw.js` en cada
+  versión. Varias Captivas gastan una sola vez. No entra a la base de los escaneos, y no se "quita" de ningún registro.
+  Antes de guardar mira que la respuesta sea buena y que sea ese archivo, por su huella (`sha256` en la tabla; en http,
+  sin `crypto.subtle`, que empiece por `glTF` y mida lo que dice medir): una página de error guardada sería un carro roto
+  para siempre, y uno dañado por dentro mide lo mismo. Lo guardado también se compara: si no es, se bota y se baja de
+  nuevo. Si el archivo cambia de nombre, lo viejo se borra. La bajada va sin Referer, porque la dirección de la página
+  lleva la placa; se corta tras 30 s sin recibir nada (por silencio y no por total: 4 MB en 3G tardan unos 25 s); y volver
+  a una Captiva mientras baja no gasta otra.
+- **El orden.** Vista previa > escaneo guardado de esta placa > modelo de la línea > genérico. Un escaneo propio
+  siempre le gana, y al quitarlo vuelve el modelo. Lo viejo no se pone encima si mientras tanto cambió el carro, la
+  línea o llegó una vista previa (`turnoDeLinea`). Una base que se demora tampoco lo frena: a los 2,5 s se trae el
+  modelo igual, y si aparece un escaneo, le gana.
+- **El carro de cajas no sale si el modelo ya está en el teléfono.** Salía un segundo o más cada vez que se abría una
+  Captiva: justo la queja de Joan. Primero iba el genérico por decisión de diseño, y la revisión del 6-nov mostró que era
+  eso lo que se veía. Ahora el lienzo espera tapado (`taparLienzo`, en `visor.js`), con "Abriendo…" si se demora, y se destapa
+  cuando llega el modelo, si hay que ir a la red o a los 3 s, pase lo que pase. La primera vez, que hay que bajarlo, sí se
+  ve el genérico, con su letrero ("Bajando el modelo de la Captiva (4 MB)…"): 4 MB pueden tardar, y sirve para marcar. Un
+  carro de otra línea no espera a nadie. Si la cámara ya se movió cuando llega el modelo, se queda donde iba.
+- **Sin un solo lienzo de por medio** (`leerModeloGlb`). La ruta normal de un archivo subido (`leerArchivoDeEscaneo`)
+  abre la imagen en lienzos para sacarle el color y volverla a comprimir, y en un iPhone la suma de los lienzos
+  tiene tope: es lo que tumbó el crear carro de Joan el 5-nov. Aquí no hace falta nada de eso: el lector saca los
+  números del binario y la imagen sigue siendo el JPEG del archivo. Una prueba compara, número por número, contra lo
+  que da GLTFLoader con `mallaDeObjeto3D`. Sin color por vértice, la cintura de `ajustes` sale de la forma (1,35 m
+  contra 1,16 m por el color, medido): solo la usa el genérico que no se ve, y por dentro va el carro nuevo sin ajustes.
+- **Sin señal y sin caché** se queda el genérico, y se dice una sola vez: "Esta línea tiene modelo 3D; se baja la
+  primera vez con internet". El diálogo lo sigue diciendo, y se vuelve a intentar al volver la señal, al volver a la app
+  (Safari corta la bajada al irse a WhatsApp) y al abrir el carro otra vez, no en cada refrescar. Con otra línea el aviso se
+  va, y el del registro caído no se pisa: los dos pueden llegar juntos, porque sin memoria se cae la base y tampoco abre la foto.
+  Cada aviso de lo que falla trae lo que dijo el navegador (`Dato para revisar`).
+- **Si no cabe en este celular.** La foto abierta son 48 MiB, más 64 en la GPU. Si `createImageBitmap` no puede, o la reserva da
+  `OUT_OF_MEMORY`, o el contexto de WebGL se cae dos veces en 30 s con el modelo a la vista, o no vuelve, baja un escalón:
+  primero la misma foto a 2048 x 1536, y lo dice; después el genérico, con un botón en el diálogo para intentarlo otra
+  vez. Con la liviana a la vista, el diálogo también ofrece "Verlo con todo el detalle": un mal momento de memoria no deja el
+  modelo así para siempre, y si sigue sin caber baja el escalón solo. iOS suele matar la pestaña sin error: por eso se deja una marca en `localStorage` antes de abrir la foto y se quita con
+  el primer cuadro; si al arrancar sigue puesta, ese intento murió ahí y también baja un escalón. Se recuerda por celular
+  (`taller-cupo-de-modelos`). Todo esto se probó simulando la falla en Edge: si un iPhone llega ahí, no se ha visto. Y si el
+  contexto se cae justo antes de un cuadro, `dibujar` no dibuja y el piso deja todo como estaba: el lienzo ya no se queda vacío.
+- **El diálogo de Escanear** dice qué es ("hecho con fotos de otro carro de la misma línea, no de este carro"), lo que
+  el modelo no puede decir solo (`aviso` en la tabla: "las de otros años pueden tener otra trompa"), que no hace falta escanear salvo que se
+  quiera ESTE carro exacto, de quién son las fotos, que no es un modelo oficial, y siempre la lista de lo que la app tiene,
+  con la línea que hay que elegir, para que el dueño no escanee lo que ya está. "Ver las piezas por dentro" abre el carro nuevo
+  (`js/generico`), con sus bisagras; espera sus módulos, para que no salga el de cajas en medio, y tanto el diálogo como la
+  ficha dicen que eso es otra carrocería, no la forma de este modelo. **"Usar la carrocería de referencia"** deja
+  ese carro con el genérico, por si no se parece: se recuerda en el carro (`sinModeloDeCatalogo`) y el diálogo ofrece
+  volver. Tocar el renglón de arriba ("modelo de catálogo") lleva a este diálogo: quien ve que el carro no se parece no va a buscar
+  debajo de "Escanear" cómo dejar de usar un modelo. No es "Quitar": eso sigue siendo para lo guardado en esa placa, también un
+  GLB de catálogo subido a mano, que tampoco parece un escaneo: el botón sigue en "Escanear", dice si es de otra línea, y no
+  se queda de portada en el Garaje.
+- **Lo que la gente escribe.** "Chevrolet Captiva", en el campo Marca del Garaje, no casa con la línea, y no se le pone el
+  modelo sin preguntar: también lo escribe quien tiene la de 2007 a 2018, que es otro carro. Un aviso lo dice, y el diálogo
+  pregunta ("Es de 2019 en adelante: usar ese modelo"): al decir que sí, el carro queda con la línea del catálogo y lo escrito de
+  más ("LT 2020") en la versión. El campo ahora sugiere el catálogo, y lo elegido de ahí se guarda como línea, con su carrocería.
+  Un carro viejo con todo en la marca también saca el modelo, y sus piezas se llaman como las del modelo (no "Baúl").
+- **Para agregar otro modelo:** hacer el GLB con la tubería (un nodo, una malla, una primitiva, con `_PIEZA` y
+  `extras.taller`); ponerlo en `modelos/`, con otro nombre si es una versión nueva; y una entrada en `MODELOS`
+  (`js/modelos-catalogo.js`): `marca` y `linea` tal como las guarda el catálogo, `nombre` (marca, línea, versión y
+  modelo del `extras`, separados por espacios), `corto` ("la Captiva", para el letrero), `archivo`, `megas`,
+  `sha256`, `aviso` (si hay algo que decir de la línea), `colorFoto` (el de la lata en pantalla: el de por dentro y el del
+  cuadrito, cuando la ficha no tiene color) y `credito`, con `marcaDe`. Nada más: la pantalla, la lista y las
+  pruebas salen de la tabla. Y sus fotos, en "Créditos", al final de este archivo, y en `modelos/CREDITOS.txt`, que viaja al
+  lado del archivo. `npm test` revisa que el archivo pese lo que dice y sea el de la huella, traiga las 17 piezas de afuera, en
+  metros, que la línea exista en el catálogo y que el crédito esté completo.
+- **Medido, y lo que falta.** Con Edge sin ventana, sin GPU, en 390 x 844 (`pruebas/datos-externos/diseno-escaneo/probar-captiva.mjs`,
+  fuera de git): de la caché, el modelo se ve a unos 1,2 s de abrir la página; con la CPU frenada 6x, de 3,7 a 3,9 s; en los dos, sin un solo
+  cuadro del carro de cajas. **Nada de esto ha corrido en un iPhone**, y desde este PC no se puede: los
+  tiempos son los de Edge. Lo primero que hay que hacer allá es el paso 4 de `diagnostico.html`: baja el modelo, abre la foto,
+  la reserva en la GPU, lo dibuja y lo gira, y dice cuánto tarda cada cosa y cuántos cuadros por segundo da; si la pestaña muere
+  a mitad, al volver dice en qué paso iba. Con `index.html?carro=nuevo&placa=...` el medidor también mide la Captiva, y lo dice
+  ("Modelo de catálogo, en prueba"). Son 250 mil triángulos por cuadro con el reflejo. Toda la línea, 2019-hoy, sale con la trompa de la
+  de 2020, y por eso el diálogo avisa y no dice que sea igual. Sin dar un año: notas de México y Centroamérica dicen que cambió en 2024,
+  para Colombia no se encontró fuente, y Autocosmos Colombia habló de otro retoque para 2021.
+
 **El 5 de noviembre por la noche, el carro nuevo, en prueba.** Joan dijo que el carro sin
 escanear "sigue de juguete". `js/generico/` es su reemplazo: 66 a 73 mil triángulos contra
 5.600, las mismas 29 piezas y 6 bisagras, y una pintura que ya da el color pedido en cualquier
@@ -189,7 +278,7 @@ Safari en ese camino, por capas:
 Probado simulando cada falla en la app, con Edge sin ventana
 (`pruebas/datos-externos/iphone/fallas.mjs`, fuera de git). **Falta correrlo en un iPhone.**
 
-**Si algo falla en un celular: `diagnostico.html`.** Desde el PC no se puede correr Safari, así que esa
+**Si algo falla en un celular: `diagnostico.html`** (el paso 4 es el del modelo de catálogo). Desde el PC no se puede correr Safari, así que esa
 página prueba cada paso en el celular de verdad, con el código que ese celular tiene instalado, y dice
 qué falló con las palabras del navegador: la versión instalada contra la publicada, la base, los
 lienzos, cada módulo, el camino de "Abrir en 3D" (también con una foto de la cámara), el 3D, y hasta
@@ -785,7 +874,7 @@ Claude, la entrada `taller-pintura-celular` de `.claude/launch.json` arranca
 el servidor abierto a la red. El reconocedor de fotos sí necesita internet
 en el teléfono la primera vez (89 MB desde Hugging Face); lo demás no.
 
-Pruebas (342, en Node, sin navegador; el registro se prueba contra
+Pruebas (438, en Node, sin navegador; el registro se prueba contra
 `fake-indexeddb`, una IndexedDB de mentira que se instala con `npm install`):
 
 ```bash
@@ -848,6 +937,9 @@ npm test
 | `js/escaneo-velo.js` | Lo que se ve de una pieza marcada sobre un escaneo: la línea (una curva sobre un valor suavizado, no la orilla de los triángulos) y el relleno con la luz de la foto. |
 | `js/piso-vitrina.js` | El piso de sala de exhibición: reflejo en una textura a media resolución, sombra de la huella real del carro y fundido al fondo, sin horizonte. |
 | `js/encuadre.js` | La distancia de cámara para que el carro quepa, exacta, con las 8 esquinas de su caja, y qué medidas usar para encuadrar un escaneo fuera de rango. |
+| `js/escaneo-catalogo.js` | Lo que es un carro de catálogo: del archivo al escaneo sin medir nada, la pintura por capa, la placa dibujada y cómo se dice en la pantalla. |
+| `js/modelos-catalogo.js` | Las líneas que la app ya trae en 3D (`MODELOS`), de dónde se bajan (`bajarModelo`, con su caché propia), cómo se leen sin lienzos (`leerModeloGlb`), qué le toca a un carro y qué se le pregunta (`modeloQueLeToca`, `modeloParecido`), el color que se le ve (`colorQueSeVe`) y lo que se recuerda de este celular (`nivelDeCupo`). Sin Three.js ni DOM. |
+| `modelos/` | Los GLB de catálogo, uno por línea, y `CREDITOS.txt`, que viaja con ellos. Fuera de la precarga: se bajan la primera vez que se abre un carro de esa línea. |
 | `js/escaneos.js` | Los escaneos guardados, en una base de IndexedDB APARTE (`taller-escaneos`): pesan megas y así el Garaje abre sin leerlos, y no hubo que subir la versión de la base de los carros. |
 | `js/escaneo-pantalla.js` | La pantalla del escaneo: el botón, el diálogo, lo que se ve encima de la cámara (dom-overlay), la vista previa con Guardar / Frente al revés / Descartar, ver piezas y quitar. |
 | `js/vendor/loaders/`, `js/vendor/utils/` | GLTFLoader, OBJLoader, PLYLoader y BufferGeometryUtils de three 0.169, copiados tal cual (MIT); están en la precarga para que importar funcione sin internet. |
@@ -856,7 +948,7 @@ npm test
 | `herramientas/servidor.js` | Servidor estático sin dependencias; los módulos de JavaScript no cargan desde `file://`. Sirve `.wasm` con su tipo para que el motor compile en streaming, y todo con COOP/COEP para que el motor use varios hilos también en el PC. Bajo `/como-github/` sirve lo mismo como GitHub Pages (en una carpeta y sin cabeceras), para probar el service worker antes de publicar. |
 | `herramientas/generar-catalogo.mjs` | Del JSON de la investigación al catálogo: una entrada por marca y línea, medidas limpias, fuente conservada. |
 | `herramientas/calcular-etiquetas.mjs` | Calcula en el PC los vectores de texto de CLIP (modelo de texto, 60 MB que el teléfono así no necesita) y escribe `js/etiquetas-clip.json`. |
-| `pruebas/` | `estado.test.js` (la orden, las 29 piezas), `carro.test.js` (piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio, la base de puertas, la placa), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `tablero.test.js` (semanas, pesos, pago por pieza, pintor y entrega, nómina, historial, indicadores, la demostración, los empleados en el almacén y la subida de versión de la base sin perder carros), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras), `catalogo.test.js` (el catálogo y su buscador) e `instalable.test.js` (el manifest y sus iconos, los enlaces de las tres páginas, el sello de `sw.js` contra la carpeta real, y el service worker corriendo en un `vm` con navegador de mentira: qué toca, qué no, que Hugging Face nunca, y las cabeceras de aislamiento). También `logo.test.js` (recorte, agrupación, clasificación con y sin fondo, la rejilla del barrido, la regla de 2 de 3 y cuál logo queda), `placa-foto.test.js` (la placa amarilla con sus tres pasadas, el borde, las esquinas, enderezarla, leerla), `escaneo.test.js` (la tubería con escaneos de mentira: fusión, piso, estorbo, orientación sin reflejo, medidas con ruido y reflejos, piezas, el contrato del visor, cerrar huecos, los bloques de relleno, el genérico acomodado a lo medido, la máscara de pintura, el suavizado de etiquetas y las juntas), `escaneo-importar.test.js` (PLY en milímetros con z arriba, malla con color, escala, simplificar, el almacén de escaneos) y `escaneo-ar.test.js` (el escáner con un WebXR de mentira). 170 pruebas. `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
+| `pruebas/` | `estado.test.js` (la orden, las 29 piezas), `carro.test.js` (piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio, la base de puertas, la placa), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `tablero.test.js` (semanas, pesos, pago por pieza, pintor y entrega, nómina, historial, indicadores, la demostración, los empleados en el almacén y la subida de versión de la base sin perder carros), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras), `catalogo.test.js` (el catálogo y su buscador) e `instalable.test.js` (el manifest y sus iconos, los enlaces de las tres páginas, el sello de `sw.js` contra la carpeta real, y el service worker corriendo en un `vm` con navegador de mentira: qué toca, qué no, que Hugging Face nunca, y las cabeceras de aislamiento). También `logo.test.js` (recorte, agrupación, clasificación con y sin fondo, la rejilla del barrido, la regla de 2 de 3 y cuál logo queda), `placa-foto.test.js` (la placa amarilla con sus tres pasadas, el borde, las esquinas, enderezarla, leerla), `escaneo.test.js` (la tubería con escaneos de mentira: fusión, piso, estorbo, orientación sin reflejo, medidas con ruido y reflejos, piezas, el contrato del visor, cerrar huecos, los bloques de relleno, el genérico acomodado a lo medido, la máscara de pintura, el suavizado de etiquetas y las juntas), `escaneo-importar.test.js` (PLY en milímetros con z arriba, malla con color, escala, simplificar, el almacén de escaneos) `escaneo-ar.test.js` (el escáner con un WebXR de mentira), `escaneo-catalogo.test.js` y `modelos-catalogo.test.js` (los carros de catálogo: el archivo de verdad, el lector contra la ruta normal, bajarlo una vez, y la pantalla con un DOM de mentira: el orden, las carreras, el lienzo tapado, los avisos, sin señal, sin foto, sin cupo, lo que la gente escribe). `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
 
 Decisiones que conviene conocer:
 
@@ -990,6 +1082,10 @@ escaneo
 
 ## Trampas conocidas
 
+- **Cambiar un GLB de `modelos/` es cambiar también su `sha256` en la tabla.** La caché `modelos-de-carros` no vuelve a
+  preguntar por lo que ya tiene; lo que hace llegar el nuevo es que el de la caché ya no da la huella. Sin cambiarla, los teléfonos que lo
+  bajen lo rechazan ("Lo que llegó no es el modelo") y `npm test` falla. En http, sin `crypto.subtle`, no se compara nada: ahí
+  sigue haciendo falta otro nombre de archivo. Para no pensarlo, una versión nueva lleva otro nombre y su `archivo` en la tabla; lo viejo se borra solo.
 - **Publicar una versión nueva son tres pasos, no uno.** El service worker
   guarda la app en el teléfono y la sirve de ahí sin mirar la red; el
   navegador solo se entera de que hay versión nueva cuando cambia `sw.js`.
@@ -1213,3 +1309,19 @@ escaneo
   (`puntoEnFoto`): la foto se muestra entera con `object-fit: contain`, con
   franjas vacías a los lados; un toque en la franja no es foto y se ignora.
   Con `object-fit: cover` (como estaba) el toque habría caído en otro sitio.
+
+## Créditos
+
+**El modelo de la Chevrolet Captiva LT 2020** (`modelos/chevrolet-captiva-2020.glb`) está hecho con siete fotos de
+**Autosdeprimera**, de Wikimedia Commons, con licencia
+[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Se modificaron: recoloreadas y pegadas sobre una forma 3D.
+En la app salen en el color que diga la ficha. El crédito también se ve en el diálogo de Escanear, y va al lado del
+archivo en `modelos/CREDITOS.txt`, porque el GLB se puede bajar suelto. No es un modelo oficial: Chevrolet es marca de General Motors, y ni la marca ni el autor de las fotos tienen relación con esta app.
+
+- [Chevrolet Captiva 2020 (Colombia) front view 1.png](https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_front_view_1.png)
+- [Chevrolet Captiva 2020 (Colombia) front view 2.png](https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_front_view_2.png)
+- [Chevrolet Captiva 2020 (Colombia) front view 3.png](https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_front_view_3.png)
+- [Chevrolet Captiva 2020 (Colombia) front view 4.png](https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_front_view_4.png)
+- [Chevrolet Captiva 2020 (Colombia) front view 5.png](https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_front_view_5.png)
+- [Chevrolet Captiva 2020 (Colombia) side view.png](https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_side_view.png)
+- [Chevrolet Captiva 2020 (Colombia) rear view.png](https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_rear_view.png)

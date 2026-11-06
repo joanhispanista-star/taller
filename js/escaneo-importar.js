@@ -9,9 +9,10 @@
 // los cargadores de Three.js y sacar los colores de la textura) es del
 // navegador y se importa solo cuando alguien sube un escaneo.
 import * as THREE from 'three';
-import { aislarCarro, cajaDe, estimarPiso, mallaDesdePuntos, procesarEscaneo, simplificarMalla, transformar } from './escaneo.js';
+import { aislarCarro, ajustesDelEscaneo, cajaDe, estimarPiso, mallaDesdePuntos, procesarEscaneo, simplificarMalla, transformar } from './escaneo.js';
 import { giroDeNivel } from './escaneo-nivel.js';
 import { leerObj } from './escaneo-obj.js';
+import { catalogoDelObjeto, escaneoDeCatalogo } from './escaneo-catalogo.js';
 
 // Más triángulos que esto no se dibujan ni se etiquetan bien en un
 // teléfono: la malla se simplifica (simplificarMalla, conserva el color).
@@ -135,6 +136,9 @@ export function mallaDeObjeto3D(objeto, { colorDeTextura = null } = {}) {
   const indices = new Uint32Array(indicesTotal);
   const mapa = mapas.size === 1 && !algunaSinMapa ? [...mapas][0] : null;
   const uvs = mapa ? new Float32Array(vertices * 2) : null;
+  // Un carro de catálogo trae la pieza de cada vértice (_PIEZA, escaneo-catalogo.js). Solo si la traen todas las mallas.
+  const catalogo = catalogoDelObjeto(objeto);
+  const pieza = catalogo && piezas.every((p) => p.geo.attributes._pieza) ? new Uint8Array(vertices) : null;
   let nube = false;
   let v0 = 0;
   let i0 = 0;
@@ -171,6 +175,7 @@ export function mallaDeObjeto3D(objeto, { colorDeTextura = null } = {}) {
         uvs[(v0 + i) * 2] = uv.getX(i);
         uvs[(v0 + i) * 2 + 1] = mapa.flipY === false ? uv.getY(i) : 1 - uv.getY(i);
       }
+      if (pieza) pieza[v0 + i] = geo.attributes._pieza.getX(i);
     }
     if (hijo.isPoints) {
       nube = true;
@@ -186,7 +191,7 @@ export function mallaDeObjeto3D(objeto, { colorDeTextura = null } = {}) {
   if (fotoSinCoordenadas) fotoPerdida = FOTO_SIN_COORDENADAS;
   else if (mapas.size > 1) fotoPerdida = FOTO_EN_VARIAS;
   else if (mapas.size === 1 && algunaSinMapa) fotoPerdida = FOTO_A_MEDIAS;
-  return { posiciones, indices: indices.subarray(0, i0), colores, esNube: nube && i0 === 0, uvs, mapa, fotoPerdida };
+  return { posiciones, indices: indices.subarray(0, i0), colores, esNube: nube && i0 === 0, uvs, mapa, fotoPerdida, pieza, catalogo: pieza ? catalogo : null };
 }
 
 function materialesDe(malla) {
@@ -314,6 +319,7 @@ function escalar(posiciones, factor) {
 // `ejeArriba`: si la persona dijo que quedó acostado, el eje que eligió con
 // el botón (uno de EJES_ARRIBA); si no, el que adivina detectarArriba.
 export function procesarImportado(malla, { carroceria = 'sedan', medidasCatalogo = null, voltear = false, ejeArriba = null } = {}) {
+  if (malla.catalogo) return escaneoDeCatalogo(malla, ajustesDelEscaneo);
   // Primero la escala (no depende de qué eje es arriba) y con eso, en
   // metros, el piso que dice dónde es arriba.
   const escala = ajustarEscala(malla.posiciones, { largoCatalogo: medidasCatalogo && medidasCatalogo.largo });

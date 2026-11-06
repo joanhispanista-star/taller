@@ -180,6 +180,27 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
   pointer-events: none;
 }
 
+/* El modelo de la línea va en camino: encima del lugar de la pista, que a veces va en dos
+   renglones, y el dedo lo atraviesa. El genérico sigue en pantalla, y se puede usar. */
+.letrero-modelo {
+  position: absolute;
+  bottom: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 20px);
+  background: rgba(10, 13, 17, 0.88);
+  border: 1px solid var(--acento);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  text-align: center;
+  pointer-events: none;
+  /* Encima del medidor de la prueba del carro nuevo (js/generico/en-prueba.js), que cae en el mismo sitio. */
+  z-index: 6;
+}
+
 /* Debajo del lienzo y no encima: encima pisaban las llantas en cuanto el carro lo llena a
    lo alto (Frente en el computador, cualquier vista en un lienzo ancho). */
 .vistas {
@@ -1113,6 +1134,9 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 
 .opcion-escaneo { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .opcion-escaneo .ayuda { margin: 0; }
+.credito-modelo a { color: var(--acento); }
+.credito-modelo summary { cursor: pointer; color: var(--acento); margin-top: 4px; }
+.credito-modelo ul { margin: 4px 0 0; padding-left: 18px; overflow-wrap: anywhere; }
 
 /* Encima de la cámara: transparente, con el texto en recuadros oscuros. */
 .hud-escaneo {
