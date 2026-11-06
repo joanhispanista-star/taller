@@ -144,6 +144,17 @@ media puerta quedaba como "nada" y el estribo era una franja enorme. Ahora:
   luz entre dos latas. El toque del dedo las atraviesa (un rayo de Three.js
   "toca" una línea a un metro por defecto, y tapaban las piezas).
 
+**El 5 de noviembre por la noche, el carro nuevo, en prueba.** Joan dijo que el carro sin
+escanear "sigue de juguete". `js/generico/` es su reemplazo: 66 a 73 mil triángulos contra
+5.600, las mismas 29 piezas y 6 bisagras, y una pintura que ya da el color pedido en cualquier
+vista (capó rojo en Frente: pedido 184,35,42, antes 247,203,200, ahora 184,35,42). Todavía no
+es el de todos, porque lo único que no se puede medir desde el PC es si gira fluido en un
+celular: se enciende con `index.html?carro=nuevo` (el visor; también con `&placa=`), solo en el teléfono que abre el enlace, y
+un medidor en pantalla dice los cuadros por segundo y deja comparar con el de hoy
+(`js/generico/en-prueba.js`). `?carro=salir` lo apaga. Quien no abra el enlace no baja de la
+red ni arma nada de esto, aunque los archivos van en la precarga para que el enlace abra sin
+señal. Con escaneo se sigue usando el de hoy: la junta trasera del nuevo no sigue lo medido.
+
 **El 5 de noviembre, el iPhone de Joan.** Joan tomó la foto en su iPhone y "Abrir en 3D"
 dijo "No se pudo crear el carro: revisa que el teléfono tenga espacio libre", con espacio
 de sobra. Ese texto era nuestro: salía para cualquier error en inglés, y tapó la causa
@@ -771,7 +782,7 @@ Claude, la entrada `taller-pintura-celular` de `.claude/launch.json` arranca
 el servidor abierto a la red. El reconocedor de fotos sí necesita internet
 en el teléfono la primera vez (89 MB desde Hugging Face); lo demás no.
 
-Pruebas (320, en Node, sin navegador; el registro se prueba contra
+Pruebas (342, en Node, sin navegador; el registro se prueba contra
 `fake-indexeddb`, una IndexedDB de mentira que se instala con `npm install`):
 
 ```bash

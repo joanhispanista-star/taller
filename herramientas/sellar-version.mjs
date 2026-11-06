@@ -46,6 +46,8 @@ export function archivosApp(raiz = RAIZ) {
     ...listar(raiz, '', (n) => /^(index|garaje|tablero)\.html$/.test(n) || n === 'manifest.webmanifest'),
     ...listar(raiz, 'css', (n) => n.endsWith('.css')),
     ...listar(raiz, 'js', (n) => n.endsWith('.js') || n.endsWith('.json')),
+    // El carro nuevo, en prueba: listar() no entra a subcarpetas, y sin esto el enlace no abriría sin señal.
+    ...listar(raiz, 'js/generico', (n) => n.endsWith('.js')),
     ...listar(raiz, 'js/vendor', (n) => n.endsWith('.js')),
     // Los cargadores de escaneos (GLB, OBJ, PLY) de Three.js 0.169, con la
     // utilidad que usa el de GLB: 180 KB, para que importar funcione sin internet.

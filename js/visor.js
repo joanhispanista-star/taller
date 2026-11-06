@@ -44,6 +44,7 @@ import { crearFichaCarro } from './ficha-carro.js';
 import { reducirFoto } from './fotos.js';
 import { modeloDesdeEscaneo } from './escaneo.js';
 import { crearPisoVitrina } from './piso-vitrina.js';
+import { crearMedidor, iniciarPrueba } from './generico/en-prueba.js';
 import { crearEscaneoPantalla, textoDeMedidas } from './escaneo-pantalla.js';
 
 const COLOR_BASE = 0xcfd4da;
@@ -234,6 +235,9 @@ function firmaDelModelo() {
   const sinPlaca = escaneoVisto && !verPiezasEscaneo ? { placa: '' } : {};
   return JSON.stringify({ ...opcionesDelModelo(), ...sinPlaca, escaneo: escaneoVisto ? versionEscaneo : 0, verPiezas: verPiezasEscaneo });
 }
+// El carro nuevo se enciende con un enlace, solo en el teléfono de quien lo abre (js/generico/en-prueba.js).
+let prueba = null;
+let medidor = null;
 function construirModelo() {
   if (escaneoVisto && !verPiezasEscaneo) {
     const conFoto = modeloDesdeEscaneo(escaneoVisto, { colorBase: carro.color || COLOR_BASE });
@@ -252,7 +256,13 @@ function construirModelo() {
     }
     return conFoto;
   }
-  return construirCarro(opcionesDelModelo());
+  // Con escaneo se queda el de hoy: sus piezas tienen que quedar sobre lo medido, y la junta
+  // trasera del nuevo todavía no sigue esas medidas (el arco la frena).
+  const armar = !escaneoVisto && prueba && prueba.construir ? prueba.construir : construirCarro;
+  const inicio = performance.now();
+  const armado = armar(opcionesDelModelo());
+  if (medidor) medidor.armado(performance.now() - inicio);
+  return armado;
 }
 let modelo = construirModelo();
 let firmaModelo = firmaDelModelo();
@@ -317,13 +327,35 @@ function dibujar() {
   piso.actualizar(camara, modelo.disposicion);
   renderizador.render(escena, camara);
 }
-function bucle() {
+function bucle(ahora) {
   requestAnimationFrame(bucle);
   const seMovio = controles.update();
   enMovimiento = seMovio;
   if (seMovio || cuadroPedido) dibujar();
+  if (medidor) medidor.cuadro(ahora, seMovio);
 }
 bucle();
+
+// Sin espera en el arranque: primero sale el carro de hoy y, si este teléfono pidió el nuevo, se
+// cambia cuando lleguen sus módulos. Un `await` arriba dejaba el visor entero colgado de esos
+// módulos, también para quien no abrió el enlace. Se llama aquí y no después porque lee ?carro=
+// de la URL, y refrescar() la limpia al abrir el carro.
+iniciarPrueba().then((pedida) => {
+  if (!pedida) return;
+  prueba = pedida;
+  medidor = crearMedidor(ui.escena, pedida.estado);
+  if (!pedida.construir || escaneoVisto) return;
+  try {
+    firmaModelo = '';
+    reconstruirModelo();
+    aplicarSeleccion();
+  } catch (e) {
+    // Una prueba no puede dejar la app sin carro: reconstruirModelo deja en pantalla lo de antes.
+    console.warn(e);
+    prueba = null;
+    firmaModelo = firmaDelModelo();
+  }
+});
 
 let primerTamano = true;
 function ajustarTamano() {
