@@ -154,6 +154,9 @@ un medidor en pantalla dice los cuadros por segundo y deja comparar con el de ho
 (`js/generico/en-prueba.js`). `?carro=salir` lo apaga. Quien no abra el enlace no baja de la
 red ni arma nada de esto, aunque los archivos van en la precarga para que el enlace abra sin
 señal. Con escaneo se sigue usando el de hoy: la junta trasera del nuevo no sigue lo medido.
+El enlace que se le pasa a alguien es `probar-carro.html?placa=...`, fuera de la precarga: trae
+la versión nueva sin pasar por el botón del Garaje y entra, porque un visor viejo no conoce
+`?carro=nuevo` y lo borra de la URL sin avisar. Se borra el día que el nuevo sea el de todos.
 
 **El 5 de noviembre, el iPhone de Joan.** Joan tomó la foto en su iPhone y "Abrir en 3D"
 dijo "No se pudo crear el carro: revisa que el teléfono tenga espacio libre", con espacio

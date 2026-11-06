@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Probar el carro nuevo</title>
+<!-- Fuera de la precarga a propósito, como diagnostico.html: esta página tiene que llegar de la red
+     aunque el teléfono tenga guardada una versión vieja de la app. Se borra el día que el carro
+     nuevo sea el de todos. -->
+<style>
+  body { margin: 0; padding: 24px 16px; background: #14181e; color: #eef1f4; font: 16px/1.45 system-ui, -apple-system, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 12px; }
+  a { color: #ff9a4d; }
+</style>
+</head>
+<body>
+<h1>Probar el carro nuevo</h1>
+<p id="estado">Trayendo la versión nueva de la app…</p>
+<p>Se prende solo en este teléfono. No borra tus carros, y adentro hay un botón para volver al de hoy.</p>
+
+<script type="module">
+const estado = document.getElementById('estado');
+const placa = new URLSearchParams(location.search).get('placa') || '';
+const destino = 'index.html?carro=nuevo' + (placa ? '&placa=' + encodeURIComponent(placa) : '');
+
+// Sin esto, un teléfono con la versión vieja abre el visor viejo, que no conoce ?carro=nuevo y se lo
+// borra a la URL al abrir el carro: la persona ve el carro de siempre y cree que la prueba no sirve.
+// La versión nueva solo se ofrece con un botón en el Garaje, y aquí nadie va a pasar por el Garaje.
+try {
+  localStorage.setItem('taller-carro-en-prueba', 'nuevo');
+} catch {
+  // Almacenamiento bloqueado: el enlace de abajo también lo pide, y la prueba dura lo que dure la página.
+}
+
+const pasaA = (sw, estados) => new Promise((listo) => {
+  if (estados.includes(sw.state)) return listo();
+  sw.addEventListener('statechange', () => {
+    if (estados.includes(sw.state)) listo();
+  });
+});
+
+async function traerVersionNueva() {
+  if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
+  const registro = await navigator.serviceWorker.register('sw.js');
+  await registro.update();
+  // Lo que se esté bajando (son 64 archivos), si no hay ya una versión esperando.
+  if (registro.installing) await pasaA(registro.installing, ['installed', 'redundant']);
+  const esperando = registro.waiting;
+  // Sin versión esperando, esta ya es la última.
+  if (!esperando || !navigator.serviceWorker.controller) return;
+  esperando.postMessage({ tipo: 'activar' });
+  await pasaA(esperando, ['activated', 'redundant']);
+}
+
+function entrar() {
+  location.replace(destino);
+}
+
+// Con mala señal no se queda aquí para siempre: entra con lo que haya, y la marca de arriba ya quedó puesta.
+const reloj = setTimeout(() => {
+  estado.textContent = 'La señal está lenta. Entro con lo que hay.';
+  setTimeout(entrar, 1200);
+}, 40000);
+
+traerVersionNueva().then(() => {
+  clearTimeout(reloj);
+  entrar();
+}, (error) => {
+  clearTimeout(reloj);
+  console.warn(error);
+  estado.textContent = 'No pude traer la versión nueva. Entro con lo que hay.';
+  setTimeout(entrar, 1200);
+});
+</script>
+</body>
+</html>
