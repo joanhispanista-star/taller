@@ -194,14 +194,38 @@ export function tienePieza(carro, id) {
   return Object.hasOwn(carro.piezas, id);
 }
 
-// Marca la pieza (pendiente) o la quita. Devuelve true si quedó marcada.
+// ¿Se puede desmarcar esta pieza con un toque, sin preguntar? Solo si quitarla no borra
+// nada que haya costado trabajo: pendiente y sin pintor, es un toque de más y otro toque
+// lo arregla. En proceso, terminada o con pintor ya es trabajo del taller, y una terminada
+// con pintor son 90.000 pesos en la nómina (tablero.js, pagoDePieza). Hasta el 9-nov-2026
+// un toque sobre el carro o la × del renglón la borraba con su estado, su fecha y su
+// pintor, sin preguntar, y la plata se iba de la nómina sin que nadie lo notara.
+export function seQuitaConUnToque(pieza) {
+  return !pieza || (pieza.estado === ESTADOS[0] && !pieza.pintor);
+}
+
+// Marca la pieza (pendiente) o la quita, pero solo si quitarla no cuesta nada
+// (seQuitaConUnToque). Una pieza que ya es trabajo del taller se queda como está: el
+// visor abre su menú y ahí quitarla pide confirmar (quitarPieza). Por eso la regla vive
+// aquí y no en la pantalla: ningún botón nuevo puede volver a borrarla de un toque.
+// Devuelve true si quedó marcada.
 export function alternarPieza(carro, id, ahora = new Date().toISOString()) {
   if (!PIEZAS_POR_ID.has(id)) return false;
   if (tienePieza(carro, id)) {
+    if (!seQuitaConUnToque(carro.piezas[id])) return true;
     delete carro.piezas[id];
     return false;
   }
   carro.piezas[id] = { estado: ESTADOS[0], desde: ahora, trabajo: TRABAJOS[0], pintor: '' };
+  return true;
+}
+
+// Quita la pieza, esté como esté. Solo para después de que la persona confirmó con el
+// aviso de lo que sale de la nómina (textoParaQuitar, en tablero.js). Devuelve true si
+// estaba marcada.
+export function quitarPieza(carro, id) {
+  if (!tienePieza(carro, id)) return false;
+  delete carro.piezas[id];
   return true;
 }
 
@@ -265,9 +289,20 @@ export function nombreDePiezaEnOrden(carro, id, nombreBase) {
 // (textoParaAsistente, en estado.js); esto convierte el carro del registro
 // al estado que esa función entiende.
 export function estadoParaOrden(carro) {
+  // Para pintar va solo lo que falta (pendiente o en proceso). Hasta el 9-nov-2026 iban
+  // todas las marcadas, también las terminadas, y una orden se sigue al pie de la letra:
+  // el asistente pintaba dos veces. Las terminadas van aparte, nombradas, para que sepa
+  // que no se le olvidaron sino que ya están.
+  const ids = Object.keys(carro.piezas);
+  const terminada = (id) => carro.piezas[id].estado === 'terminada';
   // La orden lleva el carro completo ("Chevrolet Captiva (nueva) · 5
   // puestos"), no solo la marca: el asistente tiene que saber cuál es.
-  return crearEstado({ placa: carro.placa, marca: nombreCompletoDelCarro(carro), seleccion: Object.keys(carro.piezas) });
+  return crearEstado({
+    placa: carro.placa,
+    marca: nombreCompletoDelCarro(carro),
+    seleccion: ids.filter((id) => !terminada(id)),
+    terminadas: ids.filter(terminada),
+  });
 }
 
 export function serializarCarro(carro) {

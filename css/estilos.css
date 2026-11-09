@@ -18,6 +18,9 @@
   --estado-pendiente: #ff7a1a;
   --estado-en-proceso: #ffd23f;
   --estado-terminada: #3ddc84;
+  /* Lo que borra algo que costó trabajo (desmarcar una pieza en proceso o terminada).
+     #ff7b7b y no un rojo más oscuro: sobre --panel-2 da 4,8:1, que se lee a 14 px. */
+  --peligro: #ff7b7b;
 }
 
 /* Cualquier elemento con la clase de un estado hereda su tono en --tono. */
@@ -1001,6 +1004,17 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 
 .menu-estado .menu-pintor::before { display: none; }
 .menu-estado .sin-empleados { color: var(--acento); }
+
+/* ---------- Desmarcar sin borrar plata (9-nov-2026) ---------- */
+
+/* El menú se abre también desde el carro, con el dedo a media pantalla: si no cabe
+   entero, se desplaza por dentro en vez de salirse por abajo. dvh y no vh: en el
+   iPhone 100vh es la pantalla sin las barras de Safari, y lo de abajo quedaba tapado. */
+.menu-estado { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; }
+/* De qué pieza es el menú: desde el carro el chip, que lo dice, puede no estar a la vista. */
+.menu-titulo { margin: 6px 12px 4px; font-size: 13px; font-weight: 600; color: var(--texto-suave); }
+.menu-estado .menu-desmarcar { color: var(--peligro); }
+.menu-estado .menu-desmarcar::before { display: none; }
 
 .entrega .campo { flex: 1; }
 .entrega .campo input { width: 100%; }

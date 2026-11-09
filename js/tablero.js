@@ -63,6 +63,28 @@ export function pagoDePieza(pieza, id) {
   return TARIFA_PIEZA;
 }
 
+// La pregunta antes de quitar una pieza que ya es trabajo del taller (en proceso,
+// terminada o con pintor: seQuitaConUnToque, en garaje.js). Dice la plata con nombre y
+// semana, con la misma cuenta de nominaSemanal: un "¿seguro?" no le avisa a nadie que se
+// le van 90.000 pesos a un pintor. `empleados`: todos, también los retirados, porque una
+// pieza terminada de un pintor retirado sigue en la nómina de su semana.
+export function textoParaQuitar(nombre, pieza, id, empleados = []) {
+  const pintor = pieza.pintor ? empleados.find((e) => e.id === pieza.pintor) : null;
+  const pago = pagoDePieza(pieza, id);
+  let texto = '¿Desmarcar ' + nombre + '? ';
+  if (pago && pintor) {
+    texto += 'Está terminada: salen ' + pesos(pago) + ' de la nómina de ' + pintor.nombre + ', semana del ' + etiquetaDeSemana(semanaDe(new Date(pieza.desde))) + '.';
+  } else if (pago) {
+    // Sin pintor (o con uno que ya se borró de Empleados) no está en la nómina de nadie,
+    // pero sí en los indicadores y en el historial como pieza terminada.
+    texto += 'Está terminada, sin pintor: no sale plata de la nómina, pero deja de contar como pieza terminada.';
+  } else {
+    const estado = pieza.estado === 'en-proceso' ? 'en proceso' : 'pendiente';
+    texto += 'Está ' + estado + (pintor ? ', con ' + pintor.nombre : '') + '. Todavía no paga nada: no sale plata de la nómina, pero se pierde' + (pintor ? 'n su estado y su pintor.' : ' su estado.');
+  }
+  return texto + ' No se puede deshacer.';
+}
+
 // La nómina de una semana: por empleado, qué piezas terminó (las que
 // tienen su id como pintor y pasaron a terminada dentro de la semana) y lo
 // que se le paga. Las piezas terminadas sin pintor asignado se listan

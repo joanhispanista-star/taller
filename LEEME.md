@@ -445,7 +445,16 @@ el de vitrina.
 - Se gira con un dedo y se acerca con dos. Cinco botones (Frente, Izquierdo,
   Derecho, Atrás, Arriba) llevan la cámara al sitio sin tener que girar.
 - Un toque sobre una pieza la marca: se tiñe de naranja, con un brillo leve,
-  y aparece en la lista de abajo. Otro toque (o la × de la lista) la quita.
+  y aparece en la lista de abajo. Otro toque (o la × de la lista) la desmarca,
+  **solo si sigue pendiente y sin pintor**. Si ya está en proceso, terminada o
+  tiene pintor, el toque abre su menú junto al dedo (con el nombre de la pieza
+  arriba), y «Desmarcar…», al final del menú, o la × preguntan antes diciendo
+  la plata: «¿Desmarcar Capó? Está terminada: salen $ 90.000 de la nómina de
+  Carlos, semana del 9 nov al 15 nov. No se puede deshacer.» Sin terminar dice
+  que no sale plata, pero que se pierden su estado y su pintor. Hasta el
+  9-nov-2026 un toque de más la borraba sin preguntar, y si estaba terminada
+  sus 90.000 se iban de la nómina (decisión de Joan del 9-nov: menú, no
+  pregunta directa, para poder cambiarle también el estado desde el carro).
 - **Nuevo carro con foto** (en el Garaje): una foto del carro y la app, en
   el teléfono y sin servidor, saca el color de la pintura (siempre acierta,
   salvo luz muy rara), y propone el tipo de carrocería y seis carros
@@ -765,7 +774,13 @@ el de vitrina.
 - Todo queda guardado en el teléfono (IndexedDB, por placa): si se cierra la
   página no se pierde nada, y al volver se abre el mismo carro.
 - **Enviar al asistente** manda la orden escrita (carro, cantidad y lista
-  numerada de piezas) por WhatsApp. No hay cuenta ni servidor todavía; el
+  numerada de **las piezas que faltan**, pendientes o en proceso) por
+  WhatsApp. Las ya terminadas van aparte, con guion y sin número, bajo «Ya
+  terminadas, no se pintan»; si no falta ninguna, dice «Nada por pintar».
+  Hasta el 9-nov-2026 pedía pintarlas todas, también las terminadas, y una
+  orden se sigue al pie de la letra (decisión de Joan del 9-nov: nombrarlas
+  aparte y no callarlas, para que el asistente vea que no se olvidaron).
+  No hay cuenta ni servidor todavía; el
   canal que ya tiene el asistente es WhatsApp, así que ese es el canal.
   Detalle honesto: la hoja de compartir del teléfono solo existe por
   **https** (cuando la app esté publicada); abierta por http en la red
@@ -894,7 +909,7 @@ npm test
 | `iconos/` | Los iconos de la app (dibujo propio: carro naranja de perfil con la línea de la puerta y una gota de pintura): 192 y 512 normales y maskable, 180 para iPhone, y el `icono.svg` original. Se regeneran con `npm run iconos`. |
 | `herramientas/generar-iconos.mjs` | Dibuja el SVG y lo convierte a PNG con `sharp`, que ya está en `node_modules` porque lo trae Transformers.js (no es una dependencia nueva). |
 | `herramientas/sellar-version.mjs` | `npm run sellar`: escribe en `sw.js` la lista de archivos a precargar y una huella SHA-256 de su contenido (y otra del motor). Sin eso el navegador no ve que hay versión nueva. Exporta lo que usa la prueba. |
-| `js/tablero.js` | Los números: la semana del taller (lunes a domingo), `pagoDePieza`, `nominaSemanal`, `historial`, `indicadores` (con serie por semana) y `pesos`. Funciones puras, sin DOM, probadas en Node. |
+| `js/tablero.js` | Los números: la semana del taller (lunes a domingo), `pagoDePieza`, `nominaSemanal`, `historial`, `indicadores` (con serie por semana), `pesos` y `textoParaQuitar` (la pregunta antes de desmarcar, con la plata, el pintor y la semana). Funciones puras, sin DOM, probadas en Node. |
 | `js/tablero-pantalla.js` | La pantalla del tablero: pinta las tres pestañas con lo que calcula `tablero.js`, agrega y retira empleados, y carga o quita la demostración. |
 | `js/demo.js` | Los 5 carros y 3 empleados de demostración (fechas relativas a hoy, todo con `demo: true`), `cargarDemo` (no pisa un carro real) y `estadoDemo`. |
 | `css/estilos.css` | Colores como variables `--*` (incluidos los tres de estado), tema oscuro (luz de taller). Empieza con `[hidden] { display: none !important }` por una trampa conocida. |
@@ -902,8 +917,8 @@ npm test
 | `js/carrocerias.js` | Los cuatro tipos de carrocería: medidas típicas, qué nombre toma cada pieza en cada uno (compuerta, costado del platón), y cómo se limpian las medidas del catálogo para dibujar. Sin Three.js. |
 | `js/catalogo-carros.js` | GENERADO. Los carros que ruedan en Colombia: marca, línea, carrocería, medidas en mm, años, presencia y fuente. Se regenera con `herramientas/generar-catalogo.mjs`. |
 | `js/catalogo.js` | Buscar en el catálogo ("onix", "sedan onix", sin tildes), la entrada exacta de un carro y lo que el registro guarda de ella. |
-| `js/estado.js` | El texto de la orden para el asistente (ahora con el nombre de pieza de la carrocería) y la placa normalizada. Su modelo de selección fue el del visor del 15 de octubre; hoy lo reemplaza `garaje.js`, pero sigue probado. |
-| `js/garaje.js` | El registro: el modelo del carro (placa, marca, línea, carrocería, color, medidas, cobro, fecha de entrega, piezas con estado, trabajo, pintor y fecha) y del empleado como funciones puras, la tarifa (`TARIFA_PIEZA`), y el almacén en IndexedDB versión 2 (carros, fotos y empleados; `quitarDemo`). Sin DOM; probado en Node con `fake-indexeddb`. |
+| `js/estado.js` | El texto de la orden para el asistente (con el nombre de pieza de la carrocería; numeradas solo las que faltan y las terminadas aparte) y la placa normalizada. Su modelo de selección fue el del visor del 15 de octubre; hoy lo reemplaza `garaje.js`, pero sigue probado. |
+| `js/garaje.js` | El registro: el modelo del carro (placa, marca, línea, carrocería, color, medidas, cobro, fecha de entrega, piezas con estado, trabajo, pintor y fecha) y del empleado como funciones puras, la tarifa (`TARIFA_PIEZA`), la regla de desmarcar (`seQuitaConUnToque`, `quitarPieza`), y el almacén en IndexedDB versión 2 (carros, fotos y empleados; `quitarDemo`). Sin DOM; probado en Node con `fake-indexeddb`. |
 | `js/fotos.js` | Reducir una foto a 1280 px y sacarle la miniatura con canvas. La cuenta de medidas es pura y se prueba en Node. |
 | `js/color-foto.js` | El color de la pintura a partir de la foto (k-medias sobre el centro, descartando vidrios y llantas) y su nombre de taller (plateado, vinotinto...). La parte pura se prueba en Node. |
 | `js/reconocer.js` | El reconocedor en el navegador: CLIP (visión) sobre la foto, comparado con los vectores de texto de `js/etiquetas-clip.json`. `reconocerCarro` (carrocerías, líneas y marcas por la foto entera, más el vector de la foto), `reconocerMarcaPorLogo` (recortes alrededor del toque contra los logos), `reconocerMarcaCercaDePlaca` (la zona encima de la placa), `reconocerMarcaBarriendo` (la rejilla sin placa; se puede abortar), `reconocerMarcaEnFotoDeCerca` y `lineasDeMarca` (las familias de una marca ordenadas por parecido). Cede el turno al navegador antes de cada pasada (`cederTurno`) y decide cuántos hilos usa el motor (`hilosDelMotor`). |
@@ -922,7 +937,7 @@ npm test
 | `herramientas/medir-cadena.mjs` | La medición que vale: repite en el PC lo que hace el teléfono con una sola foto (las tres pasadas de la placa, el logo encima, el barrido, cuál queda, la placa leída) sobre las 46 fotos, con las mismas constantes de `js/logo.js`. `--sin-barrido` da la cadena de antes del 17-oct. |
 | `herramientas/medir-barrido.mjs`, `medir-barrido-fino.mjs`, `medir-barrido-acuerdo.mjs` | Cómo se eligió el barrido: cuatro rejillas por dos criterios (probabilidad del mejor logo o "menos fondo"), con y sin fondo al decidir; luego franjas, pasos y refinados para el costo; y las reglas para frenar los "seguros" equivocados (de ahí los 2 de 3). Escriben su detalle en `pruebas/datos-externos/`. |
 | `herramientas/medir-placa-pasadas.mjs` | Qué encuentran las pasadas extra de la placa en las fotos reales, con una hoja de contactos de cada hallazgo para mirarlo. Dijo que encontraban llantas y carretera, y así se cerraron. |
-| `js/hoja.js` | La hoja de abajo del visor: chips con estado, trabajo (latonería), pintor y cámara; menú de estado, trabajo y pintor; tira de fotos y foto grande, con los nombres de la carrocería. DOM puro, sin Three.js. |
+| `js/hoja.js` | La hoja de abajo del visor: chips con estado, trabajo (latonería), pintor y cámara; menú de estado, trabajo, pintor y «Desmarcar…» (que, como la ×, pregunta con la plata), que también se abre desde el carro (`abrirMenuDe`); tira de fotos y foto grande, con los nombres de la carrocería. DOM puro, sin Three.js. |
 | `js/ficha-carro.js` | La ficha "Datos del carro" del visor: marca, línea con el catálogo, versión, carrocería, color, cobro al cliente y entrega. DOM puro. |
 | `js/garaje-pantalla.js` | La pantalla Garaje: lista con portada y color (con "entregado" y lo cobrado, y la insignia «demo»), abrir o crear por placa, borrar, la ficha del carro nuevo con foto (color, reconocedor, catálogo, confirmación) y la demostración. |
 | `js/carro.js` | El carro, pieza por pieza, construido con perfiles extruidos, en cuatro carrocerías y a las medidas de la línea (`disposicion` convierte medidas en bordes y alturas). Cada pieza es un objeto aparte con su propio material; las articuladas (puertas, capó, pieza trasera) cuelgan de un pivote en su bisagra (`articular`) y las de interior comparten material con sus paredes (`acompanar`). Sin DOM: también se construye en Node para probarlo. |
@@ -1203,6 +1218,15 @@ escaneo
   decide otra cosa: los huecos encerrados (las letras).
 - A 360 px de ancho las letras de una placa chica no se resuelven y los
   huecos no existen; a 640 sí, y sigue tardando 70 ms.
+- **Desmarcar no es lo contrario de marcar: una pieza marcada puede valer
+  plata.** Terminada y con pintor son 90.000 pesos en la nómina de su semana.
+  La regla vive en `garaje.js` y no en la pantalla: `alternarPieza` se niega a
+  borrar lo que no sea pendiente y sin pintor (`seQuitaConUnToque`), así que un
+  botón nuevo que la llame no puede volver a borrar plata de un toque. Para
+  quitar de verdad está `quitarPieza`, y solo después del `confirm` con
+  `textoParaQuitar`. `diseno-escaneo/probar-desmarcar.mjs` lo prueba con toques
+  en Edge sin ventana (y la orden de WhatsApp); con `RAIZ_APP` apuntando a una
+  copia de antes del arreglo (`git archive`), cae.
 - **Tesseract no lee texto inclinado**: con la placa a 30° devolvía basura
   o nada. Enderezada por sus esquinas (homografía) lee. El lector ONNX
   tampoco: siempre se endereza antes.

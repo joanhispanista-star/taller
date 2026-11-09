@@ -148,3 +148,19 @@ test('deserializar nunca revienta y descarta piezas que ya no existen', () => {
   assert.deepEqual([...viejo.seleccion], ['capo']);
   assert.equal(viejo.placa, 'AAA111');
 });
+
+// Las terminadas van aparte en la orden: el asistente no las pinta otra vez, pero sabe
+// que no se olvidaron. Se nombran con guion, sin número: lo numerado es lo que hay que hacer.
+test('el texto nombra aparte las piezas ya terminadas, sin pedir pintarlas', () => {
+  const estado = crearEstado({ placa: 'abc123', seleccion: ['capo'], terminadas: ['techo', 'baul', 'capo', 'ala-delta'] });
+  // El capó no puede estar en las dos listas: manda la de pintar.
+  assert.deepEqual([...estado.terminadas], ['techo', 'baul']);
+  const lineas = textoParaAsistente(estado).split(String.fromCharCode(10));
+  assert.deepEqual(lineas, ['ORDEN DE PINTURA - placa ABC123', '1 pieza para pintar:', '1. Capó', '', 'Ya terminadas, no se pintan:', '- Techo', '- Baúl', '', 'Enviado desde Taller de Pintura']);
+  const sola = textoParaAsistente(crearEstado({ terminadas: ['baul'] })).split(String.fromCharCode(10));
+  assert.deepEqual(sola.slice(1, 5), ['Nada por pintar: la pieza marcada ya está terminada.', '', 'Ya terminada, no se pinta:', '- Baúl']);
+  // Cambiar de carro también se lleva las terminadas del anterior.
+  assert.equal(cambiarPlaca(estado, 'XYZ789'), true);
+  assert.equal(estado.terminadas.size, 0);
+  assert.deepEqual([...deserializar(serializar(crearEstado({ terminadas: ['techo'] }))).terminadas], ['techo']);
+});

@@ -40,8 +40,11 @@ import {
   PIEZA_CARRO,
   nombreDelCarro,
   piezasDelCarro,
+  quitarPieza,
   quitarTodas,
+  seQuitaConUnToque,
   serializarCarro,
+  tienePieza,
 } from './garaje.js';
 import { crearHoja } from './hoja.js';
 import { crearFichaCarro } from './ficha-carro.js';
@@ -612,8 +615,14 @@ ui.lienzo.addEventListener('wheel', () => (camaraMovida = true), { capture: true
 function alTocar(x, y) {
   const id = piezaBajo(x, y);
   if (!id) return;
-  alternar(id);
   ui.pista.hidden = true;
+  // Una pieza que ya es trabajo del taller (en proceso, terminada o con pintor) no se
+  // desmarca con un toque: hasta el 9-nov-2026 un toque de más se llevaba su estado, su
+  // pintor y, si estaba terminada, sus 90.000 pesos de la nómina. Se abre su menú junto
+  // al dedo, y desde ahí «Desmarcar…» pregunta diciendo la plata. El menú ya dice el
+  // nombre: la etiqueta de la pieza quedaría debajo.
+  if (tienePieza(carro, id) && !seQuitaConUnToque(carro.piezas[id]) && hoja.abrirMenuDe(id, x, y)) return;
+  alternar(id);
   mostrarNombreDePieza(id, x, y);
 }
 
@@ -819,6 +828,17 @@ function alternar(id) {
   pintarHoja();
 }
 
+// Desmarcar desde la hoja (la × o el menú), ya confirmado si hacía falta. No pide que la
+// pieza esté en el 3D de ahora: una de adentro se ve en la lista aunque se esté mirando
+// un escaneo, y su × tiene que poder quitarla.
+function quitar(id) {
+  if (!quitarPieza(carro, id)) return;
+  tenir(id);
+  pedirCuadro();
+  persistir();
+  pintarHoja();
+}
+
 function fijar(id, estado) {
   if (!modelo.porId.has(id) || !fijarEstado(carro, id, estado)) return;
   tenir(id);
@@ -858,7 +878,7 @@ function carroceriaDeLasPiezas() {
 let carroceriaEnLaHoja = '';
 
 const hoja = crearHoja({
-  alAlternar: alternar,
+  alQuitar: quitar,
   alFijarEstado: fijar,
   alFijarTrabajo: fijarTrabajoDe,
   alAsignarPintor: asignarPintorDe,
@@ -1326,6 +1346,7 @@ window.__visor = {
   camara,
   depurar: () => ({ enMovimiento, dedos, animacionActiva: Boolean(animacionActiva), gesto: Boolean(gesto), controles: controles.enabled }),
   alternar,
+  quitar,
   fijar,
   fijarTrabajo: fijarTrabajoDe,
   asignarPintor: asignarPintorDe,

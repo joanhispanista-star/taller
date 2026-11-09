@@ -23,6 +23,7 @@ import {
   pagoDePieza,
   pesos,
   semanaDe,
+  textoParaQuitar,
 } from '../js/tablero.js';
 import { EMPLEADOS_DEMO, cargarDemo, carrosDemo, empleadosDemo } from '../js/demo.js';
 
@@ -138,6 +139,34 @@ test('la nómina semanal paga 90.000 por pieza terminada a su pintor, en la sema
   const retirado = crearEmpleado({ id: 'carlos', nombre: 'Carlos', activo: false });
   assert.equal(nominaSemanal([a], [retirado], semanaDe(HOY, -3)).filas.length, 0);
   assert.equal(nominaSemanal([a], [retirado], semanaDe(HOY, -1)).filas.length, 1);
+});
+
+// Lo que lee el dueño antes de quitar una pieza que ya es trabajo del taller: la plata,
+// con nombre y semana, y que no se puede deshacer. Antes no había pregunta: un toque y los
+// 90.000 se iban de la nómina.
+test('quitar una pieza dice cuánto sale de la nómina, de quién y de qué semana', () => {
+  const empleados = [CARLOS, crearEmpleado({ id: 'luis', nombre: 'Luis Pérez', activo: false })];
+  assert.equal(
+    textoParaQuitar('Capó', { estado: 'terminada', desde: dia(1), pintor: 'carlos' }, 'capo', empleados),
+    '¿Desmarcar Capó? Está terminada: salen $ 90.000 de la nómina de Carlos, semana del 12 oct al 18 oct. No se puede deshacer.',
+  );
+  // Un pintor retirado sigue cobrando lo que terminó: también sale de su nómina, y de la de su semana.
+  assert.match(textoParaQuitar('Techo', { estado: 'terminada', desde: dia(7), pintor: 'luis' }, 'techo', empleados), /salen \$ 90\.000 de la nómina de Luis Pérez, semana del 5 oct al 11 oct/);
+  // Terminada sin pintor (o con uno que se borró): no está en la nómina de nadie, y se dice.
+  for (const pintor of ['', 'borrado']) {
+    const texto = textoParaQuitar('Baúl', { estado: 'terminada', desde: dia(1), pintor }, 'baul', empleados);
+    assert.match(texto, /^¿Desmarcar Baúl\? Está terminada, sin pintor: no sale plata de la nómina/);
+    assert.doesNotMatch(texto, /\$/);
+  }
+  // Sin terminar todavía no paga: lo que se pierde es el estado y el pintor.
+  assert.equal(
+    textoParaQuitar('Techo', { estado: 'en-proceso', desde: dia(1), pintor: 'carlos' }, 'techo', empleados),
+    '¿Desmarcar Techo? Está en proceso, con Carlos. Todavía no paga nada: no sale plata de la nómina, pero se pierden su estado y su pintor. No se puede deshacer.',
+  );
+  assert.equal(
+    textoParaQuitar('Techo', { estado: 'en-proceso', desde: dia(1), pintor: '' }, 'techo', empleados),
+    '¿Desmarcar Techo? Está en proceso. Todavía no paga nada: no sale plata de la nómina, pero se pierde su estado. No se puede deshacer.',
+  );
 });
 
 test('el historial lista los entregados del más reciente al más viejo, con cobro, pagado y margen', () => {

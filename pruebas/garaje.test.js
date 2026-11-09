@@ -26,8 +26,10 @@ import {
   nombreDePiezaEnOrden,
   nombreDelCarro,
   piezasDelCarro,
+  quitarPieza,
   quitarTodas,
   resumen,
+  seQuitaConUnToque,
   serializarCarro,
   siguienteEstado,
   tienePieza,
@@ -153,6 +155,45 @@ test('alternarPieza marca como pendiente, quita, e ignora piezas inventadas', ()
   assert.deepEqual(carro.piezas, {});
 });
 
+// El defecto del 6-nov-2026: tocar en el 3D una pieza ya marcada, o la × de su renglón,
+// la borraba con su estado, su fecha y su pintor. Si estaba terminada, sus 90.000 pesos
+// se iban de la nómina sin que nadie lo notara. Un toque de más solo puede deshacer un
+// toque de menos: una pieza pendiente y sin pintor.
+test('un toque de más no borra plata: alternarPieza no quita una pieza en proceso, terminada o con pintor', () => {
+  const carro = crearCarro(
+    {
+      piezas: {
+        capo: { estado: 'terminada', desde: AHORA, pintor: 'emp-1' },
+        techo: { estado: 'en-proceso', desde: AHORA },
+        baul: { estado: 'pendiente', desde: AHORA, pintor: 'emp-1' },
+        'bomper-del': { estado: 'terminada', desde: AHORA },
+      },
+    },
+    AHORA,
+  );
+  const antes = structuredClone(carro.piezas);
+  for (const id of Object.keys(antes)) assert.equal(alternarPieza(carro, id, DESPUES), true, id + ' tiene que seguir marcada');
+  // Ni el estado, ni la fecha de cuándo se terminó, ni el pintor.
+  assert.deepEqual(carro.piezas, antes);
+});
+
+test('seQuitaConUnToque: solo una pieza pendiente y sin pintor', () => {
+  assert.equal(seQuitaConUnToque({ estado: 'pendiente', pintor: '' }), true);
+  assert.equal(seQuitaConUnToque({ estado: 'pendiente', pintor: '', trabajo: 'latoneria' }), true);
+  assert.equal(seQuitaConUnToque({ estado: 'pendiente', pintor: 'emp-1' }), false);
+  assert.equal(seQuitaConUnToque({ estado: 'en-proceso', pintor: '' }), false);
+  assert.equal(seQuitaConUnToque({ estado: 'terminada', pintor: '' }), false);
+  assert.equal(seQuitaConUnToque({ estado: 'terminada', pintor: 'emp-1' }), false);
+});
+
+test('quitarPieza quita cualquier pieza (es lo que corre después de confirmar)', () => {
+  const carro = crearCarro({ piezas: { capo: { estado: 'terminada', desde: AHORA, pintor: 'emp-1' } } }, AHORA);
+  assert.equal(quitarPieza(carro, 'capo'), true);
+  assert.equal(tienePieza(carro, 'capo'), false);
+  assert.equal(quitarPieza(carro, 'capo'), false);
+  assert.equal(quitarPieza(carro, 'ala-delta'), false);
+});
+
 test('fijarEstado cambia estado y fecha; marca la pieza si no estaba; rechaza lo inventado', () => {
   const carro = crearCarro({ piezas: { capo: { estado: 'pendiente', desde: AHORA } } }, AHORA);
   assert.equal(fijarEstado(carro, 'capo', 'en-proceso', DESPUES), true);
@@ -208,17 +249,32 @@ test('resumen cuenta por estado', () => {
   assert.deepEqual(resumen(crearCarro()), { total: 0, pendientes: 0, enProceso: 0, terminadas: 0, latoneria: 0 });
 });
 
-test('la orden para el asistente sale del carro del registro, con todas las piezas marcadas', () => {
+// El otro defecto del 6-nov-2026: la orden pedía pintar TODAS las piezas marcadas,
+// también las terminadas. El asistente que la sigue al pie de la letra pinta dos veces.
+test('la orden para el asistente pide solo lo que falta, y nombra aparte lo ya terminado', () => {
   const carro = crearCarro({
     placa: 'abc123',
     marca: 'Chevrolet Onix',
-    piezas: { techo: { estado: 'terminada' }, capo: { estado: 'en-proceso' } },
+    piezas: { techo: { estado: 'terminada' }, capo: { estado: 'en-proceso' }, 'bomper-del': { estado: 'pendiente' } },
   });
   const lineas = textoParaAsistente(estadoParaOrden(carro)).split(String.fromCharCode(10));
-  assert.equal(lineas[0], 'ORDEN DE PINTURA - Chevrolet Onix, placa ABC123');
-  assert.equal(lineas[1], '2 piezas para pintar:');
-  assert.equal(lineas[2], '1. Capó');
-  assert.equal(lineas[3], '2. Techo');
+  assert.deepEqual(lineas, [
+    'ORDEN DE PINTURA - Chevrolet Onix, placa ABC123',
+    '2 piezas para pintar:',
+    '1. Capó',
+    '2. Bómper delantero',
+    '',
+    'Ya terminada, no se pinta:',
+    '- Techo',
+    '',
+    'Enviado desde Taller de Pintura',
+  ]);
+  // Todo terminado: la orden no dice "0 piezas para pintar" ni pide nada.
+  const listo = crearCarro({ placa: 'abc123', piezas: { techo: { estado: 'terminada' }, capo: { estado: 'terminada' } } });
+  const deListo = textoParaAsistente(estadoParaOrden(listo)).split(String.fromCharCode(10));
+  assert.equal(deListo[1], 'Nada por pintar: las 2 piezas marcadas ya están terminadas.');
+  assert.deepEqual(deListo.slice(2, 6), ['', 'Ya terminadas, no se pintan:', '- Capó', '- Techo']);
+  assert.ok(!deListo.some((l) => /para pintar|^\d+\./.test(l)), deListo.join(' | '));
   // Con línea y versión, la orden dice el carro completo.
   const captiva = crearCarro({ placa: 'JRX248', marca: 'Chevrolet', linea: 'Captiva (nueva)', version: '5 puestos', piezas: { capo: {} } });
   assert.equal(textoParaAsistente(estadoParaOrden(captiva)).split(String.fromCharCode(10))[0], 'ORDEN DE PINTURA - Chevrolet Captiva (nueva) · 5 puestos, placa JRX248');

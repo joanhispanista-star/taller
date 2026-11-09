@@ -12,12 +12,19 @@ export const CLAVE_GUARDADO = 'taller-pintura:visor';
 // con los saltos rotos llega como un solo renglón.
 const NL = String.fromCharCode(10);
 
+// `seleccion` son las piezas para pintar; `terminadas`, las que ya están y la orden nombra
+// aparte para que el asistente no las pinte otra vez (ver estadoParaOrden en garaje.js).
 export function crearEstado(inicial = {}) {
   const ids = Array.isArray(inicial.seleccion) ? inicial.seleccion : [];
+  const listas = Array.isArray(inicial.terminadas) ? inicial.terminadas : [];
+  const seleccion = new Set(ids.filter((id) => PIEZAS_POR_ID.has(id)));
   return {
     placa: normalizarPlaca(inicial.placa),
     marca: typeof inicial.marca === 'string' ? inicial.marca.slice(0, 40) : '',
-    seleccion: new Set(ids.filter((id) => PIEZAS_POR_ID.has(id))),
+    seleccion,
+    // Una pieza no puede estar en las dos listas: si llegara así, manda la de pintar, que
+    // es la que pide trabajo y no se puede perder.
+    terminadas: new Set(listas.filter((id) => PIEZAS_POR_ID.has(id) && !seleccion.has(id))),
   };
 }
 
@@ -34,6 +41,7 @@ export function alternarPieza(estado, id) {
 
 export function limpiarSeleccion(estado) {
   estado.seleccion.clear();
+  estado.terminadas.clear();
 }
 
 // Cambiar a OTRA placa es cambiar de carro: las piezas marcadas y la marca
@@ -46,8 +54,9 @@ export function cambiarPlaca(estado, texto) {
   const otroCarro = estado.placa !== '' && nueva !== estado.placa;
   estado.placa = nueva;
   if (!otroCarro) return false;
-  const habiaAlgo = estado.seleccion.size > 0 || estado.marca !== '';
+  const habiaAlgo = estado.seleccion.size > 0 || estado.terminadas.size > 0 || estado.marca !== '';
   estado.seleccion.clear();
+  estado.terminadas.clear();
   estado.marca = '';
   return habiaAlgo;
 }
@@ -78,15 +87,24 @@ export function piezasSeleccionadas(estado) {
 // pieza 'baul' se llama compuerta); sin él, los nombres del catálogo.
 export function textoParaAsistente(estado, nombreDe = nombreDePieza) {
   const piezas = piezasSeleccionadas(estado);
+  const terminadas = estado.terminadas ? PIEZAS.filter((p) => estado.terminadas.has(p.id)) : [];
   const carro = [estado.marca.trim(), estado.placa ? 'placa ' + estado.placa : '']
     .filter(Boolean)
     .join(', ');
   const lineas = ['ORDEN DE PINTURA' + (carro ? ' - ' + carro : '')];
-  if (piezas.length === 0) {
+  if (piezas.length === 0 && terminadas.length === 0) {
     lineas.push('Sin piezas marcadas.');
+  } else if (piezas.length === 0) {
+    lineas.push(terminadas.length === 1 ? 'Nada por pintar: la pieza marcada ya está terminada.' : 'Nada por pintar: las ' + terminadas.length + ' piezas marcadas ya están terminadas.');
   } else {
     lineas.push(piezas.length === 1 ? '1 pieza para pintar:' : piezas.length + ' piezas para pintar:');
     piezas.forEach((p, i) => lineas.push(i + 1 + '. ' + nombreDe(p.id)));
+  }
+  // Con guion y no con número: lo numerado es lo que hay que hacer, y así no se cuenta
+  // de más. Van nombradas para que el asistente vea que no se olvidaron, sino que ya están.
+  if (terminadas.length > 0) {
+    lineas.push('', terminadas.length === 1 ? 'Ya terminada, no se pinta:' : 'Ya terminadas, no se pintan:');
+    for (const p of terminadas) lineas.push('- ' + nombreDe(p.id));
   }
   lineas.push('', 'Enviado desde Taller de Pintura');
   return lineas.join(NL);
@@ -97,6 +115,7 @@ export function serializar(estado) {
     placa: estado.placa,
     marca: estado.marca,
     seleccion: [...estado.seleccion],
+    terminadas: [...estado.terminadas],
   });
 }
 

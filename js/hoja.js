@@ -4,8 +4,9 @@
 // Es DOM puro, sin Three.js. El visor le dice qué carro y qué fotos hay
 // (pintar) y ella avisa por las acciones cuando la persona toca algo. Así
 // visor.js se queda con la escena y esto se lee aparte.
-import { ESTADOS, NOMBRE_ESTADO, NOMBRE_TRABAJO, PIEZA_CARRO, TRABAJOS, fechaCorta, piezasDelCarro } from './garaje.js';
+import { ESTADOS, NOMBRE_ESTADO, NOMBRE_TRABAJO, PIEZA_CARRO, TRABAJOS, fechaCorta, piezasDelCarro, seQuitaConUnToque } from './garaje.js';
 import { nombreDePiezaEn } from './carrocerias.js';
+import { textoParaQuitar } from './tablero.js';
 
 // Un icono propio y no un emoji: el emoji de cámara cambia de dibujo (y de
 // tamaño) entre Android, iPhone y Windows, y en algunos teléfonos viejos
@@ -45,7 +46,7 @@ function boton(clase, texto, etiqueta) {
   return b;
 }
 
-// acciones: { alAlternar(id), alFijarEstado(id, estado), alAgregarFoto(id, archivo), alBorrarFoto(idFoto) }
+// acciones: { alQuitar(id), alFijarEstado(id, estado), alFijarTrabajo(id, trabajo), alAsignarPintor(id, pintor), alAgregarFoto(id, archivo), alBorrarFoto(idFoto) }
 export function crearHoja(acciones) {
   const ui = {
     contador: document.getElementById('contador'),
@@ -72,6 +73,7 @@ export function crearHoja(acciones) {
   let piezaDelMenu = null;
   let carroceria = ''; // la del carro que se está pintando, para los nombres
   let empleados = []; // los del taller, para asignar pintor desde el menú
+  let pintadas = new Map(); // las piezas de los chips, por id: el menú se abre también desde el carro
 
   function nombreDePintor(id) {
     const e = empleados.find((x) => x.id === id);
@@ -86,6 +88,7 @@ export function crearHoja(acciones) {
     carroceria = deLasPiezas ?? (carro.carroceria || '');
     empleados = lista;
     const piezas = piezasDelCarro(carro).map((p) => ({ ...p, nombre: nombreDe(carroceria, p.id) }));
+    pintadas = new Map(piezas.map((p) => [p.id, p]));
     const porPieza = new Map();
     for (const f of fotos) porPieza.set(f.pieza, (porPieza.get(f.pieza) || 0) + 1);
 
@@ -148,20 +151,44 @@ export function crearHoja(acciones) {
       ui.camara.click();
     });
 
-    const quitar = boton('chip-quitar', '×', 'Quitar ' + pieza.nombre);
-    quitar.addEventListener('click', () => acciones.alAlternar(pieza.id));
+    const quitar = boton('chip-quitar', '×', 'Desmarcar ' + pieza.nombre);
+    quitar.addEventListener('click', () => desmarcar(pieza));
 
     item.append(estado, camara, quitar);
     return item;
   }
 
+  // La × del renglón y «Desmarcar…» del menú siguen la misma regla que el toque en el
+  // carro (seQuitaConUnToque, en garaje.js): sin trabajo encima se va de una; con trabajo,
+  // primero la pregunta que dice cuánto sale de la nómina y de quién. Hasta el 9-nov-2026
+  // la × borraba una pieza terminada sin preguntar, y con ella sus 90.000 pesos.
+  function desmarcar(pieza) {
+    if (!seQuitaConUnToque(pieza) && !confirm(textoParaQuitar(pieza.nombre, pieza, pieza.id, empleados))) return;
+    acciones.alQuitar(pieza.id);
+  }
+
   // ---------- Menú de estado ----------
 
-  function abrirMenu(pieza, ancla) {
+  // `ancla`: el chip, o el punto del carro donde cayó el dedo (`enElCarro`). Desde el carro
+  // el menú sale centrado sobre el dedo: ahí está mirando la persona, y el chip puede estar
+  // fuera de la vista, abajo en la lista. Por eso el menú dice arriba de qué pieza es.
+  function abrirMenu(pieza, ancla, { enElCarro = false } = {}) {
     piezaDelMenu = pieza.id;
     const separador = document.createElement('hr');
     separador.className = 'menu-separador';
+    const titulo = document.createElement('p');
+    titulo.className = 'menu-titulo';
+    titulo.textContent = pieza.nombre;
+    // Con puntos suspensivos solo cuando va a preguntar: así se sabe antes de tocarlo.
+    const conPregunta = !seQuitaConUnToque(pieza);
+    const quitar = boton('menu-desmarcar', conPregunta ? 'Desmarcar…' : 'Desmarcar', 'Desmarcar ' + pieza.nombre);
+    quitar.setAttribute('role', 'menuitem');
+    quitar.addEventListener('click', () => {
+      cerrarMenu();
+      desmarcar(pieza);
+    });
     ui.menu.replaceChildren(
+      titulo,
       ...ESTADOS.map((estado) => {
         const opcion = boton('estado-' + estado, NOMBRE_ESTADO[estado], NOMBRE_ESTADO[estado]);
         opcion.setAttribute('role', 'menuitemradio');
@@ -186,19 +213,36 @@ export function crearHoja(acciones) {
         return opcion;
       }),
       separador.cloneNode(),
-      // Y al final, quién la pinta: los empleados activos (más el asignado,
+      // Quién la pinta: los empleados activos (más el asignado,
       // aunque esté retirado, para que no desaparezca de la vista).
       ...opcionesDePintor(pieza),
+      separador.cloneNode(),
+      // Y lo último, lejos de lo que se toca a diario: desmarcarla.
+      quitar,
     );
     ui.menu.hidden = false;
-    // Encima del chip; si arriba no cabe, debajo. Y nunca por fuera de la
-    // pantalla: el chip puede estar pegado al borde derecho.
-    const r = ancla.getBoundingClientRect();
+    // Encima del ancla; si arriba no cabe, debajo. Y nunca por fuera de la
+    // pantalla: el chip puede estar pegado al borde derecho, y desde el carro
+    // el dedo puede caer a media pantalla, donde el menú no cabe ni arriba ni
+    // abajo entero (con tres pintores mide unos 480 px).
+    const r = ancla.getBoundingClientRect ? ancla.getBoundingClientRect() : ancla;
     const m = ui.menu.getBoundingClientRect();
-    const x = Math.max(8, Math.min(r.left, window.innerWidth - m.width - 8));
+    const izquierda = enElCarro ? r.left - m.width / 2 : r.left;
+    const x = Math.max(8, Math.min(izquierda, window.innerWidth - m.width - 8));
     const arriba = r.top - m.height - 6;
+    const y = arriba >= 8 ? arriba : r.bottom + 6;
     ui.menu.style.left = x + 'px';
-    ui.menu.style.top = (arriba >= 8 ? arriba : r.bottom + 6) + 'px';
+    ui.menu.style.top = Math.max(8, Math.min(y, window.innerHeight - m.height - 8)) + 'px';
+  }
+
+  // El menú de una pieza marcada, desde el carro: el visor lo abre cuando el dedo cae en
+  // una pieza que ya es trabajo del taller, en vez de desmarcarla. `x`, `y`: donde cayó
+  // el dedo, en la ventana. Devuelve false si esa pieza no está en la lista.
+  function abrirMenuDe(id, x, y) {
+    const pieza = pintadas.get(id);
+    if (!pieza) return false;
+    abrirMenu(pieza, { left: x, top: y, bottom: y }, { enElCarro: true });
+    return true;
   }
 
   function opcionesDePintor(pieza) {
@@ -324,5 +368,5 @@ export function crearHoja(acciones) {
     ui.aviso.hidden = !texto;
   }
 
-  return { pintar, avisar };
+  return { pintar, avisar, abrirMenuDe };
 }
