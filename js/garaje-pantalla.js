@@ -12,17 +12,18 @@ import { CARROCERIAS, normalizarCarroceria } from './carrocerias.js';
 import { catalogoOrdenado, datosDeEntrada, entradaEscrita, entradaExacta, familiaDe, marcaDelCatalogo, mejorDeFamilia, nombreDeLinea } from './catalogo.js';
 import { colorDeFoto, nombreDeColor } from './color-foto.js';
 import { reducirFoto } from './fotos.js';
-import { cargarDemo, estadoDemo } from './demo.js';
+import { cargarDemo, estadoDemo, ofertaDeLaDemo, quitarLaDemostracion } from './demo.js';
 import { pesos } from './tablero.js';
 import { logoQueQueda, puntoEnFoto } from './logo.js';
 import { zonaDelLogo } from './placa-foto.js';
 import { versionInstalada } from './instalable.js';
-import { colorQueSeVe } from './modelos-catalogo.js';
+import { colorElegido, colorQueSeVe, hexDeColor, miniaturaDelCarro, modeloQueLeToca } from './modelos-catalogo.js';
 
 const ui = {
   demo: document.getElementById('demo'),
   demoTexto: document.getElementById('demo-texto'),
   demoBoton: document.getElementById('demo-boton'),
+  demoQuitar: document.getElementById('demo-quitar'),
   formulario: document.getElementById('registro'),
   placa: document.getElementById('placa'),
   marca: document.getElementById('marca'),
@@ -118,6 +119,7 @@ function cuenta(estado, n, singular, plural) {
 }
 
 let urlsPortadas = [];
+const comoPorPlaca = new Map(); // el renglón "3D de verdad / carrocería de referencia" de cada fila, para cuando llegue lo de los escaneos
 
 function fila(carro) {
   const item = document.createElement('li');
@@ -126,11 +128,31 @@ function fila(carro) {
   enlace.className = 'carro';
   enlace.href = enlaceAlVisor(carro.placa);
 
-  // La foto del carro (si la hay) o un cuadro con su color.
+  // La foto del carro, si la hay (la de "Nuevo carro con foto", o la que sacó la app de su propio escaneo). Si no, y su
+  // línea trae modelo (la Captiva), la miniatura del modelo, que es lo que se ve al abrirlo: un cuadro café al lado de
+  // "Captiva" no decía nada. Y si tampoco, un cuadro con su color. La foto de verdad siempre manda: llega después, del
+  // registro, y reemplaza lo que haya.
   const portada = document.createElement('div');
   portada.className = 'carro-portada';
   const color = colorQueSeVe(carro);
-  if (color) portada.style.background = color;
+  const miniatura = miniaturaDelCarro(carro);
+  if (miniatura) {
+    const imagen = document.createElement('img');
+    imagen.src = miniatura;
+    imagen.alt = '';
+    portada.append(imagen);
+    // La miniatura está en el color del modelo (café). Con otro color elegido, el 3D sale en ese color y la miniatura no:
+    // un punto con el color de verdad, para que la foto no diga otro color que el renglón de al lado.
+    const elegido = colorElegido(carro);
+    if (elegido && elegido.toLowerCase() !== hexDeColor(modeloQueLeToca(carro).colorFoto)) {
+      const punto = document.createElement('b');
+      punto.className = 'portada-color';
+      punto.style.background = elegido;
+      portada.append(punto);
+    }
+  } else if (color) {
+    portada.style.background = color;
+  }
   if (almacen) {
     almacen.portada(carro.placa).then((foto) => {
       if (!foto) return;
@@ -188,7 +210,19 @@ function fila(carro) {
     cuentas.append(cobro);
   }
 
-  enlace.append(portada, placa, fecha, descripcion, cuentas);
+  // Cómo sale al abrirlo: en 3D de verdad (el modelo de su línea), con su propio escaneo, o con la carrocería de referencia.
+  // Joan pidió carros "reales, no carritos de juguete", y de la demostración solo DEM006 tiene modelo: sin esto, 5 de 6 filas
+  // prometían lo mismo y abrían la carrocería de cajas (revisión del 9-nov). El escaneo vive en otra base y llega después
+  // (marcarComoSeVe); hasta saberlo, un carro sin modelo no dice nada.
+  const como = document.createElement('span');
+  como.className = 'carro-3d';
+  comoPorPlaca.set(carro.placa, como);
+  if (modeloQueLeToca(carro)) {
+    como.textContent = '3D de verdad';
+    como.className = 'carro-3d de-verdad';
+  }
+
+  enlace.append(portada, placa, fecha, descripcion, cuentas, como);
 
   const borrar = document.createElement('button');
   borrar.type = 'button';
@@ -209,45 +243,58 @@ async function pintar() {
   urlsPortadas = [];
   const carros = await almacen.listar();
   ui.vacio.hidden = carros.length > 0;
+  comoPorPlaca.clear();
   ui.lista.replaceChildren(...carros.map(fila));
+  marcarComoSeVe(carros);
   await pintarDemo();
+}
+
+// Lo que no se sabe sin la base de los escaneos: si el carro tiene el suyo, que manda sobre el modelo de la línea
+// (escaneo-pantalla.js). Si esa base no contesta en 3 s, los carros sin modelo se quedan sin decir nada: no se sabe.
+async function marcarComoSeVe(lista) {
+  let escaneos = null;
+  let placas;
+  try {
+    escaneos = await Promise.race([import('./escaneos.js').then((m) => m.abrirEscaneos()), new Promise((_, no) => setTimeout(() => no(new Error('tarde')), 3000))]);
+    placas = new Set(await escaneos.placas());
+  } catch {
+    return;
+  } finally {
+    if (escaneos) escaneos.cerrar();
+  }
+  for (const carro of lista) {
+    const como = comoPorPlaca.get(carro.placa);
+    if (!como) continue;
+    if (placas.has(carro.placa)) {
+      como.textContent = 'Con su propio escaneo';
+      como.className = 'carro-3d de-verdad';
+    } else if (!modeloQueLeToca(carro)) {
+      como.textContent = 'Carrocería de referencia';
+    }
+  }
 }
 
 // ---------- Demostración ----------
 
+// Se ofrece siempre, también debajo de carros reales: lo decidió Joan el 15-oct ("ya tiene su Captiva y aun así quiere ver
+// los carros demo al lado") y lo volvió a pedir el 9-nov. Del 5 al 9-nov solo salía con el Garaje vacío, por una revisión
+// (db72438), y con su JPX248 en el teléfono no veía nada distinto. El texto dice cuáles salen en 3D de verdad (ofertaDeLaDemo).
 async function pintarDemo() {
-  const estado = await estadoDemo(almacen);
-  if (estado.carros + estado.empleados > 0) {
-    ui.demoTexto.textContent = 'Los carros marcados «demo» son de demostración (' + estado.carros + '), con sus empleados (' + estado.empleados + '). Lo real no se toca al quitarlos.';
-    ui.demoBoton.textContent = 'Quitar la demostración';
-    ui.demoBoton.dataset.accion = 'quitar';
-    ui.demo.hidden = false;
-  } else {
-    ui.demoTexto.textContent = 'Para ver la app con algo adentro puedes cargar 5 carros de demostración (marcas y colores distintos, con piezas arregladas y en reparación) y 3 empleados.';
-    ui.demoBoton.textContent = 'Cargar demostración';
-    ui.demoBoton.dataset.accion = 'cargar';
-    // Solo con el Garaje vacío: debajo de un carro real, "demostración" hace dudar.
-    ui.demo.hidden = (await almacen.listar()).length > 0;
-  }
+  const oferta = ofertaDeLaDemo(await estadoDemo(almacen));
+  ui.demoTexto.textContent = oferta.texto;
+  ui.demoBoton.textContent = oferta.boton;
+  ui.demoBoton.dataset.accion = oferta.accion;
+  ui.demoQuitar.hidden = !oferta.quitarAparte;
+  ui.demo.hidden = false;
 }
 
-ui.demoBoton.addEventListener('click', async () => {
+async function demoHacer(accion, boton) {
   if (!almacen) return;
-  ui.demoBoton.disabled = true;
+  boton.disabled = true;
   try {
-    if (ui.demoBoton.dataset.accion === 'quitar') {
+    if (accion === 'quitar') {
       if (!confirm('¿Quitar los carros y empleados de demostración? Lo real se queda.')) return;
-      // Los escaneos viven en otra base (escaneos.js): los de los carros de
-      // demostración se van con ellos; si se quedaran, volverían pegados al
-      // mismo DEM00x al cargar la demostración otra vez.
-      const placasDemo = (await almacen.listar()).filter((c) => c.demo).map((c) => c.placa);
-      await almacen.quitarDemo();
-      import('./escaneos.js')
-        .then(({ abrirEscaneos }) => abrirEscaneos())
-        .then(async (escaneos) => {
-          for (const placa of placasDemo) await escaneos.borrar(placa);
-        })
-        .catch(() => {});
+      await quitarLaDemostracion(almacen);
     } else {
       await cargarDemo(almacen);
     }
@@ -255,9 +302,12 @@ ui.demoBoton.addEventListener('click', async () => {
   } catch (e) {
     avisar('No se pudo: ' + mensajeParaLaPantalla(e, 'vuelve a intentarlo.'));
   } finally {
-    ui.demoBoton.disabled = false;
+    boton.disabled = false;
   }
-});
+}
+
+ui.demoBoton.addEventListener('click', () => demoHacer(ui.demoBoton.dataset.accion, ui.demoBoton));
+ui.demoQuitar.addEventListener('click', () => demoHacer('quitar', ui.demoQuitar));
 
 async function borrarCarro(placa) {
   if (!confirm('¿Borrar el carro ' + placa + ' con sus piezas y sus fotos? No se puede deshacer.')) return;

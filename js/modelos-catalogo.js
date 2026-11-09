@@ -28,6 +28,12 @@ export const MODELOS = [
     archivo: 'modelos/chevrolet-captiva-2020-v2.glb',
     // Con dos decimales: el letrero redondea, y 4,46 MB no son "5 MB", que es lo que salía de 4,5.
     megas: 4.46,
+    // Las que se pueden tocar y van a la orden: las 17 de afuera. Lo dice la pestaña Vehículos, y una prueba la cuenta en el archivo.
+    piezas: 17,
+    // La foto de la tarjeta en la pestaña Vehículos y la portada en el Garaje de un carro de esta línea sin foto propia. Sacada
+    // de la app misma (Edge sin ventana, vista Inicio, sin color elegido, placa de muestra DEM006), con el nombre del GLB:
+    // un modelo nuevo es una foto nueva. Va en vehiculos/, que SÍ entra a la precarga, para que la pestaña abra sin señal.
+    miniatura: 'vehiculos/chevrolet-captiva-2020-v2.jpg',
     // Del archivo, comprobado al bajarlo y al sacarlo de la caché: uno dañado por dentro mide lo mismo y empieza igual, y se
     // quedaría roto para siempre. También es lo que hace llegar un GLB corregido que se publique con el mismo nombre.
     sha256: 'c9739044ccf54cf7c0ea3bc3858b85b95cee338ab6f1e3e406f7df6dac726d9c',
@@ -59,6 +65,12 @@ export const MODELOS = [
     },
   },
 ];
+
+// Los modelos que alguien está haciendo de verdad, para la sección "Los que siguen" de la pestaña Vehículos:
+// { nombre: 'Renault Logan II 2019', de: 'fotos de ...' }. Hoy no hay ninguno, y con la tabla vacía la pestaña no muestra
+// esa sección: anunciar carros "en camino" que nadie está haciendo es prometer lo que la app no va a cumplir. Se agrega
+// aquí cuando la tubería ya esté corriendo con sus fotos, y se quita al pasar a MODELOS.
+export const MODELOS_EN_OBRA = [];
 
 // La entrada de la tabla para la línea de este carro, o null. Sin tildes ni mayúsculas, como el catálogo. Por el nombre
 // entero y no campo por campo: el formulario por placa del Garaje guarda lo que se escriba como marca
@@ -166,6 +178,34 @@ export function creditoDeCatalogo(catalogo) {
 // elegir dejaba a quien escribió eso con el carro de cajas y este texto al lado. "Tiene" y no "ya trae": se baja al abrirlo.
 export function textoDeLaLista(modelos = MODELOS) {
   return 'La app tiene el modelo de: ' + modelos.map((m) => m.nombre + ' (en Datos del carro, línea «' + m.marca + ' ' + m.linea + '»)').join(', ') + '. Se baja la primera vez que se abre esa línea. Para las demás líneas se ve la carrocería de referencia hasta que se escanee ese carro.';
+}
+
+// "4,5 MB", con coma, como se escribe aquí. Un decimal basta para decidir si bajarlo con datos del celular.
+export function textoDeMegas(megas) {
+  return String(Math.round(megas * 10) / 10).replace('.', ',') + ' MB';
+}
+
+// Lo que dice la tarjeta de un modelo en la pestaña Vehículos. Todo sale de la tabla y del catálogo, para que un modelo
+// nuevo no pida tocar la pantalla. Sin "escaneado": está hecho con fotos de otro carro de la línea, y la pestaña lo dice.
+// `uso` lleva al botón «Usar en un carro» y no a Datos del carro: hasta el 9-nov decía "toca «Datos del carro» y elige la
+// línea", y en un carro creado como "Chevrolet Captiva" ese botón lleva el nombre del carro, y escribir la línea como la
+// sugiere el campo dejaba "Chevrolet Captiva Captiva (nueva)", con la carrocería de cajas (revisión del 9-nov).
+export function textosDeLaTarjeta(modelo) {
+  const anos = anosDelModelo(modelo);
+  const linea = modelo.marca + ' ' + modelo.linea;
+  return {
+    nombre: modelo.nombre,
+    linea,
+    detalle: ['Para ' + modelo.corto + (anos ? ' ' + anos : ''), modelo.piezas + ' piezas', textoDeMegas(modelo.megas) + ' la primera vez'].join(' · '),
+    uso: 'En un carro del taller: toca «Usar en un carro» y elígelo. Le pone la línea «' + linea + '», y ' + modelo.corto + ' sale sola en ese carro.' + (modelo.aviso ? ' ' + modelo.aviso : ''),
+  };
+}
+
+// La miniatura que va de portada en el Garaje para un carro sin foto propia: la del modelo que le toca, o '' si no le toca
+// ninguno (otra línea, o la persona pidió la carrocería de referencia para él; entonces la miniatura no sería su carro).
+export function miniaturaDelCarro(carro) {
+  const modelo = modeloQueLeToca(carro);
+  return (modelo && modelo.miniatura) || '';
 }
 
 // ---- Bajarlo una vez ----

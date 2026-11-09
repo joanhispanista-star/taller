@@ -17,8 +17,9 @@ SUV, camioneta de platón) y un catálogo de los carros que ruedan en Colombia.
 Y adelantada la del 26 (sin la nube): **Empleados** con la nómina de la
 semana (pintor por pieza, 90.000 por pieza terminada), **Historial** de carros
 entregados con lo cobrado, e **Indicadores** para el dueño, en
-`tablero.html`; con una demostración (5 carros, 3 empleados) que se carga
-y se quita en bloque.
+`tablero.html`; con una demostración (desde el 9-nov, 6 carros y 3 empleados) que se carga
+y se quita en bloque. Y desde el 9 de noviembre, la pestaña **Vehículos**: los carros
+que la app tiene en 3D de verdad (hoy, la Captiva), con "Ver en 3D".
 
 ## Lo que NO va a hacer esta app, y por qué
 
@@ -144,6 +145,120 @@ media puerta quedaba como "nada" y el estribo era una franja enorme. Ahora:
   luz entre dos latas. El toque del dedo las atraviesa (un rayo de Three.js
   "toca" una línea a un metro por defecto, y tapaban las piezas).
 
+**El 9 de noviembre, la pestaña Vehículos.** Joan abrió en su iPhone `probar-carro.html?placa=JPX248` y no vio la camioneta "por ningún
+lado": "quiero tener varios vehículos en la app ya escaneados con una pestaña de vehículos, y algunos en el Garaje como demo de prueba,
+que sean reales, no carritos de juguete". Dos causas posibles, y desde aquí no se puede ver cuál fue: en ese almacén del teléfono JPX248
+no existía o no tenía la línea (Safari y la app instalada en la pantalla de inicio guardan aparte, y el enlace crea un JPX248 vacío, que
+sale con la carrocería de referencia), o el enlace entró a los 40 s a la versión vieja, que no conoce la Captiva. Lo que entró, sin publicar:
+
+- **La pestaña Vehículos** (`tablero.html?p=vehiculos`), segunda en la barra: Garaje, Vehículos, Empleados, Historial, Indicadores. Vive
+  en el tablero y no en una página nueva: ya está en la precarga, ya abre el registro (para crear el carro de "Ver en 3D") y ya tiene el
+  bloque de la demostración. Sale de la tabla `MODELOS`, una tarjeta por entrada: la miniatura, "En 3D de verdad", el nombre, para qué
+  años (`anosDelModelo`), cuántas piezas (`piezas`) y cuánto baja la primera vez (`megas`), "Ver en 3D", "Usar en un carro" (ver la
+  revisión de abajo; el `aviso` de la línea va en el texto), y el crédito de las fotos: la miniatura sale de ellas, que son CC BY.
+  Al final, que las otras 1.136 líneas del catálogo se ven con la carrocería de referencia y que para un carro exacto se escanea. No dice
+  "escaneado" en ningún lado: el modelo está hecho con fotos de otro carro de la línea, y la pestaña lo dice. Dice "tiene" y no "ya trae":
+  se baja al abrirlo. "Los que siguen" sale solo de `MODELOS_EN_OBRA` (`js/modelos-catalogo.js`), que hoy está vacía, y con la tabla vacía
+  no se muestra: no se anuncian carros que nadie está haciendo.
+- **"Ver en 3D" abre DEM006**, la Captiva de la demostración (`js/demo.js`): línea "Chevrolet Captiva (nueva)" con los datos del
+  catálogo, sin color elegido (o sea el café de las fotos, y así lo nombra el Garaje), capó en proceso, puerta delantera derecha pendiente
+  con latonería y guardafango delantero derecho pendiente. Si no está en este teléfono, crea solo ese carro (`asegurarCarroDeMuestra`): ni
+  el resto de la demostración ni sus empleados, y nada real. Así se ve el modelo sin depender de cómo esté guardado JPX248. Si ya está, no
+  lo pisa; si es de demostración pero le cambiaron la línea o le pidieron la carrocería de referencia, se la devuelve, con sus piezas; un
+  carro real con esa placa no se toca. Sin registro va de borrador (`taller-pintura:visor`), que es de donde lee el visor, y abre igual.
+  El carro de cada modelo se busca por la línea (`carroDeMuestra`), no con una placa en la tabla: así no se pueden desencontrar, y una
+  prueba exige que cada modelo tenga el suyo. **DEM006 no trae ninguna pieza terminada ni ningún pintor, a propósito**: creado solo, sin
+  los empleados de la demostración, una terminada saldría en Empleados como "terminada sin pintor asignado", plata que nadie va a cobrar
+  (lo del pintor, en la revisión de abajo).
+- **La demostración a medias.** Con DEM006 solo, el Garaje y el tablero lo dicen ("Hay 1 carro de demostración (el marcado «demo»).
+  Puedes cargar los otros: 5 carros y 3 empleados (esos carros se ven con la carrocería de referencia, no en 3D de verdad)") y ofrecen
+  "Cargar el resto" y "Quitar la demostración" (`ofertaDeLaDemo`, igual en las dos
+  pantallas). Entera son 6 carros y 3 empleados. Quitarla (`quitarLaDemostracion`) se lleva también los escaneos de esas placas y el
+  borrador del visor si era de un carro de demostración: antes, abrir el visor sin placa volvía a crear el último que se abrió, ya quitado.
+- **La portada en el Garaje.** Un carro sin foto propia al que le toca un modelo (DEM006, y JPX248 si tiene la línea) muestra la miniatura
+  del modelo y no el cuadro de color (`miniaturaDelCarro`). La foto de verdad sigue mandando, y también la que la app sacó del escaneo de
+  ESE carro. Con otro color elegido, un punto de ese color va encima: la miniatura es café y el 3D sale en el color del carro. Con la
+  carrocería de referencia pedida para ese carro, o con "Chevrolet Captiva" a secas (puede ser la de 2007 a 2018), no hay miniatura. En
+  el Historial y en Indicadores sigue el cuadro de color.
+- **La miniatura** (`vehiculos/chevrolet-captiva-2020-v2.jpg`, 700 x 380, 23 KB) la sacó la app misma, con Edge sin ventana: DEM006 sin
+  piezas marcadas, sin color elegido, vista Inicio, solo el lienzo, a escala 2 y reducida a la mitad con `sharp`
+  (`pruebas/datos-externos/diseno-escaneo/probar-vehiculos.mjs miniatura`, fuera de git). La placa que se ve es DEM006, la de muestra.
+  Va en `vehiculos/`, que sí entra a la precarga (`sellar-version.mjs`), y no en `modelos/`, que se queda fuera por los 4,5 MB del GLB.
+  Lleva el nombre del GLB: un modelo nuevo pide una miniatura nueva. Y el sello trata los `.jpg` como bytes: pasados por texto, dos JPEG
+  distintos podían dar la misma huella, y los teléfonos no se enterarían de la miniatura nueva.
+- **El enlace de prueba ya no entra a la versión vieja.** `probar-carro.html` entraba a los 40 s con lo que hubiera. Ahora, si la versión
+  nueva no ha terminado de bajar a los 12 s, lo dice ("Todavía está bajando la versión nueva (lleva 12 s). La señal está lenta: sigo
+  esperando, y entro solo cuando termine"), sigue esperando y ofrece "Entrar igual", que dice que puede abrir una versión anterior sin el
+  carro nuevo ni la Captiva. Si la instalación se cae a mitad (`redundant`) ya no lo toma por "está al día": lo dice y ofrece "Intentar otra
+  vez". Con la versión al día entra de una.
+- **Cinco pestañas en 320 px.** De 360 px de ancho para abajo van a 12 px; a 13 px suman unos 325 px de letra.
+- **Medido** con Edge sin ventana a 390 x 844 (`probar-vehiculos.mjs`, etapas `limpio`, `demo`, `sinred`, `enlace`, `angosto`, `recorte`;
+  pantallazos en `pruebas/datos-externos/diseno-escaneo/pantallazos/vehiculos-app-*.png`). Un perfil limpio abre la pestaña tocándola en
+  el Garaje, toca "Ver en 3D" y ve la Captiva en 2,0 y 4,2 s (dos corridas, con la bajada de 4,46 MB desde este mismo PC); el registro
+  queda con DEM006 y nada más; las 17 piezas tienen un punto donde el dedo cae en ellas en alguna de las cinco vistas, y con un clic de
+  verdad se marca el techo. Con un carro real (REA123, con su capó marcado): DEM006 solo, quitarlo con el segundo botón, DEM006 otra vez,
+  "Cargar el resto" (6 carros y 3 empleados), Indicadores con 4 en el taller (DEM003, DEM004, DEM006 y el real), Historial con los 3
+  entregados, ningún DEM006 "sin pintor", y "Quitar la demostración" deja solo REA123 tal cual; el visor sin placa ya no la vuelve a crear.
+  Sin señal (el servidor cortando todo) la pestaña abre con su imagen, de la precarga. El enlace: al día entra en 1 a 2,5 s; con un
+  archivo de la precarga que tarda 50 s, a los 46 s sigue esperando y entra solo a los 52 s, con la versión nueva; con uno que da 404, lo
+  dice y no entra. Las cinco pestañas caben en 320, 360 y 390 px.
+- **Lo que falta.** **Nada de esto ha corrido en un iPhone**, y desde este PC no se puede. **Sigue habiendo un solo modelo**: los otros
+  cinco carros de la demostración se ven con la carrocería de referencia, que es lo que Joan llama de juguete, y desde la revisión de abajo
+  la app lo dice en el bloque de la demostración y en cada fila del Garaje; cada modelo más es trabajo de la tubería
+  (`fg-trabajo/captiva/foto2`) con fotos libres de esa línea. No se sabe cuál de las dos causas le pasó a Joan; el enlace que hay que
+  mandarle ahora es `tablero.html?p=vehiculos`, y el viejo de JPX248 también sirve: si JPX248 no se vería, cae en Vehículos y lo explica.
+  Y antes de publicar, `npm run sellar` (en una copia sellada fuera del repo, la precarga quedó en 3,61 MiB de un tope de 4 MiB, con
+  `instalable.test.js` en 12 de 12).
+
+**El 9 de noviembre, la revisión de la pestaña Vehículos.** Dos revisores la corrieron en Edge sin ventana, servida como en producción.
+Lo que encontraron, reproducido antes de tocar nada (`probar-vehiculos.mjs repro`, `reproreal viejo`, y `reproducir.mjs` en Node), y
+cómo quedó:
+
+- **El enlace de JPX248 seguía mostrando el carro de cajas** en un teléfono donde JPX248 no existía: entraba al visor con la placa, el
+  visor la creaba vacía, y desde ahí siempre salía vacía. Ahora `probar-carro.html`, ya con la versión nueva, le pregunta al registro
+  (`js/enlace-prueba.js`, `porQueNoSeVeria`): si la placa no está, está vacía o dice "Chevrolet Captiva" sin el año, entra a
+  `tablero.html?p=vehiculos&placa=JPX248`, que dice por qué en una línea ("En este celular no hay ningún carro JPX248, y por eso el
+  enlace mostraba el carro de siempre (Safari y la app de la pantalla de inicio guardan los carros aparte)") y deja abierta la lista
+  para crear JPX248 con la Captiva o ponérsela. Un carro con sus datos y sin modelo (un Logan) entra al visor como antes: eso es lo que
+  el enlace sirve para probar. Si el registro no contesta en 4 s, entra al de siempre. «Entrar igual» nunca le pregunta a la versión que
+  haya: puede ser una vieja sin la pestaña. Y no crea ningún carro.
+- **Con DEM006 solo en un taller real, su capó se le pagaba a una pintora real.** DEM006 traía pintores de la demostración que ahí no
+  existían; el menú del capó solo ofrecía a los reales, y un toque en Terminada más asignárselo a Marta sumaba 90.000 a su nómina, sin
+  marca (medido en Edge: "$ 90.000 · Marta Díaz · DEM006 Capó"). Ahora DEM006 no trae pintores; `nominaSemanal` no le paga a nadie real
+  una pieza de un carro de demostración, ni la lista "sin pintor" (solo cuenta para un empleado de demostración); y en un carro de
+  demostración el menú solo ofrece a los de la demostración, o "Pintor: carga los de la demostración", que lleva a Empleados.
+- **Con un carro del taller de placa DEM006, "Ver en 3D" abría ese carro** (un Fiat, con la carrocería de referencia) mientras la tarjeta
+  prometía uno de demostración. Ahora no navega y lo dice arriba: "Ya hay un carro del taller con la placa DEM006, que es la de la
+  muestra de la Captiva: no se abre, para no tocar ese carro. Para verla en uno tuyo, toca «Usar en un carro»".
+- **De los 6 carros de la demostración, 5 abren de cajas, y nada lo decía.** El bloque de la demostración ahora lo dice (`comoSeVen`:
+  "1 en 3D de verdad (la Captiva) y 5 con la carrocería de referencia"), y cada fila del Garaje dice cómo sale al abrirla: "3D de
+  verdad", "Con su propio escaneo" o "Carrocería de referencia" (el escaneo vive en otra base, `escaneos.js`, y llega aparte; si esa base
+  no contesta en 3 s, un carro sin modelo no dice nada). El pedido de Joan, varios carros reales, sigue en 1 de 6: eso no lo arregla un
+  texto.
+- **La receta de la tarjeta fallaba justo en el caso de Joan.** Decía "toca «Datos del carro» y elige la línea"; en un carro creado como
+  "Chevrolet Captiva" ese botón lleva el nombre del carro, y escribir "Captiva (nueva)" como sugiere el campo dejaba "Chevrolet Captiva
+  Captiva (nueva)", de cajas. Ahora la tarjeta tiene el segundo botón de la maqueta A, **"Usar en un carro"**: lista los carros del taller
+  de este teléfono (los de demostración no), cada uno con lo que va a pasar ("ya la tiene: abrir", o que tiene su propio escaneo y se
+  sigue viendo el escaneo; si ya tiene la línea y además su escaneo, dice "tiene la línea, pero se ve su escaneo: abrir", porque al
+  abrirlo sale el escaneo), pregunta antes de cambiar datos de un carro real, le pone la línea (`datosParaUsarModelo`, como "usar ese
+  modelo" del visor) y lo abre. Y en Datos del carro, la línea sola con la marca escrita de más ya es la del catálogo
+  (`lineaConLaMarcaDeMas`, en `js/ficha-carro.js`), solo cuando la marca trae algo más que la marca: así al guardar no pisa la carrocería
+  elegida después.
+- **El Garaje con JPX248 no ofrecía la demostración**, contra lo que Joan decidió el 15-oct ("ya tiene su Captiva y aun así quiere ver
+  los carros demo al lado"); `db72438` la había escondido por una revisión, y la entrega anterior de este mismo día cambió esta línea del
+  LEEME en vez de devolver la regla. Vuelve a ofrecerse siempre, con el texto de cuántos salen en 3D de verdad.
+- **"Para un carro exacto: ábrelo y toca Escanear"** prometía un camino que un iPhone no tiene (el escáner de la app pide un Android con
+  ARCore). Ahora dice eso, y que subir un archivo de RealityScan todavía no se ha probado con uno sacado de un celular.
+- **Los bajos de una línea:** "Cargar el resto" ya no le devuelve a DEM006 sus piezas de fábrica (`cargarDemo` salta todo lo que ya
+  está); con el registro caído, Vehículos dice que "Ver en 3D" abre la muestra como borrador, en vez de "aquí no hay nada que mostrar"; los
+  botones de la demostración y el desplegable de las fotos miden 44 px; "lleva 12 s" ya no se parte; "Falta el resto" pasó a "Puedes
+  cargar los otros"; la miniatura tiene sus créditos al lado (`vehiculos/CREDITOS.txt`, fuera de la precarga); la nota de DEM006 cabe en
+  una línea. **No se tocó** que la tarjeta sea larga (el crédito entero sigue a la vista: acortarlo no es de una línea) ni el orden de
+  los botones de la demostración con carros reales ("Cargar" sigue de primero, porque Joan quiere verla).
+- **Medido** en Edge sin ventana a 390 x 844, cada etapa con `timeout 170` y "todo bien": `limpio`, `demo`, `sinred`, `enlace`,
+  `angosto`, `repro`, `reproreal` y `usar` (JPX248 creado como "Chevrolet Captiva" por el Garaje; "Usar en un carro" lo lista, se toca,
+  y sale con la Captiva y su capó marcado; la receta vieja en Datos del carro también da la Captiva). Pantallazos nuevos 15 a 19.
+
 **El 5 de noviembre por la noche, los modelos de catálogo: la Captiva.** Joan abrió en su iPhone su
 JPX248, Chevrolet Captiva (nueva), y vio el carro de cajas: "sigue apareciendo así como de juguete, y yo
 quiero que tengamos los modelos de muchos de los carros de Colombia en una versión 3D, empieza con la
@@ -220,10 +335,15 @@ carro de esa línea, sin subir ni escanear nada. Por ahora es una sola: Chevrole
   (`js/modelos-catalogo.js`): `marca` y `linea` tal como las guarda el catálogo, `nombre` (marca, línea, versión y
   modelo del `extras`, separados por espacios), `corto` ("la Captiva", para el letrero), `archivo`, `megas`,
   `sha256`, `aviso` (si hay algo que decir de la línea), `colorFoto` (el de la lata en pantalla: el de por dentro y el del
-  cuadrito, cuando la ficha no tiene color) y `credito`, con `marcaDe`. Nada más: la pantalla, la lista y las
-  pruebas salen de la tabla. Y sus fotos, en "Créditos", al final de este archivo, y en `modelos/CREDITOS.txt`, que viaja al
+  cuadrito, cuando la ficha no tiene color), `credito`, con `marcaDe`, y desde el 9-nov `piezas` (las que se pueden tocar) y
+  `miniatura`. La miniatura la saca la app misma: un carro de demostración de esa línea en `carrosDemo` (`js/demo.js`, con la
+  línea tal cual del catálogo, sin color elegido y sin piezas terminadas, como DEM006), y
+  `node pruebas/datos-externos/diseno-escaneo/probar-vehiculos.mjs miniatura <n>` (n, su lugar en `MODELOS`), que la deja en
+  `vehiculos/` con el nombre del GLB; mírala antes de publicar. Nada más: la pestaña Vehículos, la pantalla, la lista y las
+  pruebas salen de la tabla. Si estaba en `MODELOS_EN_OBRA`, se quita de ahí. Y sus fotos, en "Créditos", al final de este archivo, y en `modelos/CREDITOS.txt`, que viaja al
   lado del archivo. `npm test` revisa que el archivo pese lo que dice y sea el de la huella, traiga las 17 piezas de afuera, en
-  metros, que la línea exista en el catálogo y que el crédito esté completo. En la Captiva revisa además su máscara del brillo y que el dedo no marque Techo debajo de la ventana.
+  metros, que la línea exista en el catálogo y que el crédito esté completo; y (`vehiculos.test.js`) que `piezas` sea lo que trae el archivo, que la miniatura
+  sea un JPEG de 700 x 380 de menos de 80 KB dentro de la precarga, y que el modelo tenga su carro de demostración. En la Captiva revisa además su máscara del brillo y que el dedo no marque Techo debajo de la ventana.
 - **Medido, y lo que falta.** Con Edge sin ventana y la GPU integrada del PC (Iris Xe), en 390 x 844 (`pruebas/datos-externos/diseno-escaneo/probar-captiva.mjs`,
   fuera de git): de la caché, el modelo se ve de 0,9 a 1,2 s después de abrir la página; con la CPU frenada 6x, de 2,4 a 5,1 s según la corrida (la primera versión, de 3,5 a 4,6: con este ruido no se puede decir si cambió); en los dos, sin un solo
   cuadro del carro de cajas. **Nada de esto ha corrido en un iPhone**, y desde este PC no se puede: los
@@ -246,7 +366,8 @@ red ni arma nada de esto, aunque los archivos van en la precarga para que el enl
 señal. Con escaneo se sigue usando el de hoy: la junta trasera del nuevo no sigue lo medido.
 El enlace que se le pasa a alguien es `probar-carro.html?placa=...`, fuera de la precarga: trae
 la versión nueva sin pasar por el botón del Garaje y entra, porque un visor viejo no conoce
-`?carro=nuevo` y lo borra de la URL sin avisar. Se borra el día que el nuevo sea el de todos.
+`?carro=nuevo` y lo borra de la URL sin avisar. Desde el 9-nov no entra a la versión vieja si la
+nueva tarda: lo dice, espera, y ofrece "Entrar igual" (ver "la pestaña Vehículos"). Se borra el día que el nuevo sea el de todos.
 
 **El 6 de noviembre, la segunda versión de la Captiva.** La queja de Joan era que parecía de juguete. De lado y de cola la primera ya parecía un carro; lo que
 se veía mal estaba en la vista con que abre: el capó y el parabrisas. `modelos/chevrolet-captiva-2020-v2.glb`, con la misma interfaz, sale de `fg-trabajo/captiva/foto2`.
@@ -799,10 +920,13 @@ el de vitrina.
   últimas ocho semanas (piezas terminadas y cobrado) hechas a mano; y la
   lista de los carros que están en el taller con su avance.
 - **Demostración**: en el Garaje y en el tablero, "Cargar demostración" mete
-  5 carros de marcas y colores distintos (Onix rojo, Logan blanco, CX-30
-  gris, Hilux negra, Picanto azul) con piezas arregladas, en reparación y
+  6 carros de marcas y colores distintos (Onix rojo, Logan blanco, CX-30
+  gris, Hilux negra, Picanto azul y, desde el 9-nov, la Captiva café en 3D
+  de verdad, DEM006) con piezas arregladas, en reparación y
   entregadas, y 3 empleados, con fechas de las últimas dos semanas. Todo va
-  marcado «demo» y "Quitar la demostración" se lleva solo eso.
+  marcado «demo» y "Quitar la demostración" se lleva solo eso. "Ver en 3D",
+  en la pestaña Vehículos, carga solo DEM006; entonces se ofrece "Cargar el
+  resto" o quitarla.
 - Cada pieza marcada tiene **estado**: pendiente (naranja), en proceso
   (amarillo) o terminada (verde). La chapa en 3D y el chip de la lista van
   del mismo color. Se cambia tocando el nombre en el chip: sale un menú con
@@ -929,7 +1053,7 @@ Claude, la entrada `taller-pintura-celular` de `.claude/launch.json` arranca
 el servidor abierto a la red. El reconocedor de fotos sí necesita internet
 en el teléfono la primera vez (89 MB desde Hugging Face); lo demás no.
 
-Pruebas (462, corridas el 9-nov con la segunda versión de la Captiva y los arreglos de desmarcar y del catálogo; en Node, sin navegador; el registro se prueba contra
+Pruebas: 494 = las 462 del 9-nov (corridas con la segunda versión de la Captiva y los arreglos de desmarcar y del catálogo) + 20 de la pestaña Vehículos (13 en `vehiculos.test.js`, 1 en `garaje-portada.test.js`, 6 en `probar-carro.test.js`; `tablero.test.js` sigue con las suyas, al día con DEM006) + 12 de su revisión (7 más en `vehiculos.test.js`, 4 en `probar-carro.test.js`, 1 en `tablero.test.js`; `garaje-portada.test.js` mira además cómo sale cada fila). Corrida entera el 9-nov, ya sellada (versión 36520bec3993, 68 archivos) para publicar: 493 pasan y 1 se salta, la misma que venía saltada. En Node, sin navegador; el registro se prueba contra
 `fake-indexeddb`, una IndexedDB de mentira que se instala con `npm install`):
 
 ```bash
@@ -942,16 +1066,19 @@ npm test
 |---|---|
 | `index.html` | El visor: barra con el enlace al Garaje, placa y marca; el lienzo 3D con la ficha del carro; botones de vista; la hoja con los chips, la tira de fotos y los dos botones; el menú de estado, la cámara (`input type=file capture`) y el diálogo de la foto grande. |
 | `garaje.html` | El Garaje: las pestañas de la app, el botón "Nuevo carro con foto" y su ficha (foto, color, sugerencias, marca y línea, carrocería, placa), el formulario por placa, la lista de carros y el bloque de la demostración. |
-| `tablero.html` | Las otras tres pestañas: Empleados (la nómina de la semana y la lista de empleados), Historial (entregados y cobrado) e Indicadores (todo junto, con dos gráficas). `?p=` dice cuál se abre. |
+| `tablero.html` | Las otras cuatro pestañas: Vehículos (los modelos que la app tiene en 3D, con "Ver en 3D"), Empleados (la nómina de la semana y la lista de empleados), Historial (entregados y cobrado) e Indicadores (todo junto, con dos gráficas). `?p=` dice cuál se abre. |
+| `probar-carro.html` | El enlace para probar el carro nuevo en un teléfono (`?placa=...`). Fuera de la precarga: trae la versión nueva y entra; si tarda, lo dice, espera y ofrece "Entrar igual"; si se cae, no entra a la vieja. Si en ese teléfono la placa no se vería (no está, vacía, o "Chevrolet Captiva" sin año), entra a la pestaña Vehículos, que lo explica (`js/enlace-prueba.js`). |
+| `js/enlace-prueba.js` | A dónde entra el enlace de prueba: `porQueNoSeVeria(carro)` y `destinoDelEnlace(placa)`, que lee el registro sin crear nada. Sin DOM. |
+| `vehiculos/` | Las miniaturas de los modelos de catálogo (JPEG de 700 x 380, unos 23 KB), con el nombre del GLB: la tarjeta de la pestaña Vehículos y la portada en el Garaje. Dentro de la precarga (solo los `.jpg`). `CREDITOS.txt`, al lado: de qué fotos salen. |
 | `manifest.webmanifest` | Lo que el celular lee para instalar la app: nombre, `start_url` y `scope` relativos (la app vive en `/taller/`, no en la raíz del dominio), `display: standalone`, colores e iconos (192 y 512, normales y maskable). |
 | `sw.js` | El service worker: al instalar precarga lo propio (36 archivos, 2,5 MB: páginas, CSS, módulos, Three.js, etiquetas, el bundle de Transformers.js, manifest e iconos) y desde ahí lo sirve de la caché; el motor ONNX (`ort-*`, 39 MB) se guarda al primer uso en su propia caché; Hugging Face no se toca. Las páginas y los scripts de los workers salen con COOP/COEP (los hilos del motor); el `.wasm` sale tal cual para no perder su código compilado. Contesta su versión cuando la ficha se la pregunta. La versión del nombre de la caché la escribe `npm run sellar`. En el PC va primero a la red. |
 | `js/instalable.js` | Registra el service worker con ruta relativa (solo https o localhost) y enciende en el Garaje el botón "Hay una versión nueva, toca para actualizar" cuando hay una esperando; tocarlo la activa y recarga. Lo cargan las tres páginas. |
 | `iconos/` | Los iconos de la app (dibujo propio: carro naranja de perfil con la línea de la puerta y una gota de pintura): 192 y 512 normales y maskable, 180 para iPhone, y el `icono.svg` original. Se regeneran con `npm run iconos`. |
 | `herramientas/generar-iconos.mjs` | Dibuja el SVG y lo convierte a PNG con `sharp`, que ya está en `node_modules` porque lo trae Transformers.js (no es una dependencia nueva). |
 | `herramientas/sellar-version.mjs` | `npm run sellar`: escribe en `sw.js` la lista de archivos a precargar y una huella SHA-256 de su contenido (y otra del motor). Sin eso el navegador no ve que hay versión nueva. Exporta lo que usa la prueba. |
-| `js/tablero.js` | Los números: la semana del taller (lunes a domingo), `pagoDePieza`, `nominaSemanal`, `historial`, `indicadores` (con serie por semana), `pesos` y `textoParaQuitar` (la pregunta antes de desmarcar, con la plata, el pintor y la semana). Funciones puras, sin DOM, probadas en Node. |
-| `js/tablero-pantalla.js` | La pantalla del tablero: pinta las tres pestañas con lo que calcula `tablero.js`, agrega y retira empleados, y carga o quita la demostración. |
-| `js/demo.js` | Los 5 carros y 3 empleados de demostración (fechas relativas a hoy, todo con `demo: true`), `cargarDemo` (no pisa un carro real) y `estadoDemo`. |
+| `js/tablero.js` | Los números: la semana del taller (lunes a domingo), `pagoDePieza`, `nominaSemanal`, `historial`, `indicadores` (con serie por semana), `pesos` y `textoParaQuitar` (la pregunta antes de desmarcar, con la plata, el pintor y la semana). Funciones puras, sin DOM, probadas en Node. Un carro de demostración solo le cuenta a un empleado de demostración. |
+| `js/tablero-pantalla.js` | La pantalla del tablero: pinta las cuatro pestañas (Vehículos sale de `MODELOS`; las otras, de lo que calcula `tablero.js`), "Ver en 3D" (no abre un carro real de placa DEM006), "Usar en un carro", el aviso del enlace de prueba, agrega y retira empleados, y carga o quita la demostración. |
+| `js/demo.js` | Los 6 carros y 3 empleados de demostración (fechas relativas a hoy, todo con `demo: true`; DEM006 es la Captiva, sin pintores), `cargarDemo` (solo lo que falta: no pisa nada que ya esté), `estadoDemo` y lo que se ofrece (`ofertaDeLaDemo`, siempre, también a medias, con `comoSeVen`: cuántos en 3D de verdad), `quitarLaDemostracion` (con escaneos y borrador), y el carro de muestra de cada modelo (`carroDeMuestra`, `asegurarCarroDeMuestra`). |
 | `css/estilos.css` | Colores como variables `--*` (incluidos los tres de estado), tema oscuro (luz de taller). Empieza con `[hidden] { display: none !important }` por una trampa conocida. |
 | `js/piezas.js` | El catálogo de piezas. Sin Three.js: lo usan el registro y la nómina. |
 | `js/carrocerias.js` | Los cuatro tipos de carrocería: medidas típicas, qué nombre toma cada pieza en cada uno (compuerta, costado del platón), y cómo se limpian las medidas del catálogo para dibujar (`RANGO_PARA_DIBUJAR`: fuera de él, la medida típica). Sin Three.js. |
@@ -977,9 +1104,9 @@ npm test
 | `herramientas/medir-cadena.mjs` | La medición que vale: repite en el PC lo que hace el teléfono con una sola foto (las tres pasadas de la placa, el logo encima, el barrido, cuál queda, la placa leída) sobre las 46 fotos, con las mismas constantes de `js/logo.js`. `--sin-barrido` da la cadena de antes del 17-oct. |
 | `herramientas/medir-barrido.mjs`, `medir-barrido-fino.mjs`, `medir-barrido-acuerdo.mjs` | Cómo se eligió el barrido: cuatro rejillas por dos criterios (probabilidad del mejor logo o "menos fondo"), con y sin fondo al decidir; luego franjas, pasos y refinados para el costo; y las reglas para frenar los "seguros" equivocados (de ahí los 2 de 3). Escriben su detalle en `pruebas/datos-externos/`. |
 | `herramientas/medir-placa-pasadas.mjs` | Qué encuentran las pasadas extra de la placa en las fotos reales, con una hoja de contactos de cada hallazgo para mirarlo. Dijo que encontraban llantas y carretera, y así se cerraron. |
-| `js/hoja.js` | La hoja de abajo del visor: chips con estado, trabajo (latonería), pintor y cámara; menú de estado, trabajo, pintor y «Desmarcar…» (que, como la ×, pregunta con la plata), que también se abre desde el carro (`abrirMenuDe`); tira de fotos y foto grande, con los nombres de la carrocería. DOM puro, sin Three.js. |
-| `js/ficha-carro.js` | La ficha "Datos del carro" del visor: marca, línea con el catálogo, versión, carrocería, color, cobro al cliente y entrega. DOM puro. |
-| `js/garaje-pantalla.js` | La pantalla Garaje: lista con portada y color (con "entregado" y lo cobrado, y la insignia «demo»), abrir o crear por placa, borrar, la ficha del carro nuevo con foto (color, reconocedor, catálogo, confirmación) y la demostración. |
+| `js/hoja.js` | La hoja de abajo del visor: chips con estado, trabajo (latonería), pintor y cámara; menú de estado, trabajo, pintor y «Desmarcar…» (que, como la ×, pregunta con la plata), que también se abre desde el carro (`abrirMenuDe`); tira de fotos y foto grande, con los nombres de la carrocería. En un carro de demostración, el menú solo ofrece a los pintores de la demostración. DOM puro, sin Three.js. |
+| `js/ficha-carro.js` | La ficha "Datos del carro" del visor: marca, línea con el catálogo (también la línea sola con la marca escrita de más: `lineaConLaMarcaDeMas`), versión, carrocería, color, cobro al cliente y entrega. DOM puro. |
+| `js/garaje-pantalla.js` | La pantalla Garaje: lista con portada y color (con "entregado" y lo cobrado, la insignia «demo» y cómo sale al abrirlo: 3D de verdad, su escaneo o la carrocería de referencia), abrir o crear por placa, borrar, la ficha del carro nuevo con foto (color, reconocedor, catálogo, confirmación) y la demostración. |
 | `js/carro.js` | El carro, pieza por pieza, construido con perfiles extruidos, en cuatro carrocerías y a las medidas de la línea (`disposicion` convierte medidas en bordes y alturas). Cada pieza es un objeto aparte con su propio material; las articuladas (puertas, capó, pieza trasera) cuelgan de un pivote en su bisagra (`articular`) y las de interior comparten material con sus paredes (`acompanar`). Lo de adentro solo le contesta al dedo con su bisagra abierta (`seVeCon`). Sin DOM: también se construye en Node para probarlo. |
 | `js/toque.js` | Qué pieza hay bajo el dedo: rayo central más un anillo de ocho para que estribos y espejos se dejen tocar. Sin DOM, probado con la cámara y el carro reales. |
 | `js/visor.js` | Escena, luces, cámara, giro con el dedo, el toque que marca, y el pegamento con el registro: qué carro está abierto (por la URL o el último), el 3D con su carrocería, color y medidas (se reconstruye al cambiar de carro), teñir por estado, guardar. Si el carro tiene escaneo, el modelo es el escaneado (`modeloDesdeEscaneo`) o el genérico a sus medidas ("ver piezas"). |
@@ -1003,7 +1130,7 @@ npm test
 | `herramientas/servidor.js` | Servidor estático sin dependencias; los módulos de JavaScript no cargan desde `file://`. Sirve `.wasm` con su tipo para que el motor compile en streaming, y todo con COOP/COEP para que el motor use varios hilos también en el PC. Bajo `/como-github/` sirve lo mismo como GitHub Pages (en una carpeta y sin cabeceras), para probar el service worker antes de publicar. |
 | `herramientas/generar-catalogo.mjs` | Del JSON de la investigación al catálogo: una entrada por marca y línea, medidas limpias, fuente conservada. |
 | `herramientas/calcular-etiquetas.mjs` | Calcula en el PC los vectores de texto de CLIP (modelo de texto, 60 MB que el teléfono así no necesita) y escribe `js/etiquetas-clip.json`. |
-| `pruebas/` | `estado.test.js` (la orden, las 29 piezas), `carro.test.js` (piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio, la base de puertas, la placa), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `tablero.test.js` (semanas, pesos, pago por pieza, pintor y entrega, nómina, historial, indicadores, la demostración, los empleados en el almacén y la subida de versión de la base sin perder carros), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras), `catalogo.test.js` (el catálogo y su buscador) e `instalable.test.js` (el manifest y sus iconos, los enlaces de las tres páginas, el sello de `sw.js` contra la carpeta real, y el service worker corriendo en un `vm` con navegador de mentira: qué toca, qué no, que Hugging Face nunca, y las cabeceras de aislamiento). También `logo.test.js` (recorte, agrupación, clasificación con y sin fondo, la rejilla del barrido, la regla de 2 de 3 y cuál logo queda), `placa-foto.test.js` (la placa amarilla con sus tres pasadas, el borde, las esquinas, enderezarla, leerla), `escaneo.test.js` (la tubería con escaneos de mentira: fusión, piso, estorbo, orientación sin reflejo, medidas con ruido y reflejos, piezas, el contrato del visor, cerrar huecos, los bloques de relleno, el genérico acomodado a lo medido, la máscara de pintura, el suavizado de etiquetas y las juntas), `escaneo-importar.test.js` (PLY en milímetros con z arriba, malla con color, escala, simplificar, el almacén de escaneos) `escaneo-ar.test.js` (el escáner con un WebXR de mentira), `escaneo-catalogo.test.js` y `modelos-catalogo.test.js` (los carros de catálogo: el archivo de verdad, el lector contra la ruta normal, bajarlo una vez, y la pantalla con un DOM de mentira: el orden, las carreras, el lienzo tapado, los avisos, sin señal, sin foto, sin cupo, lo que la gente escribe). Y, desde el 9-nov, `toque-por-dentro.test.js` (con todo cerrado nada de adentro se marca), `catalogo-en-pantalla.test.js` (cada línea cabe entera en los campos y se dibuja a sus medidas) y `garaje-lineas.test.js` (la pantalla del Garaje de verdad en un DOM de mentira, con el reconocedor cambiado por uno que falla). `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
+| `pruebas/` | `estado.test.js` (la orden, las 29 piezas), `carro.test.js` (piezas, medidas de sedán, simetría, accesorios que asoman, interior que no atraviesa el vidrio, la base de puertas, la placa), `carrocerias.test.js` (las cuatro carrocerías: piezas, tamaño, simetría, compuertas, platón), `toque.test.js` (el dedo sobre el estribo y el espejo), `garaje.test.js` (modelo y almacén: estados, fotos, borrado, el formato viejo del borrador, los datos de la foto), `tablero.test.js` (semanas, pesos, pago por pieza, pintor y entrega, nómina, historial, indicadores, la demostración, los empleados en el almacén y la subida de versión de la base sin perder carros), `fotos.test.js` (medidas), `color-foto.test.js` (el color con vidrios y sombras), `catalogo.test.js` (el catálogo y su buscador) e `instalable.test.js` (el manifest y sus iconos, los enlaces de las tres páginas, el sello de `sw.js` contra la carpeta real, y el service worker corriendo en un `vm` con navegador de mentira: qué toca, qué no, que Hugging Face nunca, y las cabeceras de aislamiento). También `logo.test.js` (recorte, agrupación, clasificación con y sin fondo, la rejilla del barrido, la regla de 2 de 3 y cuál logo queda), `placa-foto.test.js` (la placa amarilla con sus tres pasadas, el borde, las esquinas, enderezarla, leerla), `escaneo.test.js` (la tubería con escaneos de mentira: fusión, piso, estorbo, orientación sin reflejo, medidas con ruido y reflejos, piezas, el contrato del visor, cerrar huecos, los bloques de relleno, el genérico acomodado a lo medido, la máscara de pintura, el suavizado de etiquetas y las juntas), `escaneo-importar.test.js` (PLY en milímetros con z arriba, malla con color, escala, simplificar, el almacén de escaneos) `escaneo-ar.test.js` (el escáner con un WebXR de mentira), `escaneo-catalogo.test.js` y `modelos-catalogo.test.js` (los carros de catálogo: el archivo de verdad, el lector contra la ruta normal, bajarlo una vez, y la pantalla con un DOM de mentira: el orden, las carreras, el lienzo tapado, los avisos, sin señal, sin foto, sin cupo, lo que la gente escribe). Y, desde el 9-nov, `toque-por-dentro.test.js` (con todo cerrado nada de adentro se marca), `catalogo-en-pantalla.test.js` (cada línea cabe entera en los campos y se dibuja a sus medidas) y `garaje-lineas.test.js` (la pantalla del Garaje de verdad en un DOM de mentira, con el reconocedor cambiado por uno que falla). Desde la pestaña Vehículos, `vehiculos.test.js` (la tabla y su miniatura, DEM006, "Ver en 3D" con y sin registro, la demostración a medias y quitarla con su borrador, "Cargar el resto" sin pisar, cuántos salen en 3D de verdad, la línea sola en Datos del carro; la pantalla del tablero de verdad en un DOM de mentira, con un DEM006 real, "Usar en un carro" y el aviso del enlace), `garaje-portada.test.js` (foto de verdad, miniatura del modelo o color, y cómo sale cada fila) y `probar-carro.test.js` (el script del enlace con un service worker y un reloj de mentira, y a dónde entra según el registro). `fotos-reconocer/` (fuera de git) tiene fotos de Wikimedia para probar el reconocedor a mano. |
 
 Decisiones que conviene conocer:
 
@@ -1078,7 +1205,7 @@ Decisiones que conviene conocer:
   teléfonos con la versión 1 suben solos sin perder carros ni fotos; las
   piezas viejas sin `pintor` salen con `pintor: ''`.
 - Lo de demostración lleva `demo: true` en el carro y en el empleado, y las
-  placas son DEM001 a DEM005; `cargarDemo` no pisa un carro real con esa
+  placas son DEM001 a DEM006; `cargarDemo` no pisa un carro real con esa
   placa y `quitarDemo` solo borra lo marcado.
 
 ## Plan, con fechas
@@ -1251,7 +1378,10 @@ escaneo
   comparar `getHexString()`.
 - La demostración se ofrece siempre que no esté cargada, no solo con el
   Garaje vacío: Joan ya tiene su Captiva y aun así quiere ver los carros
-  demo al lado.
+  demo al lado (decisión del 15-oct, y el 9-nov volvió a pedir "vehículos en
+  garaje como demo de prueba"). Del 5 al 9-nov estuvo escondida debajo de
+  carros reales por una revisión (`db72438`), sin que él lo decidiera. Dice
+  cuántos de sus carros salen en 3D de verdad.
 - La placa de la Captiva de Joan, en su foto de tres cuartos, sale **más
   alta que ancha** (0,56): una placa vista en ángulo no tiene proporción
   de placa. Por eso el filtro de proporción va de 0,45 a 3,8 y la forma la
@@ -1407,7 +1537,7 @@ Edge sin ventana, con la app de verdad (`pruebas/datos-externos/diseno-escaneo/p
 
 ## Créditos
 
-**El modelo de la Chevrolet Captiva LT 2020** (`modelos/chevrolet-captiva-2020-v2.glb`; la primera versión, `modelos/chevrolet-captiva-2020.glb`, se queda una publicación más) está hecho con siete fotos de
+**El modelo de la Chevrolet Captiva LT 2020** (`modelos/chevrolet-captiva-2020-v2.glb`; la primera versión, `modelos/chevrolet-captiva-2020.glb`, se queda hasta el 16-nov: un teléfono que no ha tocado «Actualizar» desde el 6-nov todavía la pide, y la del 9-nov salió el mismo día que la pestaña Vehículos) está hecho con siete fotos de
 **Autosdeprimera**, de Wikimedia Commons, con licencia
 [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Se modificaron: recoloreadas y pegadas sobre una forma 3D; capó y techo pintados aparte, y un brillo calculado encima.
 En la app salen en el color que diga la ficha. El crédito también se ve en el diálogo de Escanear, y va al lado del

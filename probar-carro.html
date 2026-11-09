@@ -11,17 +11,32 @@
   body { margin: 0; padding: 24px 16px; background: #14181e; color: #eef1f4; font: 16px/1.45 system-ui, -apple-system, sans-serif; }
   h1 { font-size: 20px; margin: 0 0 12px; }
   a { color: #ff9a4d; }
+  [hidden] { display: none !important; }
+  .acciones { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
+  .acciones button { font: inherit; padding: 12px 14px; border-radius: 10px; border: 1px solid #3a424c; background: #242a32; color: #eef1f4; }
+  .acciones button.primario { background: #ff7a1a; border-color: #ff7a1a; color: #1a1e24; font-weight: 600; }
+  .nota { font-size: 14px; color: #a7b0bb; margin: 0; }
 </style>
 </head>
 <body>
 <h1>Probar el carro nuevo</h1>
 <p id="estado">Trayendo la versión nueva de la app…</p>
+<div class="acciones">
+  <button type="button" id="reintentar" class="primario" hidden>Intentar otra vez</button>
+  <button type="button" id="entrar-igual" hidden>Entrar igual</button>
+  <p id="entrar-nota" class="nota" hidden>«Entrar igual» abre la versión que ya tiene este teléfono. Si es una anterior, puede que no traiga el carro nuevo ni la Captiva, y se vea el carro de siempre.</p>
+</div>
 <p>Se prende solo en este teléfono. No borra tus carros, y adentro hay un botón para volver al de hoy.</p>
 
 <script type="module">
-const estado = document.getElementById('estado');
+const $ = (id) => document.getElementById(id);
+const estado = $('estado');
 const placa = new URLSearchParams(location.search).get('placa') || '';
 const destino = 'index.html?carro=nuevo' + (placa ? '&placa=' + encodeURIComponent(placa) : '');
+// Cuánto esperar antes de decir que va lento. No es un plazo para entrar: hasta el 9-nov, a los 40 s
+// entraba solo con lo que hubiera, y con mala señal eso era la versión vieja, que no conoce la Captiva
+// ni ?carro=nuevo. Joan abrió el enlace y no vio la camioneta por ningún lado.
+const AVISAR_A_LOS = 12000;
 
 // Sin esto, un teléfono con la versión vieja abre el visor viejo, que no conoce ?carro=nuevo y se lo
 // borra a la URL al abrir el carro: la persona ve el carro de siempre y cree que la prueba no sirve.
@@ -33,9 +48,9 @@ try {
 }
 
 const pasaA = (sw, estados) => new Promise((listo) => {
-  if (estados.includes(sw.state)) return listo();
+  if (estados.includes(sw.state)) return listo(sw.state);
   sw.addEventListener('statechange', () => {
-    if (estados.includes(sw.state)) listo();
+    if (estados.includes(sw.state)) listo(sw.state);
   });
 });
 
@@ -43,33 +58,79 @@ async function traerVersionNueva() {
   if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
   const registro = await navigator.serviceWorker.register('sw.js');
   await registro.update();
-  // Lo que se esté bajando (son 64 archivos), si no hay ya una versión esperando.
-  if (registro.installing) await pasaA(registro.installing, ['installed', 'redundant']);
+  // Lo que se esté bajando (son más de 60 archivos), si no hay ya una versión esperando. Si se cae a
+  // mitad ('redundant') NO es "ya está la última": es que no terminó, y entrar sería entrar a la vieja.
+  if (registro.installing && (await pasaA(registro.installing, ['installed', 'redundant'])) === 'redundant') {
+    throw Object.assign(new Error('no terminó de bajar'), { propio: true });
+  }
   const esperando = registro.waiting;
-  // Sin versión esperando, esta ya es la última.
+  // Sin versión esperando, la que hay ya es la última: se entra de una.
   if (!esperando || !navigator.serviceWorker.controller) return;
   esperando.postMessage({ tipo: 'activar' });
-  await pasaA(esperando, ['activated', 'redundant']);
+  if ((await pasaA(esperando, ['activated', 'redundant'])) === 'redundant') throw Object.assign(new Error('no se pudo encender'), { propio: true });
 }
 
+// Con la versión nueva ya puesta, a dónde: si en este teléfono esa placa no tiene cómo verse (no está, está vacía, o dice
+// "Chevrolet Captiva" sin el año), a la pestaña Vehículos, que lo explica y deja ver la Captiva o ponérsela a ese carro. Antes
+// entraba al visor, que la creaba vacía, y salía el carro de siempre (js/enlace-prueba.js). Si eso no contesta en 4 s, al de
+// siempre: un enlace que no entra es peor.
+const tarde = (ms) => new Promise((_, no) => setTimeout(() => no(new Error('tarde')), ms));
+async function destinoConLaVersionNueva() {
+  if (!placa) return destino;
+  try {
+    const { destinoDelEnlace } = await Promise.race([import('./js/enlace-prueba.js'), tarde(4000)]);
+    return await Promise.race([destinoDelEnlace(placa), tarde(4000)]);
+  } catch (error) {
+    console.warn(error);
+    return destino;
+  }
+}
+
+let entro = false;
 function entrar() {
+  if (entro) return;
+  entro = true;
+  destinoConLaVersionNueva().then((url) => location.replace(url));
+}
+// «Entrar igual» va al de siempre, sin preguntarle nada a la versión que haya: puede ser una vieja, sin la pestaña Vehículos.
+$('entrar-igual').addEventListener('click', () => {
+  if (entro) return;
+  entro = true;
   location.replace(destino);
+});
+$('reintentar').addEventListener('click', () => location.reload());
+
+function ofrecerEntrarIgual() {
+  $('entrar-igual').hidden = false;
+  $('entrar-nota').hidden = false;
 }
 
-// Con mala señal no se queda aquí para siempre: entra con lo que haya, y la marca de arriba ya quedó puesta.
+// Con mala señal no entra solo: lo dice, sigue esperando, y deja entrar a la versión de antes a quien
+// no pueda esperar, sabiendo que es esa.
+const inicio = Date.now();
+let contador = 0;
 const reloj = setTimeout(() => {
-  estado.textContent = 'La señal está lenta. Entro con lo que hay.';
-  setTimeout(entrar, 1200);
-}, 40000);
+  ofrecerEntrarIgual();
+  const decir = () => {
+    estado.textContent = 'Todavía está bajando la versión nueva (lleva ' + Math.round((Date.now() - inicio) / 1000) + ' s). La señal está lenta: sigo esperando, y entro solo cuando termine.';
+  };
+  decir();
+  contador = setInterval(decir, 5000);
+}, AVISAR_A_LOS);
 
 traerVersionNueva().then(() => {
   clearTimeout(reloj);
+  clearInterval(contador);
   entrar();
 }, (error) => {
   clearTimeout(reloj);
+  clearInterval(contador);
   console.warn(error);
-  estado.textContent = 'No pude traer la versión nueva. Entro con lo que hay.';
-  setTimeout(entrar, 1200);
+  // Lo que dijo el navegador, en sus palabras, cuando es de él: sin eso no hay cómo arreglar un teléfono desde lejos.
+  const delNavegador = error && !error.propio ? ' (el navegador dijo: ' + (error.message || error) + ')' : '';
+  estado.textContent = 'No se pudo terminar de bajar la versión nueva' + delNavegador + '. Con mejor señal, toca «Intentar otra vez».';
+  $('reintentar').hidden = false;
+  ofrecerEntrarIgual();
 });
 </script>
 </body>

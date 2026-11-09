@@ -542,11 +542,29 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
   object-fit: cover;
 }
 
+/* Sobre la miniatura del modelo (en el café de las fotos), el color que se
+   eligió para este carro: el 3D sale en ese color, y la miniatura no. */
+.carro-portada { position: relative; }
+.portada-color {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--panel);
+}
+
 .carro-marca {
   grid-column: 2 / -1;
   color: var(--texto-suave);
   font-size: 13px;
 }
+
+/* Cómo sale al abrirlo: "3D de verdad" (verde, como el chip de Vehículos), su escaneo, o "Carrocería de referencia". */
+.carro-3d { grid-column: 2 / -1; font-size: 12px; color: var(--texto-suave); }
+.carro-3d:empty { display: none; }
+.carro-3d.de-verdad { color: var(--estado-terminada); }
 
 .cuentas {
   grid-column: 2 / -1;
@@ -762,6 +780,12 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
   color: var(--texto);
   border-bottom-color: var(--acento);
   font-weight: 600;
+}
+
+/* Cinco pestañas desde el 9-nov: a 13 px suman unos 325 px de letra, y en un
+   celular de 320 (iPhone SE viejo) la barra se salía de lado. */
+@media (max-width: 360px) {
+  .pestanas a { font-size: 12px; padding-inline: 2px; }
 }
 
 /* ---------- Tablero: Empleados, Historial, Indicadores ---------- */
@@ -995,7 +1019,109 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
   border-radius: 10px;
   padding: 8px 12px;
   font-size: 13px;
+  /* 44 px: lo mínimo para un dedo (medían 35). */
+  min-height: 44px;
 }
+
+.demo-botones { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---------- Vehículos: los modelos que la app ya trae en 3D ---------- */
+
+/* main.garaje es una columna flex con scroll, y encoge a sus hijos: una
+   tarjeta alta con overflow: hidden (las esquinas de la foto) pierde su alto
+   mínimo y sale recortada. Pasó en la maqueta, con la tarjeta suelta en main.
+   Aquí va dentro de la sección, que no se encoge, y medido sin esta regla
+   tampoco se recorta (9-nov, Edge, 390 x 600): es de seguro, por si un día la
+   tarjeta sale de la sección. */
+#vehiculos > *, .vehiculos > * { flex-shrink: 0; }
+
+.vehiculos { display: flex; flex-direction: column; gap: 12px; }
+
+.vehiculo {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* Con su proporción reservada: sin eso la tarjeta salta al llegar la imagen. */
+.vehiculo-foto {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 700 / 380;
+  object-fit: cover;
+  background: var(--panel-2);
+}
+
+.vehiculo-cuerpo { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 12px; }
+.vehiculo-cuerpo strong { font-size: 17px; }
+.vehiculo-detalle { font-size: 13px; color: var(--texto-suave); }
+
+.chip-3d {
+  align-self: flex-start;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--estado-terminada);
+  border: 1px solid var(--estado-terminada);
+}
+
+/* Los dos botones de la maqueta A, uno al lado del otro: "Ver en 3D" y "Usar en un carro". */
+.vehiculo-botones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.vehiculo-botones button { flex: 1 1 140px; min-height: 44px; padding: 11px 14px; border-radius: 10px; font-size: 15px; }
+
+.vehiculo-cuerpo button.primario {
+  border: 1px solid var(--acento);
+  background: var(--acento);
+  color: var(--acento-texto);
+  font-weight: 600;
+}
+
+.vehiculo-cuerpo button.secundario {
+  border: 1px solid var(--borde);
+  background: none;
+  color: var(--texto);
+}
+
+/* La lista de "Usar en un carro": los carros del taller, uno por renglón. */
+.usar-en ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.usar-en li { display: flex; flex-direction: column; gap: 2px; }
+.usar-en li button {
+  min-height: 44px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--borde);
+  background: var(--panel-2);
+  color: var(--texto);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.usar-en li.pedido button { border-color: var(--acento); }
+.usar-en li small { font-size: 12px; color: var(--texto-suave); padding-left: 2px; }
+
+/* Llegó del enlace de prueba con una placa que aquí no se vería: lo primero de la pestaña. */
+.aviso-enlace {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--estado-en-proceso);
+  color: var(--texto);
+  font-size: 14px;
+}
+
+.vehiculos-en-obra ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.vehiculos-en-obra li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel);
+  border: 1px dashed var(--borde);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.vehiculos-en-obra li span { font-size: 12px; color: var(--texto-suave); }
 
 /* ---------- Pintor por pieza y entrega del carro ---------- */
 
@@ -1149,7 +1275,7 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
 .opcion-escaneo { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .opcion-escaneo .ayuda { margin: 0; }
 .credito-modelo a { color: var(--acento); }
-.credito-modelo summary { cursor: pointer; color: var(--acento); margin-top: 4px; }
+.credito-modelo summary { cursor: pointer; color: var(--acento); margin-top: 4px; min-height: 44px; display: flex; align-items: center; }
 .credito-modelo ul { margin: 4px 0 0; padding-left: 18px; overflow-wrap: anywhere; }
 
 /* Encima de la cámara: transparente, con el texto en recuadros oscuros. */

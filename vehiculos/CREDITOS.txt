@@ -1,0 +1,9 @@
+Créditos de las imágenes de esta carpeta.
+
+Las miniaturas se pueden bajar sueltas, igual que los modelos de modelos/, y salen de las mismas fotos. Por eso va esto al lado.
+
+chevrolet-captiva-2020-v2.jpg
+  Miniatura de la pestaña Vehículos y portada del Garaje: una captura de la app Taller de Pintura mostrando su modelo de Chevrolet Captiva LT 2020 (modelos/chevrolet-captiva-2020-v2.glb), con la placa de muestra DEM006.
+  El modelo está hecho con siete fotos de Autosdeprimera, de Wikimedia Commons. Licencia de las fotos: CC BY 3.0 - https://creativecommons.org/licenses/by/3.0/
+  Modificadas: recoloreadas y pegadas sobre una forma 3D; capó y techo pintados aparte, y un brillo calculado encima. La lista de las fotos, con sus enlaces, está en modelos/CREDITOS.txt.
+  No es un modelo oficial: Chevrolet es marca de General Motors, y ni la marca ni el autor de las fotos tienen relación con esta app.

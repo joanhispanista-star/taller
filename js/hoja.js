@@ -73,6 +73,12 @@ export function crearHoja(acciones) {
   let piezaDelMenu = null;
   let carroceria = ''; // la del carro que se está pintando, para los nombres
   let empleados = []; // los del taller, para asignar pintor desde el menú
+  let carroDeDemo = false;
+
+  // A quién se le puede asignar una pieza de este carro, y a quién le paga. A un carro de demostración solo los empleados de la
+  // demostración: la nómina no le paga a nadie real un carro que no existe (tablero.js), y ofrecerle a Marta el capó de DEM006
+  // era invitar a asignárselo para que después no le contara (revisión del 9-nov).
+  const deEsteCarro = () => (carroDeDemo ? empleados.filter((e) => e.demo) : empleados);
   let pintadas = new Map(); // las piezas de los chips, por id: el menú se abre también desde el carro
 
   function nombreDePintor(id) {
@@ -87,6 +93,7 @@ export function crearHoja(acciones) {
   function pintar({ carro, carroceria: deLasPiezas, fotos = [], conRegistro = false, empleados: lista = [] }) {
     carroceria = deLasPiezas ?? (carro.carroceria || '');
     empleados = lista;
+    carroDeDemo = Boolean(carro.demo);
     const piezas = piezasDelCarro(carro).map((p) => ({ ...p, nombre: nombreDe(carroceria, p.id) }));
     pintadas = new Map(piezas.map((p) => [p.id, p]));
     const porPieza = new Map();
@@ -163,7 +170,7 @@ export function crearHoja(acciones) {
   // primero la pregunta que dice cuánto sale de la nómina y de quién. Hasta el 9-nov-2026
   // la × borraba una pieza terminada sin preguntar, y con ella sus 90.000 pesos.
   function desmarcar(pieza) {
-    if (!seQuitaConUnToque(pieza) && !confirm(textoParaQuitar(pieza.nombre, pieza, pieza.id, empleados))) return;
+    if (!seQuitaConUnToque(pieza) && !confirm(textoParaQuitar(pieza.nombre, pieza, pieza.id, deEsteCarro()))) return;
     acciones.alQuitar(pieza.id);
   }
 
@@ -246,11 +253,15 @@ export function crearHoja(acciones) {
   }
 
   function opcionesDePintor(pieza) {
-    const visibles = empleados.filter((e) => e.activo || e.id === pieza.pintor);
+    // El asignado se ve aunque esté retirado (o sea real en un carro de demostración, de antes del 9-nov): así se puede quitar.
+    const visibles = empleados.filter((e) => e.id === pieza.pintor || (e.activo && (!carroDeDemo || e.demo)));
     if (visibles.length === 0) {
       // Sin empleados no hay a quién asignar: el menú lo dice y lleva a la
-      // pestaña donde se agregan, en vez de esconder la opción.
-      const ir = boton('menu-pintor sin-empleados', 'Pintor: agrega empleados', 'Agregar empleados');
+      // pestaña donde se agregan, en vez de esconder la opción. En un carro
+      // de demostración, los suyos llegan con el resto de la demostración.
+      const ir = carroDeDemo
+        ? boton('menu-pintor sin-empleados', 'Pintor: carga los de la demostración', 'Cargar los pintores de la demostración')
+        : boton('menu-pintor sin-empleados', 'Pintor: agrega empleados', 'Agregar empleados');
       ir.addEventListener('click', () => {
         location.href = 'tablero.html?p=empleados';
       });

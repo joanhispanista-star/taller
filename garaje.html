@@ -23,10 +23,11 @@
     <span class="subtitulo">Garaje</span>
   </header>
 
-  <!-- Las secciones de la app. El Garaje es esta página; las otras tres
+  <!-- Las secciones de la app. El Garaje es esta página; las otras cuatro
        viven en tablero.html y se abren en la pestaña pedida. -->
   <nav class="pestanas" aria-label="Secciones">
     <a href="garaje.html" aria-current="page">Garaje</a>
+    <a href="tablero.html?p=vehiculos">Vehículos</a>
     <a href="tablero.html?p=empleados">Empleados</a>
     <a href="tablero.html?p=historial">Historial</a>
     <a href="tablero.html?p=indicadores">Indicadores</a>
@@ -71,7 +72,12 @@
          dice que es demostración y se quita en bloque. -->
     <div id="demo" class="demo" hidden>
       <p class="ayuda" id="demo-texto"></p>
-      <button type="button" id="demo-boton"></button>
+      <!-- El segundo solo sale con la demostración a medias (el carro de
+           "Ver en 3D" sin el resto): el primero carga lo que falta. -->
+      <div class="demo-botones">
+        <button type="button" id="demo-boton"></button>
+        <button type="button" id="demo-quitar" hidden>Quitar la demostración</button>
+      </div>
     </div>
   </main>
 

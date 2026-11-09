@@ -141,6 +141,30 @@ test('la nómina semanal paga 90.000 por pieza terminada a su pintor, en la sema
   assert.equal(nominaSemanal([a], [retirado], semanaDe(HOY, -1)).filas.length, 1);
 });
 
+// DEM006 entra solo a un taller real con "Ver en 3D". El 9-nov, un toque en Terminada y asignárselo a la única pintora (real)
+// sumaba 90.000 a su nómina, sin ninguna marca; y sin pintor salía en "Terminadas sin pintor" pidiendo que se lo asignaran.
+test('un carro de demostración solo le cuenta a un empleado de demostración: a uno real nunca se le paga', () => {
+  const MARTA = crearEmpleado({ id: 'emp-1', nombre: 'Marta Díaz', rol: 'pintor' });
+  const [CARLOS_DEMO] = empleadosDemo(HOY);
+  const dem = crearCarro({ placa: 'DEM006', demo: true }, dia(3));
+  fijarEstado(dem, 'capo', 'terminada', dia(1));
+  fijarEstado(dem, 'techo', 'terminada', dia(1));
+  asignarPintor(dem, 'techo', 'emp-1');
+  fijarEstado(dem, 'baul', 'terminada', dia(1));
+  asignarPintor(dem, 'baul', CARLOS_DEMO.id);
+  const real = crearCarro({ placa: 'REA123' }, dia(3));
+  asignarPintor(real, 'capo', 'emp-1');
+  fijarEstado(real, 'capo', 'terminada', dia(1));
+
+  const nomina = nominaSemanal([dem, real], [MARTA, CARLOS_DEMO], semanaDe(HOY));
+  const de = (id) => nomina.filas.find((f) => f.empleado.id === id);
+  assert.deepEqual(de('emp-1').piezas.map((d) => d.placa + ' ' + d.id), ['REA123 capo'], 'el techo de DEM006 no es plata de Marta');
+  assert.equal(de('emp-1').total, TARIFA_PIEZA);
+  assert.deepEqual(de(CARLOS_DEMO.id).piezas.map((d) => d.placa + ' ' + d.id), ['DEM006 baul'], 'con la demostración entera, sus pintores sí cobran');
+  assert.deepEqual(nomina.sinPintor, [], 'el capó de DEM006 sin pintor no se pide asignar');
+  assert.equal(nomina.total, 2 * TARIFA_PIEZA);
+});
+
 // Lo que lee el dueño antes de quitar una pieza que ya es trabajo del taller: la plata,
 // con nombre y semana, y que no se puede deshacer. Antes no había pregunta: un toque y los
 // 90.000 se iban de la nómina.
@@ -230,17 +254,18 @@ test('los indicadores juntan carros, piezas, cobrado, pagado y una serie por sem
 
 test('la demostración trae carros de marcas y colores distintos, entregados y en taller, y empleados con piezas', () => {
   const carros = carrosDemo(HOY);
-  assert.equal(carros.length, 5);
+  // Seis desde el 9-nov: DEM006 es la Captiva de la pestaña Vehículos (sus pruebas, en vehiculos.test.js).
+  assert.equal(carros.length, 6);
   assert.ok(carros.every((c) => c.demo));
   assert.equal(new Set(carros.map((c) => c.marca)).size, 5);
-  assert.equal(new Set(carros.map((c) => c.color)).size, 5);
+  assert.equal(new Set(carros.map((c) => c.color)).size, 6);
   assert.equal(new Set(carros.map((c) => c.carroceria)).size, 4);
   const entregados = carros.filter((c) => c.entregado);
   assert.equal(entregados.length, 3);
   assert.ok(entregados.every((c) => c.cobro > 0));
   assert.ok(carros.some((c) => Object.values(c.piezas).some((p) => p.estado === 'en-proceso')));
   // Ninguna pieza inventada: crearCarro las habría descartado en silencio.
-  assert.deepEqual(carros.map((c) => Object.keys(c.piezas).length), [3, 5, 4, 3, 2]);
+  assert.deepEqual(carros.map((c) => Object.keys(c.piezas).length), [3, 5, 4, 3, 2, 3]);
   const empleados = empleadosDemo(HOY);
   assert.equal(empleados.length, EMPLEADOS_DEMO.length);
   assert.ok(empleados.every((e) => e.demo && e.nombre));
@@ -258,7 +283,7 @@ test('el almacén guarda empleados, carga la demostración sin pisar lo real y l
   const real = crearCarro({ placa: 'DEM001', marca: 'Fiat' });
   await almacen.guardar(real);
   const cargado = await cargarDemo(almacen, HOY);
-  assert.equal(cargado.carros, 4); // DEM001 era real: no se pisa
+  assert.equal(cargado.carros, 5); // DEM001 era real: no se pisa
   assert.equal(cargado.empleados, 3);
   assert.equal((await almacen.obtener('DEM001')).marca, 'Fiat');
   const empleados = await almacen.listarEmpleados();
@@ -271,7 +296,7 @@ test('el almacén guarda empleados, carga la demostración sin pisar lo real y l
   await assert.rejects(() => almacen.guardarEmpleado({ nombre: '   ' }));
 
   const quitado = await almacen.quitarDemo();
-  assert.deepEqual(quitado, { carros: 4, empleados: 3 });
+  assert.deepEqual(quitado, { carros: 5, empleados: 3 });
   assert.equal((await almacen.listar()).length, 1);
   assert.deepEqual((await almacen.listarEmpleados()).map((e) => e.nombre), ['Marta Díaz']);
   almacen.cerrar();

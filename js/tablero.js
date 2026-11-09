@@ -89,6 +89,12 @@ export function textoParaQuitar(nombre, pieza, id, empleados = []) {
 // tienen su id como pintor y pasaron a terminada dentro de la semana) y lo
 // que se le paga. Las piezas terminadas sin pintor asignado se listan
 // aparte: alguien las pintó y nadie va a cobrar.
+//
+// Un carro de demostración solo le cuenta a un empleado de demostración. A
+// uno real nunca se le paga un carro que no existe, y sin pintor tampoco se
+// lista para que se lo asignen: DEM006 entra solo a un taller real con "Ver
+// en 3D", y un toque en Terminada sumaba 90.000 pesos a la nómina de una
+// pintora real, sin ninguna marca (revisión del 9-nov).
 export function nominaSemanal(carros, empleados, semana) {
   const porEmpleado = new Map(empleados.map((e) => [e.id, { empleado: e, piezas: [], total: 0 }]));
   const sinPintor = [];
@@ -98,6 +104,7 @@ export function nominaSemanal(carros, empleados, semana) {
       const pago = pagoDePieza(pieza, id);
       const detalle = { placa: carro.placa, carro, id, pieza, pago };
       const fila = porEmpleado.get(pieza.pintor);
+      if (carro.demo && !(fila && fila.empleado.demo)) continue;
       if (!fila) {
         sinPintor.push(detalle);
         continue;

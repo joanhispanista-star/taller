@@ -58,6 +58,9 @@ export function archivosApp(raiz = RAIZ) {
     // El cargador del lector de placas (50 KB); el modelo va con el motor.
     ...listar(raiz, 'js/vendor/placa', (n) => n.endsWith('.mjs')),
     ...listar(raiz, 'iconos', (n) => n.endsWith('.png')),
+    // Las miniaturas de los modelos de catálogo (pestaña Vehículos y portada en el Garaje), unos 60 KB cada una: sin
+    // ellas la pestaña abriría sin señal con los cuadros vacíos. Los GLB (modelos/) siguen fuera, a propósito.
+    ...listar(raiz, 'vehiculos', (n) => n.endsWith('.jpg')),
   ].sort();
 }
 
@@ -79,7 +82,9 @@ export function rutaEnDisco(archivo) {
 // esto el mismo commit daría una versión distinta en cada máquina.
 function contenidoParaHuella(ruta) {
   const bytes = fs.readFileSync(ruta);
-  if (/\.(png|wasm)$/.test(ruta)) return bytes;
+  // Un JPEG pasado por texto pierde los bytes que no son UTF-8 (todos salen igual), y una miniatura nueva podía dar la
+  // misma huella que la vieja: los teléfonos no se enterarían de la versión nueva.
+  if (/\.(png|jpg|wasm)$/.test(ruta)) return bytes;
   return Buffer.from(bytes.toString('utf8').split(String.fromCharCode(13, 10)).join(String.fromCharCode(10)), 'utf8');
 }
 

@@ -3,9 +3,21 @@
 // corrige lo que la foto propuso mal ("no es 7 puestos, es 5"), o le pone
 // datos a un carro que entró solo por placa. DOM puro, sin Three.js.
 import { CARROCERIAS, normalizarCarroceria } from './carrocerias.js';
-import { buscarLinea, catalogoOrdenado, datosDeEntrada, nombreDeLinea } from './catalogo.js';
+import { buscarLinea, catalogoOrdenado, datosDeEntrada, entradaExacta, marcaDelCatalogo, nombreDeLinea, sinTildes } from './catalogo.js';
 import { nombreDeColor } from './color-foto.js';
 import { fechaCorta } from './garaje.js';
+
+// La línea escrita sola ("Captiva (nueva)", como la sugiere el campo) con la marca escrita de más ("Chevrolet Captiva", que es lo
+// que guarda el formulario por placa del Garaje): la entrada del catálogo de esa marca y esa línea, o null. Hasta el 9-nov quedaba
+// "Chevrolet Captiva Captiva (nueva)", con la carrocería de cajas, siguiendo al pie de la letra lo que decía la pestaña Vehículos.
+// Solo cuando la marca trae algo más que la marca: con "Chevrolet" a secas ya queda bien, y al guardar no se vuelve a pasar por
+// aquí y no pisa la carrocería que se haya elegido después.
+export function lineaConLaMarcaDeMas(marcaTexto, lineaTexto) {
+  const marca = sinTildes(marcaTexto);
+  const deCatalogo = marcaDelCatalogo(marca.split(/\s+/)[0]);
+  if (!deCatalogo || !lineaTexto || marca === sinTildes(deCatalogo)) return null;
+  return entradaExacta(deCatalogo + ' ' + lineaTexto);
+}
 
 // Pesos con punto de miles mientras se escribe: 1250000 → 1.250.000.
 function conPuntos(digitos) {
@@ -73,8 +85,9 @@ export function crearFichaCarro({ alGuardar }) {
   function tomarLinea() {
     const texto = ui.linea.value.trim();
     const encontrada = buscarLinea(texto, 1)[0];
-    if (encontrada && nombreDeLinea(encontrada).toLowerCase() === texto.toLowerCase()) {
-      const datos = datosDeEntrada(encontrada);
+    const entrada = encontrada && nombreDeLinea(encontrada).toLowerCase() === texto.toLowerCase() ? encontrada : lineaConLaMarcaDeMas(ui.marca.value, texto);
+    if (entrada) {
+      const datos = datosDeEntrada(entrada);
       borrador.marca = datos.marca;
       borrador.linea = datos.linea;
       borrador.carroceria = datos.carroceria;

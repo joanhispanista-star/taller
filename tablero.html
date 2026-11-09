@@ -24,10 +24,14 @@
   </header>
 
   <!-- Las mismas pestañas que en el Garaje: la primera es un enlace a la
-       otra página; las otras tres cambian de sección aquí mismo, sin
-       recargar (los datos ya están leídos). -->
+       otra página; las otras cuatro cambian de sección aquí mismo, sin
+       recargar (los datos ya están leídos). Vehículos vive aquí y no en
+       una página nueva: ya está en la precarga, ya tiene el registro
+       abierto (para crear el carro de "Ver en 3D") y el bloque de la
+       demostración. -->
   <nav class="pestanas" aria-label="Secciones">
     <a href="garaje.html">Garaje</a>
+    <a href="tablero.html?p=vehiculos" data-pestana="vehiculos">Vehículos</a>
     <a href="tablero.html?p=empleados" data-pestana="empleados">Empleados</a>
     <a href="tablero.html?p=historial" data-pestana="historial">Historial</a>
     <a href="tablero.html?p=indicadores" data-pestana="indicadores">Indicadores</a>
@@ -35,6 +39,24 @@
 
   <main class="garaje tablero">
     <p id="aviso" class="aviso" hidden></p>
+
+    <!-- ===== Vehículos: los modelos que la app ya trae en 3D ===== -->
+    <!-- Las tarjetas salen de la tabla MODELOS (js/modelos-catalogo.js) y
+         "Los que siguen" de MODELOS_EN_OBRA, que con la tabla vacía no se
+         muestra: no se anuncian carros que nadie está haciendo. -->
+    <section id="vehiculos" class="pestana" hidden aria-label="Vehículos">
+      <!-- Solo al llegar del enlace de prueba con una placa que en este teléfono no se vería: dice por qué (js/enlace-prueba.js). -->
+      <p id="vehiculos-enlace" class="aviso-enlace" hidden></p>
+      <!-- "Tiene" y no "ya trae": el modelo se baja la primera vez que se abre (lo dice cada tarjeta, con su peso). -->
+      <p class="ayuda">Los carros que la app tiene en 3D de verdad. Cada uno está hecho con fotos de un carro real de esa línea (no de tu carro, y no es un escaneo): si llega uno de estos al taller, no hay que escanearlo, sale solo con su línea.</p>
+      <div id="vehiculos-lista" class="vehiculos"></div>
+      <div id="vehiculos-en-obra" class="vehiculos-en-obra" hidden>
+        <h2>Los que siguen</h2>
+        <p class="ayuda">Todavía no están en la app: se están haciendo sus modelos.</p>
+        <ul></ul>
+      </div>
+      <p class="ayuda" id="vehiculos-demas"></p>
+    </section>
 
     <!-- ===== Empleados: la nómina de la semana ===== -->
     <section id="empleados" class="pestana" hidden aria-label="Empleados">
@@ -122,7 +144,12 @@
          que es demostración y se quita en bloque. -->
     <div id="demo" class="demo" hidden>
       <p class="ayuda" id="demo-texto"></p>
-      <button type="button" id="demo-boton"></button>
+      <!-- El segundo solo sale con la demostración a medias (el carro de
+           "Ver en 3D" sin el resto): el primero carga lo que falta. -->
+      <div class="demo-botones">
+        <button type="button" id="demo-boton"></button>
+        <button type="button" id="demo-quitar" hidden>Quitar la demostración</button>
+      </div>
     </div>
   </main>
 
