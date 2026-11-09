@@ -2410,6 +2410,9 @@ export function juntasDelEscaneo(posiciones, indices, deTriangulo, nombres, norm
 // se ve en la foto. Lo único que se le suma es un brillo muy suave que sí depende de
 // desde dónde se mira (el canto que se aclara, una lámpara arriba): los reflejos de la
 // foto están pegados, y al girar eso es lo que delata una foto sobre una forma.
+//
+// Un carro de catálogo que traiga su máscara (extras.taller.pintura.brillo) lleva además un reflejo calculado, solo dentro de #ifdef CATALOGO_BRILLO: un escaneo no
+// entra ahí, y un archivo sin máscara se ve igual que antes. Sin memoria nueva ni otra textura: de 1 a 3 lecturas de la misma imagen por píxel sin color elegido, y de 2 a 3 con color, también en el pase del reflejo del piso.
 function materialDeFoto(textura, catalogo = null) {
   const material = new THREE.ShaderMaterial({
     uniforms: { mapa: { value: textura }, ...(catalogo ? catalogo.uniforms : {}) },
@@ -2431,25 +2434,71 @@ function materialDeFoto(textura, catalogo = null) {
       uniform float uConTono; uniform vec3 uTono; uniform vec3 uBase; uniform vec3 uCapa;
       uniform float uConPlaca; uniform sampler2D uPlaca; uniform vec4 uRectPlaca;
       #endif
+      #ifdef CATALOGO_BRILLO
+      uniform vec4 uBrillo;
+      // Una sala de exhibición en pocas cuentas, sin imagen: un piso oscuro, paredes y techo tenues, un panel ancho en el centro y dos lámparas largas a lo largo del carro. p es dónde cae
+      // el rayo en el plano del techo: por eso las lámparas se ven angostas de frente y se juntan hacia el horizonte, como unas de verdad. Todo con orillas muy anchas y poca luz: con orillas
+      // de 0,1 y mucha luz, en la curva de la punta del capó salía un gancho de borde marcado, y en el techo una mancha, y se leían como plástico moldeado. Por eso aquí no hay ninguna silueta: solo
+      // un degradé que camina al girar. Con poco piso: lo que se suma aquí es lo que un negro no se puede quitar, y el capó negro quedaba 31 niveles por encima del color pedido.
+      float sala(vec3 r, float f){
+        vec2 p = r.xz / max(r.y, 0.02);
+        float arriba = smoothstep(0.02, 0.12, r.y);
+        float panel = (1.0 - smoothstep(0.0, 1.5, abs(p.x))) * (1.0 - smoothstep(0.3, 3.4, abs(p.y)));
+        // Sobre un pliegue el reflejo recorre la lámpara en menos de un píxel, y salía una raya punteada que se leía como un rayón. Con fwidth la lámpara se reparte en lo que cubre el píxel.
+        float w = fwidth(p.x);
+        float lamparas = (1.0 - smoothstep(0.02 - w, 0.55 + w, abs(abs(p.x) - 0.85))) * (0.5 / (0.5 + 2.0 * w)) * (1.0 - smoothstep(2.0, 3.6, abs(p.y)));
+        float franja = smoothstep(0.10, 0.24, r.y) * (1.0 - smoothstep(0.3, 0.6, r.y));
+        // Una lámpara vista de canto daría un blanco quemado: con tope.
+        return f * (0.008 + 0.02 * smoothstep(-0.03, 0.12, r.y) + 0.03 * franja + 0.035 * smoothstep(0.12, 0.85, r.y) + 0.25 * arriba * panel) + min(f * 1.0 * arriba * lamparas, 0.10);
+      }
+      #endif
       void main(){
         vec3 c = texture2D(mapa, vU).rgb;
-        #ifdef CATALOGO
-        // Foto = reflejos + capa * color de la foto, en lineal. Se cambia solo lo segundo.
-        // Arriba de 0,7 los reflejos se comprimen en vez de cortarse en 1: en blanco y plateado el capó y los guardafangos perdían la forma.
-        if (uConTono > 0.5) {
-          c = max(c + texture2D(mapa, vec2(vU.x * uCapa.x, uCapa.z + vU.y * uCapa.y)).r * (uTono - uBase), vec3(0.0));
-          vec3 sobra = max(c - 0.7, vec3(0.0));
-          c = min(c, vec3(0.7)) + sobra / (1.0 + sobra / 0.3);
-        }
-        if (uConPlaca > 0.5 && vU.x > uRectPlaca.x && vU.x < uRectPlaca.z && vU.y > uRectPlaca.y && vU.y < uRectPlaca.w) c = texture2D(uPlaca, (vU - uRectPlaca.xy) / (uRectPlaca.zw - uRectPlaca.xy)).rgb;
-        #endif
         vec3 n = normalize(vN);
         if (!gl_FrontFacing) n = -n;
         vec3 v = normalize(vV);
+        #ifdef CATALOGO
+        // Foto = reflejos + capa * color de la foto, en lineal. Se cambia solo lo segundo.
+        // Arriba de 0,7 los reflejos se comprimen en vez de cortarse en 1: en blanco y plateado el capó y los guardafangos perdían la forma.
+        float capaAqui = texture2D(mapa, vec2(vU.x * uCapa.x, uCapa.z + vU.y * uCapa.y)).r;
+        if (uConTono > 0.5) c = max(c + capaAqui * (uTono - uBase), vec3(0.0));
+        #ifdef CATALOGO_BRILLO
+        // El reflejo de la foto está pegado, y al girar eso es lo que delata una foto sobre una forma: este sí se mueve. Fresnel de un barniz (0,04 de frente, y con tope de canto: el capó se mira casi de canto,
+        // y con todo el Fresnel, en Frente, el negro salía en 98 contra 34 de la puerta), con la máscara del archivo: mucho en capó, techo y parabrisas, poco en los costados, nada en llantas,
+        // plástico, cromo y stops. Antes de comprimir, para que blanco y plateado no se quemen. El reflejo va teñido con la pintura, solo donde hay capa: blanco azulado sobre un café o un rojo, lava el
+        // color, y el capó quedaba de otro tono que el guardafango, que trae poco reflejo; el vidrio sigue neutro.
+        vec3 brillo = texture2D(mapa, uBrillo.xy + vU * uBrillo.zw).rgb;
+        float cuanto = brillo.r;
+        // En el reflejo del piso, la cámara va debajo del piso: esta cuenta ahí cambia 3 niveles como mucho (medido), y se paga por píxel dos veces. Se ahorra.
+        if (cameraPosition.y > 0.0) {
+          vec3 tinte = uConTono > 0.5 ? uTono : uBase;
+          tinte /= max(max(tinte.r, tinte.g), max(tinte.b, 0.001));
+          float enPintura = smoothstep(0.03, 0.2, capaAqui);
+          float fresnel = min(0.04 + 0.96 * pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 5.0), 0.3);
+          // El vidrio refleja más que lo que la máscara dice para la pintura: va sin nada debajo. El azul de la máscara es el filo del pliegue: una rayita de luz que no depende de la sala.
+          c += mix(vec3(0.92, 0.96, 1.0), tinte, 0.6 * enPintura) * (cuanto * (3.0 - 2.0 * enPintura) * sala(reflect(-v, n), fresnel) + brillo.b * 0.18 * fresnel);
+        }
+        #endif
+        if (uConTono > 0.5) {
+          vec3 sobra = max(c - 0.7, vec3(0.0));
+          c = min(c, vec3(0.7)) + sobra / (1.0 + sobra / 0.3);
+        }
+        #ifdef CATALOGO_BRILLO
+        // La sombra de la forma: después de comprimir, para que también dibuje el pliegue en un blanco. Poquita: con 0,14, de frente se leía como una cuña oscura al lado del pliegue, que en las fotos no está, y en un blanco como mugre gris.
+        c *= 1.0 - 0.06 * brillo.g;
+        #endif
+        if (uConPlaca > 0.5 && vU.x > uRectPlaca.x && vU.x < uRectPlaca.z && vU.y > uRectPlaca.y && vU.y < uRectPlaca.w) c = texture2D(uPlaca, (vU - uRectPlaca.xy) / (uRectPlaca.zw - uRectPlaca.xy)).rgb;
+        #endif
         float canto = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.0);
         float lampara = smoothstep(0.45, 0.95, reflect(-v, n).y);
         // Abajo no: llantas y bajos no brillan.
         float alto = smoothstep(0.32, 0.62, vY);
+        #ifdef CATALOGO_BRILLO
+        // Lo que ya lleva el brillo de verdad no lleva este, que es de mentira. Tampoco la cara de afuera del pliegue, que lleva poco: de canto, ese velo blanco era lo que más le lavaba el color.
+        alto *= 1.0 - smoothstep(0.14, 0.28, cuanto);
+        // Y la lámpara de arriba, en nada de la pintura: desde arriba le ponía un velo pálido a todo menos al techo, y el techo se veía como un rectángulo de otro tono.
+        lampara *= 1.0 - smoothstep(0.02, 0.14, cuanto);
+        #endif
         c += vec3(0.88, 0.94, 1.0) * alto * (0.13 * canto + 0.05 * lampara);
         gl_FragColor = vec4(c, 1.0);
         #include <colorspace_fragment>

@@ -5,8 +5,12 @@
 // el estribo casi nunca se marca a la primera, y lo que se marca es la
 // puerta de arriba: una orden con la pieza equivocada. Por eso, además del
 // rayo del centro, se lanzan ocho más en un anillo del tamaño de la yema, y
-// si alguno cae sobre una pieza delgada esa gana. A una puerta o un capó no
-// les afecta: el centro los decide igual que antes.
+// si alguno cae sobre una pieza delgada esa gana. Eso le quita a una puerta lo
+// que tiene cerca del estribo o del espejo: con 12 px, en un carro de catálogo,
+// un 34 % de lo que se ve de la puerta delantera en Inicio (medido con el mapa de
+// esta función), y lo bajo de una puerta es lo que más se raspa. Por eso
+// `radioSobreLata`: si el centro ya cayó en una lata, el anillo se achica; en el
+// vidrio o en el aire sigue del tamaño de la yema, que es para lo que está.
 //
 // Sin DOM a propósito: se prueba en Node con una cámara y el carro reales.
 import * as THREE from 'three';
@@ -20,9 +24,10 @@ const delgadas = [];
 
 // `x`, `y` en píxeles dentro del lienzo de `ancho` × `alto`. Devuelve el id
 // de la pieza o null si el dedo cayó en el vidrio, una llanta o el piso.
-export function piezaTocada({ camara, grupo, x, y, ancho, alto, radioPx = 12 }) {
+export function piezaTocada({ camara, grupo, x, y, ancho, alto, radioPx = 12, radioSobreLata = radioPx }) {
   const centro = cruzar(x, y);
   if (centro && DELGADAS.has(centro)) return centro;
+  const radio = centro ? radioSobreLata : radioPx;
   // Solo una pieza delgada puede cambiar lo que dijo el rayo del centro: cada rayo del
   // anillo pregunta primero contra esas, y solo si cruza alguna se lanza contra todo el
   // carro. En un escaneo de 135.000 triángulos, 9 rayos completos tardaban 83 ms en el
@@ -34,8 +39,8 @@ export function piezaTocada({ camara, grupo, x, y, ancho, alto, radioPx = 12 }) 
   if (!delgadas.length) return centro;
   for (let i = 0; i < RAYOS_EN_ANILLO; i++) {
     const angulo = (i * 2 * Math.PI) / RAYOS_EN_ANILLO;
-    const px = x + Math.cos(angulo) * radioPx;
-    const py = y + Math.sin(angulo) * radioPx;
+    const px = x + Math.cos(angulo) * radio;
+    const py = y + Math.sin(angulo) * radio;
     apuntar(px, py);
     if (!rayo.intersectObjects(delgadas, false).length) continue;
     const id = cruzar(px, py);

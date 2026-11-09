@@ -30,6 +30,8 @@
   li.ojo b::before { content: '! '; color: var(--ojo); }
   li.info b::before { content: '· '; color: var(--suave); }
   canvas#lienzo3d, canvas#lienzo-modelo { width: 100%; height: 200px; display: block; border-radius: 12px; background: #000; margin: 8px 0; }
+  /* Del tamaño del visor: lo que cuesta el brillo se paga por píxel de carro, y en 200 px de alto dibujaba de 5 a 14 veces menos carro que la pantalla de verdad. */
+  canvas#lienzo-modelo { height: 73vh; }
   canvas[hidden] { display: none !important; }
 </style>
 </head>
@@ -549,6 +551,7 @@ ui.modelo.addEventListener('click', async () => {
       const camara = new THREE.PerspectiveCamera(30, ui.lienzoModelo.clientWidth / ui.lienzoModelo.clientHeight, 0.1, 80);
       camara.position.set(-7, 2.4, -9);
       camara.lookAt(0, 0.7, 0);
+      const encuadre = await import('./js/encuadre.js');
       const m = catalogo.modeloDesdeEscaneo({ ...escaneo.escaneo, fotoAbierta: bitmap.imagen }, { placa: 'DIA 001' });
       bitmap = null; // Ya es del modelo.
       await m.texturaLista;
@@ -563,26 +566,71 @@ ui.modelo.addEventListener('click', async () => {
       const error = gl.getError();
       if (gl.isContextLost()) throw new Error('el contexto de WebGL se cayó al dibujar');
       if (error) throw new Error(error === gl.OUT_OF_MEMORY ? 'OUT_OF_MEMORY: no cabe' : 'WebGL dio el error ' + error);
-      return { r, escena, camara, piso, m, THREE, detalle: r.info.render.triangles + ' triángulos · se ve arriba' };
+      return { r, escena, camara, piso, m, THREE, encuadre, detalle: r.info.render.triangles + ' triángulos · se ve arriba' };
     }, 60000);
     if (!render) return;
     await pasoDelModelo('Modelo: girarlo, a ver si va fluido', async () => {
-      const tramos = [];
-      let antes = performance.now();
-      for (let i = 0; i < 60; i++) {
-        const angulo = i * 0.05;
-        render.camara.position.set(Math.cos(angulo) * 11, 2.4, Math.sin(angulo) * 11);
-        render.camara.lookAt(0, 0.7, 0);
-        render.piso.actualizar(render.camara, render.m.disposicion);
+      // Lo mismo que le pide el visor a la GPU: el lienzo de la pantalla, el mismo lente, la mira a la misma altura y la distancia de cada vista. Girando alrededor, de frente y desde arriba, que es donde más carro hay por píxel.
+      const { LENTE, ALTURA_DE_LA_MIRA, VISTAS, distanciaQueEncuadra } = render.encuadre;
+      const medidas = render.m.disposicion;
+      const mira = new render.THREE.Vector3(0, medidas.alto * ALTURA_DE_LA_MIRA, 0);
+      render.camara.fov = LENTE;
+      render.camara.updateProjectionMatrix();
+      const direccionEn = (x, y, z) => new render.THREE.Vector3(x, y, z).sub(mira).normalize();
+      const ponerEn = (d) => {
+        render.camara.position.copy(mira).addScaledVector(d, distanciaQueEncuadra({ direccion: d, medidas, mira, fov: render.camara.fov, aspecto: render.camara.aspect }));
+        render.camara.lookAt(mira);
+      };
+      // Cuántos píxeles de carro se dibujan: sin el piso ni el fondo, se cuenta lo que no quedó en negro. Es una sola lectura, fuera de la medida.
+      const pixelesDeCarro = () => {
+        const fondo = render.escena.background;
+        const piso = render.piso.malla;
+        const visibles = piso.visible;
+        render.escena.background = null;
+        piso.visible = false;
+        render.r.setClearColor(0x000000, 1);
         render.r.render(render.escena, render.camara);
-        await new Promise((listo) => requestAnimationFrame(listo));
-        const ahora = performance.now();
-        tramos.push(ahora - antes);
-        antes = ahora;
+        const gl = render.r.getContext();
+        const w = gl.drawingBufferWidth;
+        const h = gl.drawingBufferHeight;
+        const d = new Uint8Array(w * h * 4);
+        gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, d);
+        let n = 0;
+        for (let i = 0; i < d.length; i += 4) if (d[i] || d[i + 1] || d[i + 2]) n++;
+        render.escena.background = fondo;
+        piso.visible = visibles;
+        return n;
+      };
+      const girar = async (vueltas, poner) => {
+        const tramos = [];
+        let antes = performance.now();
+        for (let i = 0; i < vueltas; i++) {
+          poner(i);
+          render.piso.actualizar(render.camara, render.m.disposicion);
+          render.r.render(render.escena, render.camara);
+          await new Promise((listo) => requestAnimationFrame(listo));
+          const ahora = performance.now();
+          tramos.push(ahora - antes);
+          antes = ahora;
+        }
+        tramos.sort((a, b) => a - b);
+        return { cuadros: Math.round(1000 / tramos[tramos.length >> 1]), lento: Math.round(tramos[tramos.length - 1]) };
+      };
+      const alrededor = await girar(60, (i) => ponerEn(direccionEn(Math.cos(i * 0.05) * 11, 2.4, Math.sin(i * 0.05) * 11)));
+      const vistas = [];
+      for (const nombre of ['frente', 'arriba']) {
+        const base = direccionEn(...VISTAS[nombre]);
+        const resultado = await girar(30, (i) => ponerEn(base.clone().applyAxisAngle(new render.THREE.Vector3(0, 1, 0), Math.sin(i * 0.2) * 0.15)));
+        ponerEn(base);
+        vistas.push(nombre + ' ' + resultado.cuadros + ' cuadros/s, ' + Math.round(pixelesDeCarro() / 1000) + ' mil px de carro');
+        alrededor.cuadros = Math.min(alrededor.cuadros, resultado.cuadros);
+        alrededor.lento = Math.max(alrededor.lento, resultado.lento);
       }
-      tramos.sort((a, b) => a - b);
-      const cuadros = Math.round(1000 / tramos[tramos.length >> 1]);
-      return { detalle: cuadros + ' cuadros/s (el más lento, ' + Math.round(tramos[tramos.length - 1]) + ' ms)', ojo: cuadros < 20 };
+      const gl = render.r.getContext();
+      return {
+        detalle: alrededor.cuadros + ' cuadros/s lo más lento (el cuadro más largo, ' + alrededor.lento + ' ms) · ' + vistas.join(' · ') + ' · lienzo de ' + gl.drawingBufferWidth + ' x ' + gl.drawingBufferHeight + ' px',
+        ojo: alrededor.cuadros < 20,
+      };
     }, 60000);
   } finally {
     if (bitmap && bitmap.imagen) bitmap.imagen.close();

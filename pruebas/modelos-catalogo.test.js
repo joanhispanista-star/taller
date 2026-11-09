@@ -9,6 +9,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { archivosApp } from '../herramientas/sellar-version.mjs';
 import { normalizarCarroceria } from '../js/carrocerias.js';
 import { entradaDe, entradaExacta } from '../js/catalogo.js';
+import { ALTURA_DE_LA_MIRA, LENTE, VISTAS, distanciaQueEncuadra } from '../js/encuadre.js';
 import { ajustesDelEscaneo, modeloDesdeEscaneo } from '../js/escaneo.js';
 import { escaneoDeCatalogo } from '../js/escaneo-catalogo.js';
 import { leerArchivoDeEscaneo } from '../js/escaneo-importar.js';
@@ -22,6 +23,11 @@ import { crearPisoVitrina } from '../js/piso-vitrina.js';
 import { campoDePieza, campoGuardado } from '../js/escaneo-velo.js';
 import FDBObjectStore from 'fake-indexeddb/lib/FDBObjectStore';
 import { PIEZAS } from '../js/piezas.js';
+import { piezaTocada } from '../js/toque.js';
+
+// Para leer la máscara del brillo sin un navegador. sharp llega con el reconocedor (@huggingface/transformers), y ya lo usa herramientas/generar-iconos.mjs;
+// si un día no está, esa prueba no corre, y no es razón para que caigan las demás de este archivo.
+const sharp = await import('sharp').then((m) => m.default, () => null);
 
 const CAPTIVA = MODELOS[0];
 const ruta = (modelo) => new URL('../' + modelo.archivo, import.meta.url);
@@ -103,6 +109,11 @@ test('cada archivo de verdad se lee sin lienzos: las 17 piezas de afuera, en met
     for (const etiqueta of cuentas.keys()) assert.ok(etiqueta < e.nombres.length, 'etiqueta sin nombre: ' + etiqueta);
     // El nombre que trae el archivo es el de la tabla: el crédito y el color de por dentro salen de ahí.
     assert.equal(modeloDelCatalogo(malla.catalogo), m);
+    // La máscara del brillo, al lado de la capa de pintura y sin pisarla. Sin esto, el carro se ve sin el brillo que se mueve, y nada avisa.
+    const { capa, brillo } = malla.catalogo.pintura;
+    assert.ok(brillo, 'sin máscara del brillo');
+    assert.equal(brillo.u0, capa.escala_u);
+    assert.equal(brillo.v0, capa.v0);
   }
 });
 
@@ -141,24 +152,25 @@ test('el lector directo da lo mismo que la ruta de la receta: posiciones, índic
   for (const k of ['ejeDel', 'ejeTras', 'puertaDel', 'puertaMedia', 'puertaTras', 'capoTras', 'parabrisasAlto']) assert.equal(a.ajustes[k], b.ajustes[k], k);
 });
 
+// El mismo archivo con otro JSON, y el resto como estaba. La cuenta en bytes: el JSON trae tildes.
+function armar(cambiar) {
+  const largoJson = new DataView(BYTES).getUint32(12, true);
+  const json = JSON.parse(new TextDecoder().decode(new Uint8Array(BYTES, 20, largoJson)));
+  cambiar(json);
+  const sinRelleno = new TextEncoder().encode(JSON.stringify(json));
+  const relleno = (4 - (sinRelleno.length % 4)) % 4;
+  const restoDesde = 20 + largoJson;
+  const salida = new Uint8Array(20 + sinRelleno.length + relleno + BYTES.byteLength - restoDesde).fill(32);
+  salida.set(new Uint8Array(BYTES, 0, 20));
+  salida.set(sinRelleno, 20);
+  salida.set(new Uint8Array(BYTES, restoDesde), 20 + sinRelleno.length + relleno);
+  const d = new DataView(salida.buffer);
+  d.setUint32(8, salida.length, true);
+  d.setUint32(12, sinRelleno.length + relleno, true);
+  return salida.buffer;
+}
+
 test('lo que no es un carro de catálogo entero no se lee a medias', () => {
-  // Otro JSON, con el resto del archivo como estaba. La cuenta en bytes: el JSON trae tildes.
-  const armar = (cambiar) => {
-    const largoJson = new DataView(BYTES).getUint32(12, true);
-    const json = JSON.parse(new TextDecoder().decode(new Uint8Array(BYTES, 20, largoJson)));
-    cambiar(json);
-    const sinRelleno = new TextEncoder().encode(JSON.stringify(json));
-    const relleno = (4 - (sinRelleno.length % 4)) % 4;
-    const restoDesde = 20 + largoJson;
-    const salida = new Uint8Array(20 + sinRelleno.length + relleno + BYTES.byteLength - restoDesde).fill(32);
-    salida.set(new Uint8Array(BYTES, 0, 20));
-    salida.set(sinRelleno, 20);
-    salida.set(new Uint8Array(BYTES, restoDesde), 20 + sinRelleno.length + relleno);
-    const d = new DataView(salida.buffer);
-    d.setUint32(8, salida.length, true);
-    d.setUint32(12, sinRelleno.length + relleno, true);
-    return salida.buffer;
-  };
   assert.throws(() => leerModeloGlb(new ArrayBuffer(4)), /GLB/);
   assert.throws(() => leerModeloGlb(BYTES.slice(0, BYTES.byteLength - 100)), /GLB/, 'cortado');
   assert.throws(() => leerModeloGlb(new TextEncoder().encode('<html>no es</html>').buffer), /GLB/);
@@ -199,6 +211,203 @@ test('sin color por vértice el carro no sale gris ni revienta, y con la foto ya
   const conLaAbierta = modeloDesdeEscaneo({ ...e, fotoAbierta: yaAbierta }, { colorBase });
   assert.equal((await conLaAbierta.texturaLista).image, yaAbierta);
   assert.equal(abiertas.length, 1, 'se abrió otra vez');
+});
+
+// ---------- La segunda versión, en el archivo de verdad ----------
+
+// El tamaño de la foto y cómo va muestreado su color, de la cabecera del JPEG: sin abrirlo.
+function cabeceraDeJpeg(b) {
+  for (let i = 2; i + 9 < b.length && b[i] === 0xff; i += 2 + ((b[i + 2] << 8) | b[i + 3])) {
+    if (b[i + 1] < 0xc0 || b[i + 1] > 0xc2) continue;
+    return { alto: (b[i + 5] << 8) | b[i + 6], ancho: (b[i + 7] << 8) | b[i + 8], muestreo: Array.from({ length: b[i + 9] }, (_, k) => b[i + 11 + k * 3]) };
+  }
+  throw new Error('no se encontró la cabecera del JPEG');
+}
+
+test('la capa y la máscara van en la foto, lado a lado, y el mosaico no las lee', async () => {
+  const malla = leerModeloGlb(copiaDeBytes());
+  const { capa, brillo } = malla.catalogo.pintura;
+  const { ancho, alto, muestreo } = cabeceraDeJpeg(new Uint8Array(await malla.textura.arrayBuffer()));
+  assert.deepEqual([ancho, alto], [4096, 3072]);
+  // La máscara guarda tres cosas distintas en rojo, verde y azul: con el color submuestreado se correrían unas sobre otras.
+  assert.deepEqual(muestreo, [0x11, 0x11, 0x11], 'el color del JPEG va sin submuestrear');
+  const u = malla.uvs.filter((_, i) => i % 2 === 0);
+  const v = malla.uvs.filter((_, i) => i % 2 === 1);
+  const [maxU, maxV] = [u.reduce((a, b) => Math.max(a, b)), v.reduce((a, b) => Math.max(a, b))];
+  assert.ok(u.reduce((a, b) => Math.min(a, b)) >= 0 && maxU <= 1, 'u del mosaico');
+  assert.ok(v.reduce((a, b) => Math.min(a, b)) >= 0 && maxV <= capa.v0, 'el mosaico se queda arriba de la capa: ' + maxV);
+  // Cada punto del mosaico cae en su capa, a la izquierda, y en su máscara, a la derecha.
+  assert.ok(maxU * capa.escala_u <= brillo.u0, 'la capa no pisa la máscara');
+  assert.ok(brillo.u0 + maxU * brillo.escala_u <= 1 && brillo.v0 + maxV * brillo.escala_v <= 1, 'la máscara se sale de la foto');
+});
+
+test('la máscara dice lo que el sombreador espera: mucho brillo en capó y techo, poco en los costados, nada en las llantas', { skip: !sharp && 'sin sharp' }, async () => {
+  const malla = leerModeloGlb(copiaDeBytes());
+  const e = escaneoDeCatalogo(malla, ajustesDelEscaneo);
+  const { capa, brillo } = malla.catalogo.pintura;
+  const { data, info } = await sharp(Buffer.from(await malla.textura.arrayBuffer())).raw().toBuffer({ resolveWithObject: true });
+  // En lineal, que es como lo lee el sombreador.
+  const leer = (u, v, canal) => {
+    const b = data[(Math.floor(v * info.height) * info.width + Math.floor(u * info.width)) * info.channels + canal] / 255;
+    return b <= 0.04045 ? b / 12.92 : ((b + 0.055) / 1.055) ** 2.4;
+  };
+  const dz = e.catalogo.centroZ;
+  // Las llantas no son pieza: se reconocen por dónde están (en metros, en el marco de las fotos).
+  const enLlanta = (x, y, z) => y < 0.72 && Math.abs(x) > 0.75 && (Math.hypot(y - 0.345, z + 1.4) < 0.36 || Math.hypot(y - 0.345, z - 1.35) < 0.36);
+  const cuentas = new Map();
+  for (let i = 0; i < e.etiquetas.length; i++) {
+    const [u, v] = [e.uvs[i * 2], e.uvs[i * 2 + 1]];
+    const nombre = e.nombres[e.etiquetas[i]];
+    const quien = nombre === 'nada' && enLlanta(e.posiciones[i * 3], e.posiciones[i * 3 + 1], e.posiciones[i * 3 + 2] + dz) ? 'llanta' : nombre;
+    const c = cuentas.get(quien) || { n: 0, brillo: 0, maxBrillo: 0, sombra: 0, filo: 0, capa: 0 };
+    const [r, g, b] = [0, 1, 2].map((k) => leer(brillo.u0 + u * brillo.escala_u, brillo.v0 + v * brillo.escala_v, k));
+    c.n += 1;
+    c.brillo += r;
+    c.maxBrillo = Math.max(c.maxBrillo, r);
+    c.sombra = Math.max(c.sombra, g);
+    c.filo = Math.max(c.filo, b);
+    c.capa += leer(u * capa.escala_u, capa.v0 + v * capa.escala_v, 0);
+    cuentas.set(quien, c);
+  }
+  const media = (quien) => cuentas.get(quien).brillo / cuentas.get(quien).n;
+  assert.ok(media('capo') > 0.45, 'capó: ' + media('capo'));
+  assert.ok(media('techo') > 0.2 && media('techo') < media('capo'), 'techo: ' + media('techo'));
+  for (const id of ['puerta-del-izq', 'puerta-del-der', 'puerta-tras-izq', 'puerta-tras-der', 'costado-izq', 'costado-der', 'baul']) {
+    assert.ok(media(id) < 0.2, id + ': ' + media(id));
+    // Los costados ya traen los reflejos de su foto: la sombra por la forma y el filo del pliegue son cosa del capó. Con margen, por lo que deja el JPEG.
+    assert.ok(cuentas.get(id).sombra < 0.01 && cuentas.get(id).filo < 0.01, id);
+  }
+  assert.ok(cuentas.get('capo').sombra > 0.5 && cuentas.get('capo').filo > 0.5, 'el pliegue del capó');
+  const llanta = cuentas.get('llanta');
+  assert.ok(llanta.n > 1000, 'no se encontraron las llantas: ' + llanta.n);
+  assert.ok(llanta.maxBrillo < 0.01, 'las llantas no brillan: ' + llanta.maxBrillo);
+  assert.ok(llanta.capa / llanta.n < 0.01, 'y no se pintan: ' + llanta.capa / llanta.n);
+  assert.ok(cuentas.get('capo').capa / cuentas.get('capo').n > 0.2, 'el capó sí toma el color');
+});
+
+test('un archivo sin máscara se lee igual, y dibuja sin una cuenta de más: un GLB de antes se sigue viendo como antes', async (t) => {
+  globalThis.createImageBitmap = async () => ({ width: 4096, height: 3072, close() {} });
+  t.after(() => delete globalThis.createImageBitmap);
+  const con = leerModeloGlb(copiaDeBytes());
+  const sin = leerModeloGlb(armar((j) => delete j.nodes[0].extras.taller.pintura.brillo));
+  assert.equal(sin.catalogo.pintura.brillo, undefined);
+  assert.deepEqual(sin.catalogo.pintura.capa, con.catalogo.pintura.capa);
+  assert.equal(primeraDiferencia(sin.posiciones, con.posiciones), null, 'posiciones');
+  assert.equal(primeraDiferencia(sin.uvs, con.uvs), null, 'coordenadas');
+  assert.equal(primeraDiferencia(sin.pieza, con.pieza), null, 'piezas');
+  const materialDe = async (malla) => {
+    const m = modeloDesdeEscaneo(escaneoDeCatalogo(malla, ajustesDelEscaneo), { colorBase: CAPTIVA.colorFoto, color: '#2255aa' });
+    assert.ok(await m.texturaLista);
+    // Todas las piezas llevan el mismo: si una se queda sin la foto, se nota como un parche.
+    const materiales = new Set(m.seleccionables.map((s) => s.material.defines));
+    assert.equal(materiales.size, 1);
+    return m.porId.get('capo').material;
+  };
+  const sinMascara = await materialDe(sin);
+  assert.deepEqual(sinMascara.defines, { CATALOGO: 1 });
+  assert.equal(sinMascara.uniforms.uBrillo, undefined);
+  assert.equal(sinMascara.uniforms.uConTono.value, 1, 'el color de la ficha lo toma igual');
+  const conMascara = await materialDe(con);
+  assert.deepEqual(conMascara.defines, { CATALOGO: 1, CATALOGO_BRILLO: 1 });
+  const { u0, v0, escala_u, escala_v } = con.catalogo.pintura.brillo;
+  assert.deepEqual(conMascara.uniforms.uBrillo.value.toArray(), [u0, v0, escala_u, escala_v]);
+  // Lo mismo con el mismo color: la máscara no cambia cómo se tiñe.
+  assert.deepEqual(conMascara.uniforms.uTono.value.toArray(), sinMascara.uniforms.uTono.value.toArray());
+});
+
+// Un dedo de verdad sobre el archivo de verdad: la función del toque (js/toque.js), con la cámara de un botón de la app, en un lienzo del tamaño del de un
+// teléfono, y con lo mismo que le pasa el visor. Lo que cuenta es lo que le llega a la orden. `vista`: el nombre de un botón, o una posición de cámara.
+// `punto`: en metros, en el marco de las fotos, donde el centro del carro no cae en z = 0: la app lo corre por centroZ.
+function dedoSobre(bytes) {
+  const ANCHO = 390;
+  const ALTO = 616;
+  const e = escaneoDeCatalogo(leerModeloGlb(bytes), ajustesDelEscaneo);
+  const { grupo, disposicion: medidas } = modeloDesdeEscaneo(e, { colorBase: CAPTIVA.colorFoto });
+  const tocar = (vista, [x, y, z], opciones = { radioSobreLata: 4 }) => {
+    const camara = new THREE.PerspectiveCamera(LENTE, ANCHO / ALTO, 0.1, 80);
+    const mira = new THREE.Vector3(0, medidas.alto * ALTURA_DE_LA_MIRA, 0);
+    const direccion = new THREE.Vector3(...(typeof vista === 'string' ? VISTAS[vista] : vista)).sub(mira).normalize();
+    camara.position.copy(mira).addScaledVector(direccion, distanciaQueEncuadra({ direccion, medidas, mira, fov: LENTE, aspecto: ANCHO / ALTO }));
+    camara.lookAt(mira);
+    camara.updateMatrixWorld(true);
+    const q = new THREE.Vector3(x, y, z - (e.catalogo.centroZ || 0)).project(camara);
+    return piezaTocada({ camara, grupo, x: ((q.x + 1) / 2) * ANCHO, y: ((1 - q.y) / 2) * ALTO, ancho: ANCHO, alto: ALTO, ...opciones });
+  };
+  return { e, tocar };
+}
+
+test('la franja bajo el vidrio de atrás, lo de encima de los stops y el hombro no son Techo: cada pieza son 90.000 en la nómina', () => {
+  const { e, tocar } = dedoSobre(copiaDeBytes());
+  const puntos = [
+    // Estos, en la primera versión, marcaban Techo (o nada): 7 de 7 fallan con ese archivo.
+    ['franja bajo el vidrio, al centro', 'atras', [0, 1.235, 2.13], 'baul'],
+    ['franja bajo el vidrio, a media compuerta', 'atras', [-0.35, 1.25, 2.08], 'baul'],
+    ['encima del stop izquierdo', 'atras', [-0.5, 1.185, 2.1], 'baul'],
+    ['encima del stop derecho', 'atras', [0.5, 1.185, 2.1], 'baul'],
+    ['hombro del costado izquierdo', 'izquierdo', [-0.82, 1.215, 1.45], 'costado-izq'],
+    ['hombro del costado derecho', 'derecho', [0.82, 1.215, 1.45], 'costado-der'],
+    ['hombro, de tres cuartos por detrás', [-10.3, 2.74, 11], [-0.8, 1.24, 1.65], 'costado-izq'],
+    // Y lo que estaba bien sigue bien: se arregló sin correr el problema a otro lado.
+    ['alto de la puerta de atrás', 'izquierdo', [-0.87, 1.175, 0.6], 'puerta-tras-izq'],
+    ['alto de la puerta de adelante', 'derecho', [0.87, 1.165, -0.4], 'puerta-del-der'],
+    ['compuerta, debajo del corbatín', 'atras', [0.25, 0.95, 2.24], 'baul'],
+    ['techo, al centro', 'arriba', [0, 1.72, 0.6], 'techo'],
+    ['techo, sobre la ventana', 'derecho', [0.7, 1.665, 0.3], 'techo'],
+    ['capó, al centro', 'frente', [0, 1.13, -1.75], 'capo'],
+    ['parabrisas: no es pieza', 'frente', [0, 1.45, -0.8], null],
+    ['vidrio de atrás: no es pieza', 'atras', [0, 1.45, 1.96], null],
+  ];
+  for (const [nombre, vista, punto, pieza] of puntos) assert.equal(tocar(vista, punto), pieza, nombre);
+  // Y contado por triángulos, sin cámara: debajo de la ventana no queda Techo, ni capó en el pilar. En la primera versión, 1.525 y 48.
+  const techo = e.nombres.indexOf('techo');
+  const capo = e.nombres.indexOf('capo');
+  let techoAbajo = 0;
+  let capoEnElPilar = 0;
+  const { posiciones: P, indices: I, etiquetas: E } = e;
+  for (let t = 0; t < I.length; t += 3) {
+    const [a, b, c] = [I[t], I[t + 1], I[t + 2]];
+    const etiqueta = E[a] === E[b] || E[a] === E[c] ? E[a] : E[b] === E[c] ? E[b] : E[a];
+    const x = (P[a * 3] + P[b * 3] + P[c * 3]) / 3;
+    const y = (P[a * 3 + 1] + P[b * 3 + 1] + P[c * 3 + 1]) / 3;
+    const z = (P[a * 3 + 2] + P[b * 3 + 2] + P[c * 3 + 2]) / 3 + (e.catalogo.centroZ || 0);
+    if (etiqueta === techo && y > 1.15 && y < 1.31 && z > 0.46 && z < 2.24) techoAbajo += 1;
+    if (etiqueta === capo && x > 0.62 && x < 0.72 && z > -1.06 && z < -0.86) capoEnElPilar += 1;
+  }
+  assert.equal(techoAbajo, 0, 'Techo debajo de la ventana');
+  assert.equal(capoEnElPilar, 0, 'capó en el pilar');
+});
+
+test('el anillo sobre una lata: lo bajo de la puerta es puerta, y el estribo se sigue pudiendo marcar', () => {
+  const { tocar } = dedoSobre(copiaDeBytes());
+  const lata = [-0.92, 0.58, -0.4];
+  const estribo = [-0.92, 0.5, -0.4];
+  assert.equal(tocar('izquierdo', lata), 'puerta-del-izq');
+  assert.equal(tocar('izquierdo', estribo), 'estribo-izq');
+  // Con el anillo de siempre el mismo punto le daba el estribo: es lo que se medía como plata mal contada.
+  assert.equal(tocar('izquierdo', lata, {}), 'estribo-izq');
+  // El visor se lo pasa solo a un carro de catálogo: un escaneo y el genérico siguen como estaban, también el de "por dentro", que es el genérico.
+  assert.match(fs.readFileSync(new URL('../js/visor.js', import.meta.url), 'utf8'), /escaneoVisto && escaneoVisto\.catalogo && !verPiezasEscaneo \? \{ radioSobreLata: 4 \} : \{\}/);
+});
+
+test('al marcar el capó sale su línea: es una lámina suelta, y su orilla abierta cuenta como orilla', () => {
+  const e = escaneoDeCatalogo(leerModeloGlb(copiaDeBytes()), ajustesDelEscaneo);
+  const etiqueta = e.nombres.indexOf('capo');
+  const debajo = (campo) => {
+    let n = 0;
+    for (let i = 0; i < campo.length; i++) if (e.etiquetas[i] === etiqueta && campo[i] < 0.5) n += 1;
+    return n;
+  };
+  const con = campoGuardado(e, 'capo').campo;
+  const sin = campoDePieza(e, 'capo', 10).campo;
+  // Sin cerrar las orillas, el campo casi no baja dentro de la lámina: no cruza 0,5, y el capó marcado se funde con los guardafangos marcados.
+  assert.ok(debajo(con) > 3 * debajo(sin), 'con ' + debajo(con) + ' y sin ' + debajo(sin));
+  let [minimo, maximo] = [1, 0];
+  for (let i = 0; i < con.length; i++) {
+    if (e.etiquetas[i] !== etiqueta) continue;
+    minimo = Math.min(minimo, con[i]);
+    maximo = Math.max(maximo, con[i]);
+  }
+  assert.ok(minimo < 0.05 && maximo > 0.95, 'de ' + minimo + ' a ' + maximo);
 });
 
 // ---------- Lo que dice la pantalla ----------
@@ -979,7 +1188,7 @@ test('el diálogo con el modelo puesto dice qué es, de quién son las fotos y q
   assert.equal(p.elemento('escaneo-titulo').textContent, 'El 3D de este carro');
   assert.equal(p.linea.hidden, false);
   assert.equal(p.credito.hidden, false);
-  assert.match(textoDe(p.credito), /Fotos: Autosdeprimera, CC BY 3\.0 \(Wikimedia Commons\)\. Modificadas: recoloreadas y pegadas sobre una forma 3D\./);
+  assert.match(textoDe(p.credito), /Fotos: Autosdeprimera, CC BY 3\.0 \(Wikimedia Commons\)\. Modificadas: recoloreadas y pegadas sobre una forma 3D; capó y techo pintados aparte, y un brillo calculado encima\./);
   assert.match(textoDe(p.credito), /No es un modelo oficial: Chevrolet es marca de General Motors/);
   // La trompa: lo que el modelo no puede decir por sí mismo. Sin afirmar un año que para Colombia no tiene fuente.
   assert.match(p.estado.textContent, /Las de otros años pueden tener otra trompa/);
@@ -1406,6 +1615,28 @@ test('con menos detalle, el diálogo deja volver a la foto completa; si ya cabe 
   assert.equal(boton.hidden, true);
 });
 
+test('con el 3D caído no se arma nada ni se dice "con menos detalle": eso pasa cuando vuelve', async (t) => {
+  const p = montar(t, crearCarro({ ...LINEA, placa: 'GPU333' }));
+  await p.pantalla.cargar('GPU333');
+  await hasta(() => p.visor.visto, 'el modelo');
+  const abiertas = p.fotos.abiertas;
+  const avisos = p.avisos.length;
+  p.pantalla.modeloNoCupo(new Error('El contexto de WebGL no volvió'), { sinContexto: true });
+  // El escalón ya queda recordado: si no vuelve, al recargar abre con la liviana.
+  assert.equal(nivelDeCupo(CAPTIVA), FOTO_LIVIANA);
+  await unMomento();
+  assert.equal(p.fotos.abiertas, abiertas, 'no abrió otra foto con el contexto caído');
+  assert.equal(p.avisos.slice(avisos).some((a) => /menos detalle/.test(a)), false, 'y no pisó el aviso de que el 3D se cayó');
+  // Refrescar mientras sigue caído tampoco lo arma.
+  await p.pantalla.cargar('GPU333');
+  await unMomento();
+  assert.equal(p.fotos.abiertas, abiertas);
+  // Vuelve: ahora sí, la liviana, y lo dice.
+  p.pantalla.alVolverElContexto();
+  await hasta(() => p.visor.visto && p.fotos.opciones.at(-1) === OPCIONES_LIVIANAS, 'con la liviana');
+  await hasta(() => p.avisos.some((a) => /se ve con menos detalle/.test(a)), 'el aviso');
+});
+
 test('la GPU no da: un escalón menos y otra vez; al final el genérico, sin volver a intentarlo solo', async (t) => {
   const p = montar(t, crearCarro({ ...LINEA, placa: 'GPU111' }));
   await p.pantalla.cargar('GPU111');
@@ -1777,6 +2008,8 @@ test('al lado de cada GLB va su crédito: el archivo se puede bajar suelto, y CC
       assert.ok(creditos.includes(f.enlace), f.enlace);
     }
   }
+  // También el que ya nadie va a leer en la tabla: mientras esté en la carpeta se puede bajar suelto.
+  for (const archivo of fs.readdirSync(new URL('../modelos/', import.meta.url))) if (archivo.endsWith('.glb')) assert.ok(creditos.includes(archivo), archivo);
   const leeme = fs.readFileSync(new URL('../LEEME.md', import.meta.url), 'utf8');
   for (const m of MODELOS) assert.ok(leeme.includes(m.credito.marcaDe), 'el LEEME también');
   assert.equal(archivosApp().filter((a) => a.startsWith('modelos/')).length, 0, 'tampoco va en la precarga');
@@ -1842,7 +2075,7 @@ test('el campo de un velo de catálogo se calcula una vez, con menos vueltas que
   const e = escaneoDeCatalogo(leerModeloGlb(copiaDeBytes()), ajustesDelEscaneo);
   const uno = campoGuardado(e, 'estribo-izq');
   assert.ok(campoGuardado(e, 'estribo-izq') === uno, 'otra Captiva o otro armado no lo recalcula');
-  assert.equal(primeraDiferencia(uno.campo, campoDePieza(e, 'estribo-izq', 10).campo), null);
+  assert.equal(primeraDiferencia(uno.campo, campoDePieza(e, 'estribo-izq', 10, { cerrarOrillas: true }).campo), null);
 });
 
 

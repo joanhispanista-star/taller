@@ -134,6 +134,7 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar: avisarEnLa
   let lineaCaida = null; // { modelo, clase, texto }: no se pudo en esta apertura, y se vuelve a intentar en la próxima
   let enMemoria = null; // { modelo, escaneo }: dos Captivas seguidas no leen dos veces el archivo
   const yaAvisadas = new Set(); // cada clase de falla de un modelo se dice una vez: otra distinta no sale muda
+  let pendienteDelContexto = null; // { modelo, error, nivel }: el modelo no cupo y el 3D sigue caído; lo que le toca se arma cuando vuelva
   let avisoDeLinea = ''; // lo último que se dijo del modelo, para callarlo cuando deje de ser verdad
   let parecidoDicho = false; // en esta apertura ya se dijo que la app tiene un modelo que quizá le sirva
   let errorDeFoto = null; // lo que dijo el navegador al no abrir la foto: en un iPhone nadie ve la consola
@@ -289,6 +290,7 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar: avisarEnLa
   function soltarLinea() {
     cortarPedidoDeLinea();
     deLinea = null;
+    pendienteDelContexto = null;
     lineaCaida = null;
     avisoDeLinea = '';
     parecidoDicho = false;
@@ -485,6 +487,8 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar: avisarEnLa
     }
     avisarSiEsParecido(carro, toca);
     if (!toca || deLinea || pedidoDeLinea === toca || lineaCaida || previa || guardado) return;
+    // Con el 3D caído no hay dónde dibujarlo: se trae cuando vuelva.
+    if (pendienteDelContexto) return;
     traerLinea(toca);
   }
 
@@ -1175,16 +1179,31 @@ export function crearEscaneoPantalla({ obtenerCarro, mostrar, avisar: avisarEnLa
     },
     // La GPU no dio (visor.js): se perdió el contexto dos veces, no volvió, o la reserva de la foto dio OUT_OF_MEMORY. Sin esto el carro salía
     // negro, o el lienzo en blanco, y nada lo decía. Se recuerda: un escalón menos en este celular, y otra vez; al final, el genérico.
-    modeloNoCupo(error) {
+    // `sinContexto`: el 3D está caído en este momento. El escalón queda recordado y la foto se suelta, pero lo que sigue se arma y se dice cuando vuelva (`alVolverElContexto`): armarlo ahora escribía
+    // "se ve con menos detalle" con el lienzo en blanco, encima del aviso de que el 3D se cayó.
+    modeloNoCupo(error, { sinContexto = false } = {}) {
       if (!deLinea) return;
       const { modelo } = deLinea;
       quitarMarcaDeAbriendo();
       deLinea = null;
       verPiezas = false;
       const nivel = bajarCupo(modelo);
+      if (sinContexto) {
+        pendienteDelContexto = { modelo, error, nivel };
+        ponerLoQueToca();
+        return;
+      }
       if (nivel >= SIN_CUPO) lineaNoSalio(modelo, 'sinCupo', textoSinCupo(modelo, error));
       else vaMasLiviano = true;
       ponerLoQueToca();
+      revisarLinea();
+    },
+    alVolverElContexto() {
+      if (!pendienteDelContexto) return;
+      const { modelo, error, nivel } = pendienteDelContexto;
+      pendienteDelContexto = null;
+      if (nivel >= SIN_CUPO) lineaNoSalio(modelo, 'sinCupo', textoSinCupo(modelo, error));
+      else vaMasLiviano = true;
       revisarLinea();
     },
     // Ya se dibujó con su foto: si la falta de memoria iba a matar la pestaña por esto, ya lo hizo.

@@ -1,13 +1,15 @@
 // Los carros de catálogo: un modelo ya hecho (GLB) de una línea de carro, que trae sus piezas, sus medidas de ficha y lo que hace falta para
 // cambiarle el color. No es un escaneo: nadie le pasó el celular a ESTE carro, y la pantalla no lo dice como si fuera.
 //
-// El archivo lo arma la tubería de fotos (fg-trabajo/captiva/foto). Trae, además de la malla y su foto:
+// El archivo lo arma la tubería de fotos (fg-trabajo/captiva/foto2). Trae, además de la malla y su foto:
 //  - _PIEZA: la pieza de cada vértice, leída a mano de las juntas que se ven en las fotos. Con eso la app no adivina: su filtro de pintura deja
 //    manchas donde la lata no parece pintura (parrilla, bómper negro), y el genérico pone el baúl hasta el vidrio.
 //  - extras.taller en el nodo: la lista de piezas, las medidas, la escala, y dónde está la capa de pintura.
 //  - La capa de pintura, en la misma imagen, debajo del mosaico: por píxel, cuánta pintura se ve. La foto se separó en
-//    "pintura + reflejo" (foto/m05_color.py), así que cambiar de color es sumar capa * (color nuevo - color de la foto), y los reflejos, el
+//    "pintura + reflejo" (m05_color.py), así que cambiar de color es sumar capa * (color nuevo - color de la foto), y los reflejos, el
 //    cromo y los stops no se enteran. Va en la misma imagen porque es la única que la app guarda y vuelve a abrir (soloLaFoto, blobDeTextura).
+//  - La máscara del brillo, al lado de la capa: por píxel, cuánto reflejo calculado lleva (escaneo.js, materialDeFoto). Mucho en capó, techo y parabrisas, que no traen reflejos de
+//    la foto; poco en los costados, que ya traen los suyos; nada en llantas, plástico, cromo y stops. En el verde y el azul, la sombra por la forma y el filo de luz del pliegue. Sin ella (`pintura.brillo`), no se calcula ningún reflejo.
 import * as THREE from 'three';
 import { medidasParaDibujar, normalizarCarroceria } from './carrocerias.js';
 
@@ -109,6 +111,9 @@ export function pinturaDeCatalogo(catalogo, { color = null, placa = '' } = {}) {
     uPlaca: { value: null },
     uRectPlaca: { value: new THREE.Vector4(r ? r.u0 : 0, r ? r.v0 : 0, r ? r.u1 : 0, r ? r.v1 : 0) },
   };
+  // Dónde está la máscara del brillo, si el archivo la trae. Sin ella no se calcula nada: un archivo de antes se ve como siempre.
+  const b = p && p.brillo;
+  if (b) uniforms.uBrillo = { value: new THREE.Vector4(b.u0, b.v0, b.escala_u, b.escala_v) };
   let colorPuesto;
   let placaPuesta;
   // Devuelve si cambió algo, para saber si hay que dibujar otra vez.
@@ -136,7 +141,7 @@ export function pinturaDeCatalogo(catalogo, { color = null, placa = '' } = {}) {
   pintar({ color, placa });
   return {
     uniforms,
-    defines: { CATALOGO: 1 },
+    defines: b ? { CATALOGO: 1, CATALOGO_BRILLO: 1 } : { CATALOGO: 1 },
     pintar,
     soltar() {
       if (uniforms.uPlaca.value) uniforms.uPlaca.value.dispose();

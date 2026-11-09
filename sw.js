@@ -31,7 +31,7 @@
 // navegador seguiría mostrando el viejo y nadie entendería por qué.
 
 /* SELLO-INICIO: lo escribe `npm run sellar` (herramientas/sellar-version.mjs). No editar a mano. */
-const VERSION = '501996440eb3';
+const VERSION = '4af87a31dc99';
 const VERSION_MOTOR = 'a4950633eb87';
 const ARCHIVOS = [
   "./",

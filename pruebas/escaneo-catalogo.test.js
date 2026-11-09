@@ -9,6 +9,7 @@ import { ajustesDelEscaneo, modeloDesdeEscaneo, reetiquetarEscaneo } from '../js
 import { catalogoDelObjeto, escaneoDeCatalogo, pinturaDeCatalogo, textoDeCatalogo } from '../js/escaneo-catalogo.js';
 import { mallaDeObjeto3D, procesarImportado } from '../js/escaneo-importar.js';
 import { escaneoParaGuardar } from '../js/escaneos.js';
+import { leerModeloGlb } from '../js/modelos-catalogo.js';
 
 const NOMBRES = ['nada', 'capo', 'techo', 'baul', 'bomper-del', 'bomper-tras', 'guardafango-del-izq', 'guardafango-del-der', 'puerta-del-izq', 'puerta-del-der', 'puerta-tras-izq', 'puerta-tras-der', 'costado-izq', 'costado-der', 'estribo-izq', 'estribo-der', 'espejo-izq', 'espejo-der'];
 const CATALOGO = {
@@ -170,6 +171,58 @@ test('el modelo de foto no se ve hasta tener su foto, y el blanco no se quema', 
   assert.equal(m.seleccionables[0].material.uniforms.uConTono.value, 1);
 });
 
+// Lo que el sombreador dice, sin los bloques de un #ifdef que no entra. Solo saca los de más afuera: los de adentro se van con ellos.
+function sinBloque(fuente, nombre) {
+  const lineas = fuente.split('\n');
+  const salida = [];
+  let hondo = 0;
+  for (const linea of lineas) {
+    const t = linea.trim();
+    if (hondo === 0 && t === '#ifdef ' + nombre) {
+      hondo = 1;
+      continue;
+    }
+    if (hondo > 0) {
+      if (t.startsWith('#if')) hondo += 1;
+      if (t === '#endif') hondo -= 1;
+      continue;
+    }
+    salida.push(linea);
+  }
+  return salida.join('\n');
+}
+
+test('el brillo que se mueve: solo con su máscara, y un escaneo no entra', async (t) => {
+  globalThis.createImageBitmap = async () => ({ width: 4, height: 4, close() {} });
+  t.after(() => delete globalThis.createImageBitmap);
+  const { grupo } = archivo();
+  const e = escaneoDeCatalogo(mallaDeObjeto3D(grupo), ajustesDelEscaneo);
+  const uvs = new Float32Array((e.posiciones.length / 3) * 2);
+  const materialDe = async (escaneo) => {
+    const m = modeloDesdeEscaneo({ ...escaneo, uvs, textura: new Blob(['x']) });
+    await m.texturaLista;
+    return m.seleccionables[0].material;
+  };
+  // Un archivo sin máscara: como antes, sin una lectura ni una cuenta de más.
+  const sinMascara = await materialDe(e);
+  assert.deepEqual(sinMascara.defines, { CATALOGO: 1 });
+  assert.equal(sinMascara.uniforms.uBrillo, undefined);
+  // Con máscara, dice dónde está.
+  const brillo = { u0: 0.5, escala_u: 0.5, v0: 2 / 3, escala_v: 0.5 };
+  const conMascara = await materialDe({ ...e, catalogo: { ...CATALOGO, pintura: { ...CATALOGO.pintura, brillo } } });
+  assert.deepEqual(conMascara.defines, { CATALOGO: 1, CATALOGO_BRILLO: 1 });
+  assert.deepEqual(conMascara.uniforms.uBrillo.value.toArray(), [0.5, 2 / 3, 0.5, 0.5]);
+  // Un escaneo: ningún define y ningún uniform de catálogo. Lo nuevo va adentro de su #ifdef, y lo de afuera sigue siendo la cuenta de siempre.
+  const escaneo = await materialDe({ ...e, catalogo: null });
+  assert.deepEqual(escaneo.defines, {});
+  assert.deepEqual(Object.keys(escaneo.uniforms), ['mapa']);
+  const afuera = sinBloque(sinBloque(escaneo.fragmentShader, 'CATALOGO_BRILLO'), 'CATALOGO');
+  assert.doesNotMatch(afuera, /uBrillo|sala\(|cuanto|uTono|uCapa|uPlaca/);
+  // Letra por letra, sin los comentarios: aquí se notaría cualquier cuenta que se cuele en lo de un escaneo sin pasar por un #ifdef.
+  const cuenta = afuera.slice(afuera.indexOf('void main(){')).replace(/\/\/.*$/gm, '').replace(/\s+/g, ' ').trim();
+  assert.equal(cuenta, 'void main(){ vec3 c = texture2D(mapa, vU).rgb; vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n; vec3 v = normalize(vV); float canto = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.0); float lampara = smoothstep(0.45, 0.95, reflect(-v, n).y); float alto = smoothstep(0.32, 0.62, vY); c += vec3(0.88, 0.94, 1.0) * alto * (0.13 * canto + 0.05 * lampara); gl_FragColor = vec4(c, 1.0); #include <colorspace_fragment> }');
+});
+
 test('la foto más liviana también se usa al volver a armar, y un error de la foto queda a mano', async (t) => {
   const { grupo } = archivo();
   const e = escaneoDeCatalogo(mallaDeObjeto3D(grupo), ajustesDelEscaneo);
@@ -210,4 +263,25 @@ test('el GLB trae lo que dice traer', { skip: !process.env.GLB_CATALOGO }, () =>
   assert.ok(g.accessors[prim.attributes._PIEZA].max[0] < t.piezas.length);
   assert.ok(b.length < 8e6, 'pesa ' + b.length);
   assert.ok(g.accessors[prim.indices].count / 3 < 150000);
+  const { capa, brillo } = t.pintura;
+  if (brillo) {
+    // Al lado de la capa, sin pisarla, y dentro de la imagen: el mosaico llega hasta v = v0, y ahí es donde cae lo último de la máscara.
+    assert.equal(brillo.u0, capa.escala_u);
+    assert.equal(brillo.v0, capa.v0);
+    assert.ok(brillo.u0 + brillo.escala_u <= 1 && brillo.v0 + capa.v0 * brillo.escala_v <= 1.0001);
+  }
+  // La franja de Techo de la primera versión de la Captiva: debajo de la ventana, a todo lo largo, y cada pieza vale 90.000 en la nómina. Con GLB_CATALOGO en ese archivo, esto cae con 1.525 triángulos.
+  if (t.carro.linea !== 'Captiva') return;
+  const e = escaneoDeCatalogo(leerModeloGlb(b), ajustesDelEscaneo);
+  const { posiciones: P, indices: I, etiquetas: E } = e;
+  const techo = e.nombres.indexOf('techo');
+  let abajo = 0;
+  for (let k = 0; k < I.length; k += 3) {
+    const [a, c, d] = [I[k], I[k + 1], I[k + 2]];
+    if ((E[a] === E[c] || E[a] === E[d] ? E[a] : E[c] === E[d] ? E[c] : E[a]) !== techo) continue;
+    const y = (P[a * 3 + 1] + P[c * 3 + 1] + P[d * 3 + 1]) / 3;
+    const z = (P[a * 3 + 2] + P[c * 3 + 2] + P[d * 3 + 2]) / 3 + (t.centroZ || 0);
+    if (y > 1.15 && y < 1.31 && z > 0.46 && z < 2.24) abajo += 1;
+  }
+  assert.equal(abajo, 0, 'triángulos de Techo debajo de la ventana');
 });

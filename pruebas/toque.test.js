@@ -64,3 +64,22 @@ test('tocar el cielo o el vidrio no marca nada', () => {
   const cruce = piezaTocada({ camara, grupo: carro.grupo, x: techo.x, y: techo.y + 30, ancho: ANCHO, alto: ALTO });
   assert.ok(cruce === null || cruce === 'techo' || cruce.startsWith('puerta'), 'cayó en ' + cruce);
 });
+
+test('con radioSobreLata, el anillo no le quita a la lata lo que queda cerca de una pieza delgada', () => {
+  // Se busca un punto de lata con el estribo o el espejo a menos de 12 px: el de siempre lo marca como delgada, y con radioSobreLata 4 se queda en la lata. Sobre la pieza delgada y en el aire, igual que siempre.
+  const { carro, camara } = escenaDeCelular([-6.4, 1.4, 0]);
+  let probados = 0;
+  for (let y = 40; y < ALTO - 40; y += 4) {
+    for (let x = 40; x < ANCHO - 40; x += 4) {
+      const siempre = piezaTocada({ camara, grupo: carro.grupo, x, y, ancho: ANCHO, alto: ALTO });
+      const justo = piezaTocada({ camara, grupo: carro.grupo, x, y, ancho: ANCHO, alto: ALTO, radioSobreLata: 4 });
+      if (siempre === justo) continue;
+      // Solo puede cambiar de una pieza delgada a la lata del centro, y nunca hacia otra pieza delgada.
+      assert.match(siempre, /^(estribo|espejo)/);
+      assert.doesNotMatch(String(justo), /^(estribo|espejo)/);
+      assert.notEqual(justo, null);
+      probados++;
+    }
+  }
+  assert.ok(probados > 0, 'no apareció ningún punto de lata cerca de una pieza delgada');
+});

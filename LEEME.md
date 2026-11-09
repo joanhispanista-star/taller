@@ -155,10 +155,11 @@ carro de esa línea, sin subir ni escanear nada. Por ahora es una sola: Chevrole
   piezas leídas a mano de las juntas de las fotos, sus medidas de ficha y, en la misma imagen, debajo del mosaico,
   una capa con cuánta pintura se ve en cada píxel: cambiar el color de la ficha es sumar capa × (color − color de
   la foto), y los reflejos, el cromo y los stops no se enteran. Se hace sobre el mismo modelo, sin volver a armarlo ni a
-  abrir el JPEG (`repintar`), y arriba de 0,7 en lineal los reflejos se comprimen para que el blanco no se queme. Sin
+  abrir el JPEG (`repintar`), y arriba de 0,7 en lineal los reflejos se comprimen para que el blanco no se queme. Al lado de la
+  capa va la máscara del brillo calculado (más abajo, "La segunda versión"). Sin
   color elegido se queda el de la foto, y lo dicen la ficha de datos ("café, el del modelo", sin guardarlo como
   elegido), el Garaje y el Historial (`colorQueSeVe`). La placa se dibuja con el número del carro, con tope de ancho:
-  Arial Narrow está en un PC y no en un iPhone. La tubería que los hace vive fuera del repo (`fg-trabajo/captiva/foto`).
+  Arial Narrow está en un PC y no en un iPhone. La tubería que los hace vive fuera del repo (`fg-trabajo/captiva/foto2`; la de la primera versión, `foto`).
 - **Uno por línea, no por placa** (`js/modelos-catalogo.js`). El archivo va en `modelos/`, fuera de la precarga: 4 MB
   por línea no se le bajan a todos los teléfonos. Se baja la primera vez que se abre un carro de esa línea y queda
   en una caché propia, `modelos-de-carros`; el nombre no empieza por `taller-` porque esas las borra `sw.js` en cada
@@ -222,14 +223,14 @@ carro de esa línea, sin subir ni escanear nada. Por ahora es una sola: Chevrole
   cuadrito, cuando la ficha no tiene color) y `credito`, con `marcaDe`. Nada más: la pantalla, la lista y las
   pruebas salen de la tabla. Y sus fotos, en "Créditos", al final de este archivo, y en `modelos/CREDITOS.txt`, que viaja al
   lado del archivo. `npm test` revisa que el archivo pese lo que dice y sea el de la huella, traiga las 17 piezas de afuera, en
-  metros, que la línea exista en el catálogo y que el crédito esté completo.
-- **Medido, y lo que falta.** Con Edge sin ventana, sin GPU, en 390 x 844 (`pruebas/datos-externos/diseno-escaneo/probar-captiva.mjs`,
-  fuera de git): de la caché, el modelo se ve a unos 1,2 s de abrir la página; con la CPU frenada 6x, de 3,7 a 3,9 s; en los dos, sin un solo
+  metros, que la línea exista en el catálogo y que el crédito esté completo. En la Captiva revisa además su máscara del brillo y que el dedo no marque Techo debajo de la ventana.
+- **Medido, y lo que falta.** Con Edge sin ventana y la GPU integrada del PC (Iris Xe), en 390 x 844 (`pruebas/datos-externos/diseno-escaneo/probar-captiva.mjs`,
+  fuera de git): de la caché, el modelo se ve de 0,9 a 1,2 s después de abrir la página; con la CPU frenada 6x, de 2,4 a 5,1 s según la corrida (la primera versión, de 3,5 a 4,6: con este ruido no se puede decir si cambió); en los dos, sin un solo
   cuadro del carro de cajas. **Nada de esto ha corrido en un iPhone**, y desde este PC no se puede: los
   tiempos son los de Edge. Lo primero que hay que hacer allá es el paso 4 de `diagnostico.html`: baja el modelo, abre la foto,
-  la reserva en la GPU, lo dibuja y lo gira, y dice cuánto tarda cada cosa y cuántos cuadros por segundo da; si la pestaña muere
+  la reserva en la GPU, lo dibuja y lo gira en un lienzo del tamaño del visor y con su lente y su distancia, alrededor, de frente y desde arriba, y dice cuánto tarda cada cosa, cuántos cuadros por segundo da y cuántos píxeles de carro dibujó (antes, en 200 px de alto y a 11 m, dibujaba de 5 a 14 veces menos carro que la pantalla, y el brillo se paga por píxel de carro); si la pestaña muere
   a mitad, al volver dice en qué paso iba. Con `index.html?carro=nuevo&placa=...` el medidor también mide la Captiva, y lo dice
-  ("Modelo de catálogo, en prueba"). Son 250 mil triángulos por cuadro con el reflejo. Toda la línea, 2019-hoy, sale con la trompa de la
+  ("Modelo de catálogo, en prueba"). Son 248 mil triángulos por cuadro con el reflejo. Toda la línea, 2019-hoy, sale con la trompa de la
   de 2020, y por eso el diálogo avisa y no dice que sea igual. Sin dar un año: notas de México y Centroamérica dicen que cambió en 2024,
   para Colombia no se encontró fuente, y Autocosmos Colombia habló de otro retoque para 2021.
 
@@ -246,6 +247,45 @@ señal. Con escaneo se sigue usando el de hoy: la junta trasera del nuevo no sig
 El enlace que se le pasa a alguien es `probar-carro.html?placa=...`, fuera de la precarga: trae
 la versión nueva sin pasar por el botón del Garaje y entra, porque un visor viejo no conoce
 `?carro=nuevo` y lo borra de la URL sin avisar. Se borra el día que el nuevo sea el de todos.
+
+**El 6 de noviembre, la segunda versión de la Captiva.** La queja de Joan era que parecía de juguete. De lado y de cola la primera ya parecía un carro; lo que
+se veía mal estaba en la vista con que abre: el capó y el parabrisas. `modelos/chevrolet-captiva-2020-v2.glb`, con la misma interfaz, sale de `fg-trabajo/captiva/foto2`.
+
+- **Las piezas, lo más serio: cada una vale 90.000 pesos en la nómina.** La franja bajo el vidrio de atrás, lo de encima de los stops, el hombro de los costados y lo alto de la
+  puerta trasera estaban etiquetados como Techo. Ahora son de la compuerta, del costado y de la puerta. Tocar ahí con el dedo (`segunda/toques.mjs`, fuera de git): 19 de 26 puntos caían
+  donde debían en la primera, 26 de 26 en esta. El costado tenía 10 cm de Techo debajo de la ventana y la puerta de atrás 3; ahora, nada. Vidrio y parabrisas siguen sin ser pieza. El brazo del espejo es del espejo. Lo revisa una prueba de `modelos-catalogo.test.js`, con la función del toque sobre el archivo de verdad, y la etapa `piezas` de `probar-captiva.mjs`, con clics: con la primera versión, las dos caen.
+- **El capó y los vidrios son láminas aparte, no la lona del casco** (`m04b_capo.py`). El capó es una función con sus dos líneas de carácter, medidas en las fotos de frente, y su
+  silueta queda a menos de 1 cm de la foto de lado. Su orilla sale de lo medido: la junta con el guardafango en 3D con dos fotos, la esquina corta y redonda que baja a la cola de la farola, y lo de
+  encima de la farola, y cae de 1 a 3 px de lo que se lee en cinco fotos (`medir_capo.py`, fuera de git). El borde de adelante va recto sobre el cromo. Por eso sus orillas son orillas.
+  La foto de frente ya no se proyecta entera sobre el capó: lo ve de canto, y se derrite. Va pintado, y por eso toma el color igual que las puertas; encima lleva, a baja fuerza y con tope, los reflejos que esa foto trae en la lata (la raya clara a lo ancho, las bandas junto al pliegue) y un grano con el espectro de la lata de una puerta (`m06a_bloque.py`).
+  Sin eso, capó y techo eran un plano liso al lado de unas puertas con reflejos de foto: lo que más delataba que iban pintados. **Junto a la junta lleva casi la misma pintura del guardafango que tiene al lado**,
+  medida lado por lado en el mosaico: en las cuatro fotos donde se ven los dos, el capó y el guardafango dan casi la misma capa. Con una pintura pareja parecía repintado. Y el guardafango, junto a la junta, va con el mismo trato de luz que la cara de afuera del capó: el velo de los bordes depende de cómo mira cada lámina, y de tres cuartos dejaba el capó 10 puntos de L por debajo (medido en 11 vistas del giro y 7 líneas de foto, `segunda/v3/giro.py`). La junta es una banda
+  más oscura que la lata y no negra, llega a la base del pilar, y la de la foto se borró para que no salga doble. Sale de una distancia exacta, no de una máscara de 0 y 1: cada escalón de la máscara salía en la sombra, y era el peine de rayitas sobre la parrilla. La rayita que cierra la esquina de atrás está donde se ve en las fotos, y ahí termina la pieza Capó; lo de atrás es el pilar, Techo también en el cuerpo, para que no quede un rombo suelto.
+- **La farola, más delgada.** La lona entre el lente y la lámina subía en rampa, y el lente se repartía en 13 cm a lo largo: desde arriba salía gordo y quemado. Ahora sube empinada, como en la primera versión, y lo casi plano de arriba lleva el filo oscuro de la lámina que se ve en la foto de frente (`sombra_sobre_la_farola`). Se afina hacia las dos puntas.
+- **El parabrisas se lee como vidrio.** Oscuro, con el interior de la foto de frente (la de asientos vacíos; la que tiene a un hombre al volante no entra), banda negra y borde limpio. Lo que se ve por el vidrio de atrás (un seto) va con el tono de alrededor y orillas muy anchas: con un tono de por sí se leía como una caja. El
+  domo oscuro de la vista de arriba era pintura de vidrio 35 cm más allá de donde termina el vidrio, y la etiqueta decía otra cosa: ahora los tres (forma, pintura y etiqueta) usan la misma orilla.
+- **Un brillo que se mueve, sin que parezca plástico** (`materialDeFoto`, `#ifdef CATALOGO_BRILLO`). El reflejo de la foto está pegado, y eso delata una foto sobre una forma. Este lo calcula el sombreador: Fresnel con tope
+  (de canto, sin tope, el capó negro salía gris en la vista Frente), y una sala de exhibición analítica sin una sola silueta: poca luz y orillas muy anchas. Con lámparas de orilla marcada, en la curva de la punta salía un gancho de plástico.
+  Va teñido con la pintura, solo donde hay capa: blanco azulado sobre café o rojo, lava el color. La máscara va en la misma imagen (`pintura.brillo`, cuadro de u 0,5-1 y v 0,6667-1): en rojo cuánto
+  brilla cada píxel; en verde una sombra por la forma, después de comprimir las altas luces, que es lo que dibuja el pliegue en un blanco; y en azul el filo de luz del pliegue.
+  Sin memoria nueva ni otra textura. En el pase del reflejo del piso no se calcula: ahí no se notaba. Sin máscara se ve como antes, y los escaneos no entran: una comparación píxel a píxel, en Edge, lo confirma
+  (`segunda/igual-que-antes.mjs`, fuera de git). Las lámparas se reparten con `fwidth`: sobre un pliegue el reflejo pasa por ellas en menos de un píxel, y salía una raya punteada.
+- **Al marcar el capó sale su línea.** Es una lámina suelta, que no comparte vértices con nadie: el campo del velo no bajaba dentro de ella, y el capó marcado se fundía con los guardafangos marcados. En un carro de
+  catálogo, una orilla abierta cuenta como vecina de un vértice en 0 (`campoDePieza`, `cerrarOrillas`). En un escaneo no: dibujaría una línea alrededor de cada hueco.
+- **Si el 3D se cae y no vuelve, la pantalla lo dice y lo sigue diciendo.** Duraba 0,3 s: lo pisaba "se ve con menos detalle", con el lienzo en blanco. Ahora el escalón de abajo se recuerda, pero se arma y se dice cuando vuelva (`alVolverElContexto`).
+- **Y de paso:** el brazo de los espejos, la junta en S del capó, la pintura corrida bajo el vidrio de atrás (también es una lámina, y sigue leyendo la foto de siempre), las barras
+  del techo con su sombra y la costura de la parrilla. Los vidrios de los lados se probaron más grises y borrados, con más brillo: quedaban empañados, peor que en la primera versión, y se devolvieron a como estaban, con apenas brillo.
+- **Las puertas, un poco más hondas.** De la pintura media de una puerta para abajo, la sombra de la lata se hunde (`HONDO`, `m05_color.py`): el color de la ficha se multiplica por encima de la pintura de la foto, y lo oscuro quedaba 4 a 5 puntos de L por encima de la foto, y se veía de color pastel. El color de la mediana sigue siendo el pedido.
+- **El anillo del dedo, en un carro de catálogo.** Con el centro del toque en una lata, el anillo de las piezas delgadas (`toque.js`) baja de 12 a 4 px: le quitaba a la puerta delantera hasta un 34 % de lo que se ve, hacia el estribo y el espejo. En el vidrio o en el aire sigue en 12. En un escaneo, en el genérico y en "por dentro", que es el genérico, no cambia nada: **eso, y el valor de 4 px, los tiene que decidir Joan con su dedo**.
+- **El archivo de la primera versión se queda una publicación más.** Esta versión de la app ya no pide `modelos/chevrolet-captiva-2020.glb`, pero un teléfono con la anterior lo sigue pidiendo hasta que acepte la actualización, y sin él vería la carrocería de referencia (razonado, no corrido). **Se puede borrar en la publicación siguiente**, con su renglón de `modelos/CREDITOS.txt`. El teléfono que ya bajó el nuevo bota el viejo de su caché solo. El cupo de memoria (`taller-cupo-de-modelos`) va por nombre de archivo: un teléfono al que la primera versión no le cupo lo vuelve a intentar con esta, y baja el escalón si tampoco le cabe.
+- **Lo que queda flojo.** Medido en Edge con la GPU Iris Xe de este PC; las medidas y las hojas están en `fg-trabajo/captiva/segunda/`.
+  - **Nada de esto ha corrido en un iPhone**, y desde este PC no se puede. La cuenta del brillo se hace a cada cuadro, por píxel de carro (en el reflejo del piso, solo las lecturas de la imagen), y cuesta de +19 a +32 % en el pase principal. A tamaño de teléfono las dos versiones dan 90 cuadros, el tope; en un lienzo enorme (3600 x 4000) la primera dio de 1 a 9 cuadros más en 3 de 3 pares. Cuánto da allá no se sabe. Si el paso 4 de `diagnostico.html` baja de unos 24 cuadros en Frente, habría que hacer un escalón que quite `CATALOGO_BRILLO`: no existe todavía.
+  - **Tres decisiones de Joan.** El anillo de 4 px, sin probar con un dedo de verdad: se gana la puerta y se pierde perdón, porque un dedo que cae 10 px encima del estribo ahora marca la puerta; quitarlo es una línea en `visor.js`. El pie del pilar: hoy es Techo (son dos condiciones en `m06b_piezas.py`), y quien toca el rincón del capó ve Techo en la orden; puede ser Guardafango. La pintura del capó: con `PINTURA_DEL_CAPO` en 0,44 el plateado queda más cerca de su guardafango (L 88,6 contra 94,7) pero más lejos del color pedido (de 13 a 20 niveles): los dos defectos tiran para lados contrarios.
+  - **Capó y techo siguen siendo pintados.** El detalle del capó (paso alto de L, en Inicio, café) da 1,42, y no los 2,5 a 3 que se buscaban; en lata limpia iguala a la puerta (1,03 contra 1,12 y 1,26), y subirlo más daba estuco u ola. Sus reflejos son de una foto y van pegados, como en las puertas. El techo solo lleva grano.
+  - **El color pedido.** El capó no llega a 7 niveles salvo en blanco: de 18 a 24 en Inicio y de 21 a 30 en Frente (la primera versión, de 29 a 59). Sigue más claro que la puerta en casi todos los colores.
+  - **El tono junto a la junta.** En 75 combinaciones de vista y color, la diferencia media bajó de 4,6 a 2,3, pero en 12 sigue peor que la primera versión: la línea de la foto de lado en los 5 colores (en rojo da lo mismo que la foto de verdad, 6,3 contra 6,5; en plateado y negro no hay con qué comparar), la de otra foto de frente en rojo y plateado, y las de tres cuartos en negro y blanco.
+  - **A ojo, sin un número.** La cuchilla de la farola, de frente: parecida a la primera versión y no a la de la foto, con el lado de arriba un poco ondulado a 3x. El pliegue en negro casi no se lee (salto de 5 contra 3 de la primera); en blanco y rojo sigue marcado (27 y 24). Las puertas siguen menos hondas que la foto. De cerca, lo de adentro por el parabrisas va borroso y sin paralaje.
+  - **Heredado, visto y sin tocar.** La joroba oscura y el trozo gris estirado detrás del espejo, el pilar A en negro con su línea punteada, las barras del techo que desde arriba parecen cinta, la raya fina a lo ancho del techo junto a la antena, la costura clara sobre el stop, el escalón de la banda en las esquinas de arriba del parabrisas, la luneta ondulada y el tercer vidrio con su parche. Fuera de capó, techo y vidrios, la forma sigue siendo el casco.
 
 **El 5 de noviembre, el iPhone de Joan.** Joan tomó la foto en su iPhone y "Abrir en 3D"
 dijo "No se pudo crear el carro: revisa que el teléfono tenga espacio libre", con espacio
@@ -889,7 +929,7 @@ Claude, la entrada `taller-pintura-celular` de `.claude/launch.json` arranca
 el servidor abierto a la red. El reconocedor de fotos sí necesita internet
 en el teléfono la primera vez (89 MB desde Hugging Face); lo demás no.
 
-Pruebas (438, en Node, sin navegador; el registro se prueba contra
+Pruebas (462, corridas el 9-nov con la segunda versión de la Captiva y los arreglos de desmarcar y del catálogo; en Node, sin navegador; el registro se prueba contra
 `fake-indexeddb`, una IndexedDB de mentira que se instala con `npm install`):
 
 ```bash
@@ -1100,7 +1140,7 @@ escaneo
 - **Cambiar un GLB de `modelos/` es cambiar también su `sha256` en la tabla.** La caché `modelos-de-carros` no vuelve a
   preguntar por lo que ya tiene; lo que hace llegar el nuevo es que el de la caché ya no da la huella. Sin cambiarla, los teléfonos que lo
   bajen lo rechazan ("Lo que llegó no es el modelo") y `npm test` falla. En http, sin `crypto.subtle`, no se compara nada: ahí
-  sigue haciendo falta otro nombre de archivo. Para no pensarlo, una versión nueva lleva otro nombre y su `archivo` en la tabla; lo viejo se borra solo.
+  sigue haciendo falta otro nombre de archivo. Para no pensarlo, una versión nueva lleva otro nombre y su `archivo` en la tabla; lo viejo se borra solo de la caché del teléfono. El archivo viejo de `modelos/` se queda una publicación más: un teléfono con la versión anterior de la app lo sigue pidiendo hasta que acepte la actualización.
 - **Publicar una versión nueva son tres pasos, no uno.** El service worker
   guarda la app en el teléfono y la sirve de ahí sin mirar la red; el
   navegador solo se entera de que hay versión nueva cuando cambia `sw.js`.
@@ -1367,9 +1407,9 @@ Edge sin ventana, con la app de verdad (`pruebas/datos-externos/diseno-escaneo/p
 
 ## Créditos
 
-**El modelo de la Chevrolet Captiva LT 2020** (`modelos/chevrolet-captiva-2020.glb`) está hecho con siete fotos de
+**El modelo de la Chevrolet Captiva LT 2020** (`modelos/chevrolet-captiva-2020-v2.glb`; la primera versión, `modelos/chevrolet-captiva-2020.glb`, se queda una publicación más) está hecho con siete fotos de
 **Autosdeprimera**, de Wikimedia Commons, con licencia
-[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Se modificaron: recoloreadas y pegadas sobre una forma 3D.
+[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Se modificaron: recoloreadas y pegadas sobre una forma 3D; capó y techo pintados aparte, y un brillo calculado encima.
 En la app salen en el color que diga la ficha. El crédito también se ve en el diálogo de Escanear, y va al lado del
 archivo en `modelos/CREDITOS.txt`, porque el GLB se puede bajar suelto. No es un modelo oficial: Chevrolet es marca de General Motors, y ni la marca ni el autor de las fotos tienen relación con esta app.
 

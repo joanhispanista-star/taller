@@ -191,6 +191,8 @@ ui.lienzo.addEventListener('webglcontextrestored', () => {
   if (avisoDeContexto) hoja.avisar('');
   avisoDeContexto = false;
   crearEntorno();
+  // Antes del cuadro: el modelo que no cupo no vuelve a subir su foto. Lo que quedó pendiente del escalón de abajo se arma ahora que hay dónde dibujarlo.
+  pantallaEscaneo.alVolverElContexto();
   pedirCuadro();
 });
 document.addEventListener('visibilitychange', () => {
@@ -210,7 +212,8 @@ function velarContexto() {
   clearTimeout(plazoContexto);
   plazoContexto = setTimeout(() => {
     if (!renderizador.getContext().isContextLost()) return;
-    if (escaneoVisto && escaneoVisto.deLinea) pantallaEscaneo.modeloNoCupo(new Error('El contexto de WebGL no volvió'));
+    // Con el contexto perdido no se arma nada: este aviso duraba 0,3 s, lo pisaba "se ve con menos detalle" con el lienzo en blanco, y la pantalla mentía.
+    if (escaneoVisto && escaneoVisto.deLinea) pantallaEscaneo.modeloNoCupo(new Error('El contexto de WebGL no volvió'), { sinContexto: true });
     avisoDeContexto = true;
     hoja.avisar('El 3D se cayó y este navegador no lo devolvió: recarga la página. Si sigue igual, cierra otras apps.');
   }, TOPE_PARA_QUE_VUELVA);
@@ -224,7 +227,7 @@ ui.lienzo.addEventListener('webglcontextlost', () => {
   caidas.push(ahora);
   if (caidas.length < 2) return;
   caidas = [];
-  pantallaEscaneo.modeloNoCupo(new Error('El contexto de WebGL se cayó dos veces en 30 s'));
+  pantallaEscaneo.modeloNoCupo(new Error('El contexto de WebGL se cayó dos veces en 30 s'), { sinContexto: true });
 });
 escena.add(new THREE.HemisphereLight(0xffffff, 0x3a4048, 0.6));
 const sol = new THREE.DirectionalLight(0xffffff, 1.1);
@@ -564,6 +567,9 @@ function piezaBajo(xPantalla, yPantalla) {
     y: yPantalla - r.top,
     ancho: r.width,
     alto: r.height,
+    // Solo en un carro de catálogo, que ya trae sus piezas leídas de las fotos. En un escaneo y en el genérico sigue como estaba: ahí no se ha probado con el dedo de Joan.
+    // Y "por dentro" no: ese carro es el genérico, aunque escaneoVisto siga siendo el de catálogo.
+    ...(escaneoVisto && escaneoVisto.catalogo && !verPiezasEscaneo ? { radioSobreLata: 4 } : {}),
   });
 }
 

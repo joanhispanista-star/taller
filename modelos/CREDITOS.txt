@@ -2,10 +2,10 @@ Créditos de los modelos de esta carpeta.
 
 Los archivos .glb se pueden bajar sueltos, y un visor de glTF normal no muestra lo que llevan por dentro. Por eso va esto al lado.
 
-chevrolet-captiva-2020.glb
+chevrolet-captiva-2020-v2.glb
   Modelo de Chevrolet Captiva LT 2020, hecho para la app Taller de Pintura con siete fotos de Autosdeprimera, de Wikimedia Commons.
   Licencia de las fotos: CC BY 3.0 - https://creativecommons.org/licenses/by/3.0/
-  Modificadas: recoloreadas y pegadas sobre una forma 3D. El archivo trae las fotos pasadas de rojo a café; en la app salen en el color que diga la ficha.
+  Modificadas: recoloreadas y pegadas sobre una forma 3D; capó y techo pintados aparte, y un brillo calculado encima. El archivo trae las fotos pasadas de rojo a café; en la app salen en el color que diga la ficha. Las fotos son desde el piso y casi no ven el capó ni el techo: esos dos van pintados, con unos reflejos tenues sacados de una de las fotos de frente y un grano sacado de la de lado. El brillo que se mueve al girar lo calcula la app, y el archivo solo trae una máscara con cuánto le toca a cada píxel.
   No es un modelo oficial: Chevrolet es marca de General Motors, y ni la marca ni el autor de las fotos tienen relación con esta app.
 
   Las fotos:
@@ -23,3 +23,8 @@ chevrolet-captiva-2020.glb
     https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_side_view.png
   - Chevrolet Captiva 2020 (Colombia) rear view.png
     https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_rear_view.png
+
+chevrolet-captiva-2020.glb
+  La primera versión del mismo modelo, con las mismas siete fotos y la misma licencia. Se queda una publicación más, para los teléfonos que todavía tienen la versión anterior de la app.
+  Modificadas: recoloreadas y pegadas sobre una forma 3D. El archivo trae las fotos pasadas de rojo a café; en la app salen en el color que diga la ficha.
+  No es un modelo oficial: Chevrolet es marca de General Motors, y ni la marca ni el autor de las fotos tienen relación con esta app.

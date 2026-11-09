@@ -1,5 +1,5 @@
 // Los modelos de catálogo que la app ya trae: un GLB por línea de carro, hecho con fotos (la tubería vive
-// fuera del repo, en fg-trabajo/captiva/foto), que sale solo al abrir un carro de esa línea. Qué es un carro de
+// fuera del repo, en fg-trabajo/captiva/foto2), que sale solo al abrir un carro de esa línea. Qué es un carro de
 // catálogo lo dice js/escaneo-catalogo.js; aquí están cuáles hay, de dónde se bajan y cómo se leen.
 //
 // Es uno por línea, no uno por placa: varias Captivas no gastan 4 MB cada una. Por eso no entra a la base de los
@@ -22,11 +22,15 @@ export const MODELOS = [
     linea: 'Captiva (nueva)',
     nombre: 'Chevrolet Captiva LT 2020',
     corto: 'la Captiva',
-    archivo: 'modelos/chevrolet-captiva-2020.glb',
-    megas: 4.2,
+    // Otro nombre que el de la primera versión, a propósito: GitHub Pages cachea 10 minutos, y con el mismo nombre la huella de aquí abajo
+    // rechazaría el archivo viejo durante ese rato. El viejo sigue en modelos/ una publicación más: un teléfono con la versión anterior de
+    // la app lo sigue pidiendo hasta que acepte la actualización, y sin él vería la carrocería de referencia.
+    archivo: 'modelos/chevrolet-captiva-2020-v2.glb',
+    // Con dos decimales: el letrero redondea, y 4,46 MB no son "5 MB", que es lo que salía de 4,5.
+    megas: 4.46,
     // Del archivo, comprobado al bajarlo y al sacarlo de la caché: uno dañado por dentro mide lo mismo y empieza igual, y se
     // quedaría roto para siempre. También es lo que hace llegar un GLB corregido que se publique con el mismo nombre.
-    sha256: '85a9621e936077b33ac6bff3a483407809e891154faca88203e25d701222de79',
+    sha256: 'c9739044ccf54cf7c0ea3bc3858b85b95cee338ab6f1e3e406f7df6dac726d9c',
     // Lo que el diálogo tiene que decir de esta línea y no se sabe mirando el modelo. Sin año: el cambio de 2024 está en notas de México
     // y Centroamérica, para Colombia no hay fuente, y allá se habló de otro retoque para 2021.
     aviso: 'Las de otros años pueden tener otra trompa.',
@@ -39,7 +43,8 @@ export const MODELOS = [
       enlaceLicencia: 'https://creativecommons.org/licenses/by/3.0/',
       fuente: 'Wikimedia Commons',
       // El extras del GLB dice "de rojo a café", y en la app salen en el color que diga la ficha.
-      cambios: 'recoloreadas y pegadas sobre una forma 3D',
+      // Y el capó y el techo, lo primero que se ve, ya no salen de una foto, y el brillo que se mueve lo calcula la app: decir solo "pegadas" no sería verdad.
+      cambios: 'recoloreadas y pegadas sobre una forma 3D; capó y techo pintados aparte, y un brillo calculado encima',
       // La licencia de las fotos no cubre la marca, y CC BY tampoco deja insinuar respaldo del autor. El corbatín se ve grande.
       marcaDe: 'Chevrolet es marca de General Motors',
       fotos: [

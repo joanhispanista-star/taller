@@ -134,3 +134,17 @@ test('una pieza normal no se reescala: el campo llega casi a 1 por sí solo', ()
   const { campo } = campoDePieza(laminaConPiezaChica(60, 30), 'espejo-izq');
   assert.ok(campo.reduce((a, b) => Math.max(a, b), 0) > 0.9);
 });
+
+test('una lámina suelta: con cerrarOrillas el campo baja hacia su orilla y sale la línea; sin eso se queda como en un escaneo', () => {
+  // Toda la lámina es la pieza, y no comparte vértices con nadie: así va el capó de un carro de catálogo.
+  const n = 21;
+  const e = lamina(n, () => 99);
+  const sin = campoDePieza(e, 'puerta', 10).campo;
+  assert.ok(Math.min(...sin) > 0.99, 'un escaneo no dibuja línea alrededor de sus huecos');
+  const con = campoDePieza(e, 'puerta', 10, { cerrarOrillas: true }).campo;
+  const en = (i, j) => con[i * n + j];
+  assert.ok(en(10, 0) < 0.5, 'en la orilla no llega a 0,5: ' + en(10, 0));
+  assert.ok(en(10, 10) > 0.8, 'en el centro sigue adentro: ' + en(10, 10));
+  // Y cruza 0,5 antes de llegar a la orilla de enfrente: ahí va la línea.
+  assert.ok(cruce(con, n, 10) > 10 && cruce(con, n, 10) < n - 1, 'cruza en ' + cruce(con, n, 10));
+});

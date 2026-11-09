@@ -56,7 +56,11 @@ const VUELTAS_DE_CATALOGO = 10;
 // Por vértice del escaneo, qué tan adentro de la pieza está, y los triángulos donde
 // hay algo que dibujar. Solo se trabaja cerca de la pieza: un escaneo de 500 mil
 // triángulos no puede tardar en cada toque lo que tarda recorrerlo entero 26 veces.
-export function campoDePieza(escaneo, id, vueltas = VUELTAS) {
+//
+// `cerrarOrillas`: una orilla abierta cuenta como si tuviera al lado un vértice en 0. Un carro de catálogo trae láminas sueltas (el capó), que no comparten vértices con lo que tienen al
+// lado: sin esto el campo no baja dentro de la lámina, no cruza 0,5 y no sale la línea clara, y el capó marcado se funde con los guardafangos marcados. En un escaneo no aplica:
+// una malla con huecos dibujaría una línea alrededor de cada hueco.
+export function campoDePieza(escaneo, id, vueltas = VUELTAS, { cerrarOrillas = false } = {}) {
   const { posiciones: P, indices: I, etiquetas: E, nombres } = escaneo;
   const etiqueta = nombres.indexOf(id);
   const n = P.length / 3;
@@ -102,6 +106,41 @@ export function campoDePieza(escaneo, id, vueltas = VUELTAS) {
   }
   let campo = new Float32Array(cuantos);
   for (let g = 0; g < cuantos; g++) if (cuenta[g]) campo[g] = suma[g] / cuenta[g];
+  // Las aristas de un solo triángulo: de dónde sale cuánto de "vecino en 0" lleva cada grupo.
+  let orilla = null;
+  if (cerrarOrillas) {
+    // Un arreglo ordenado y no un Map: es lo que se congela cuando llega el modelo con todas sus piezas marcadas, y son 300 mil aristas por pieza.
+    const aristas = new Float64Array(region.length * 3);
+    let k = 0;
+    const anotar = (g, h) => {
+      if (g !== h) aristas[k++] = g < h ? g * cuantos + h : h * cuantos + g;
+    };
+    for (const t of region) {
+      const a = grupo[I[t]];
+      const b = grupo[I[t + 1]];
+      const c = grupo[I[t + 2]];
+      anotar(a, b);
+      anotar(b, c);
+      anotar(c, a);
+    }
+    const ordenadas = aristas.subarray(0, k).sort();
+    orilla = new Uint16Array(cuantos);
+    for (let i = 0; i < k; i++) {
+      // De un solo triángulo: distinta de la anterior y de la siguiente.
+      if ((i > 0 && ordenadas[i - 1] === ordenadas[i]) || (i + 1 < k && ordenadas[i + 1] === ordenadas[i])) continue;
+      orilla[Math.floor(ordenadas[i] / cuantos)] += 2;
+      orilla[ordenadas[i] % cuantos] += 2;
+    }
+    // Y un anillo más, con peso: el canto del capó es una tira de un triángulo de ancho, que va por debajo de la lámina. Con solo su orilla de abajo el 0,5 caía en el filo, y con poco peso, por detrás de él: la línea no salía contra el parabrisas, y de frente el capó marcado se quedaba sin borde arriba.
+    const junto = new Uint8Array(cuantos);
+    for (const t of region) {
+      const a = grupo[I[t]];
+      const b = grupo[I[t + 1]];
+      const c = grupo[I[t + 2]];
+      if (orilla[a] || orilla[b] || orilla[c]) junto[a] = junto[b] = junto[c] = 1;
+    }
+    for (let g = 0; g < cuantos; g++) if (junto[g] && !orilla[g]) orilla[g] = 8;
+  }
   // Suavizar: cada vértice se acerca al promedio de sus vecinos. Una arista compartida
   // cuenta dos veces, y eso da igual: todas las de adentro cuentan dos.
   for (let vuelta = 0; vuelta < vueltas; vuelta++) {
@@ -118,6 +157,8 @@ export function campoDePieza(escaneo, id, vueltas = VUELTAS) {
       cuenta[b] += 2;
       cuenta[c] += 2;
     }
+    // El vecino en 0 no suma nada: solo cuenta.
+    if (orilla) for (let g = 0; g < cuantos; g++) cuenta[g] += orilla[g];
     const nuevo = new Float32Array(cuantos);
     for (let g = 0; g < cuantos; g++) nuevo[g] = cuenta[g] ? 0.35 * campo[g] + (0.65 * suma[g]) / cuenta[g] : campo[g];
     campo = nuevo;
@@ -181,7 +222,7 @@ const CAMPOS = new WeakMap();
 export function campoGuardado(escaneo, id) {
   let campos = CAMPOS.get(escaneo);
   if (!campos) CAMPOS.set(escaneo, (campos = new Map()));
-  if (!campos.has(id)) campos.set(id, campoDePieza(escaneo, id, VUELTAS_DE_CATALOGO));
+  if (!campos.has(id)) campos.set(id, campoDePieza(escaneo, id, VUELTAS_DE_CATALOGO, { cerrarOrillas: true }));
   return campos.get(id);
 }
 
