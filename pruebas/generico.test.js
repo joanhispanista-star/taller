@@ -13,7 +13,7 @@ import { construirCarroNuevo } from '../js/generico/carro-nuevo.js';
 import { iniciarPrueba } from '../js/generico/en-prueba.js';
 import { crearInterior, crearPintura, crearPlaton, tonoDePlaton } from '../js/generico/pintura.js';
 import { resaltar } from '../js/carro.js';
-import { medidasParaDibujar } from '../js/carrocerias.js';
+import { RANGO_PARA_DIBUJAR, medidasParaDibujar } from '../js/carrocerias.js';
 import { CATALOGO } from '../js/catalogo-carros.js';
 import { datosDeEntrada } from '../js/catalogo.js';
 import { ALTURA_DE_LA_MIRA, LENTE, VISTAS, distanciaQueEncuadra } from '../js/encuadre.js';
@@ -135,18 +135,20 @@ test('contrato: 60 líneas del catálogo, del carro más corto al más largo', (
   for (const e of adelantadas) comprobarContrato(armarLinea(e), nombreDe(e));
 });
 
-// Un escaneo manda las medidas que midió, y medidasParaDibujar acepta de 2,6 a 6,5 m de largo y de 1,1 a 2,3 de alto. De
-// 700 carros al azar en ese rango ninguno revienta; dos pick-ups de 1,10 m salían con números rotos en el parlante.
+// Un escaneo manda las medidas que midió, y medidasParaDibujar acepta lo que dice RANGO_PARA_DIBUJAR: de 2,6 a 6,5 m de
+// largo, de 1,39 a 2,3 de ancho y de 1,1 a 2,3 de alto. De 700 carros al azar en ese rango ninguno revienta; dos pick-ups
+// de 1,10 m salían con números rotos en el parlante.
 test('contrato: cualquier medida que acepte el visor arma entero, aunque no sea un carro de verdad', () => {
   const azar = azarCon(90210);
-  const entre = (a, b) => a + (b - a) * azar();
+  const entre = ([a, b]) => a + (b - a) * azar();
+  const { largo: L, ancho: A, alto: H, entreEjes: E } = RANGO_PARA_DIBUJAR;
   for (let i = 0; i < 40; i++) {
-    const largo = entre(2.6, 6.5);
-    const medidas = { largo, ancho: entre(1.4, 2.3), alto: entre(1.1, 2.3), entreEjes: entre(1.8, Math.min(4, largo - 1)) };
+    const largo = entre(L);
+    const medidas = { largo, ancho: entre(A), alto: entre(H), entreEjes: entre([E[0], Math.min(E[1], largo - 1)]) };
     comprobarContrato(construirCarroNuevo({ colorBase: ROJO, carroceria: CARROCERIAS[i % 4], medidas }), `${CARROCERIAS[i % 4]} ${JSON.stringify(medidas)}`);
   }
   for (const carroceria of CARROCERIAS) {
-    for (const medidas of [{ largo: 4, ancho: 1.6, alto: 1.1, entreEjes: 2.5 }, { largo: 2.6, ancho: 1.4, alto: 1.1, entreEjes: 1.8 }, { largo: 6.5, ancho: 2.3, alto: 2.3, entreEjes: 4 }, { largo: 3.3, ancho: 1.5, alto: 2.0, entreEjes: 2.1 }]) {
+    for (const medidas of [{ largo: 4, ancho: 1.6, alto: H[0], entreEjes: 2.5 }, { largo: L[0], ancho: A[0], alto: H[0], entreEjes: E[0] }, { largo: L[1], ancho: A[1], alto: H[1], entreEjes: E[1] }, { largo: L[1], ancho: A[0], alto: H[1], entreEjes: E[1] }, { largo: 3.3, ancho: 1.5, alto: 2.0, entreEjes: 2.1 }]) {
       comprobarContrato(construirCarroNuevo({ colorBase: ROJO, carroceria, medidas }), `${carroceria} ${JSON.stringify(medidas)}`);
     }
   }

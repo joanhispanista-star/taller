@@ -1165,6 +1165,33 @@ export function construirCarro({ colorBase = 0xcfd4da, carroceria = 'sedan', med
     });
   }
 
+  // Con la bisagra cerrada, lo de adentro no existe para el dedo. Un rayo casi paralelo a la lata entra por la junta,
+  // sigue por debajo de la lámina (que por dentro no para el rayo) y marcaba un vano, un marco o la cara de adentro de
+  // una puerta: del 0,13 al 0,17 % de los toques al azar con todo cerrado (9-nov-2026), y una pieza de más en la orden
+  // son 90.000 pesos. Es lo mismo que hace `soloAbierta` en el carro nuevo (js/generico). Solo cambia a quién le
+  // contesta el rayo, no la forma: este carro es la plantilla de las piezas de todos los escaneos, y la tubería las
+  // toma de su superficie, no de rayos. El piso y la cara de adentro de la compuerta del platón se ven desde arriba con
+  // todo cerrado, y por eso no entran.
+  const ABIERTA = 0.03; // radianes: menos de 2 grados es una puerta mal cerrada, no una abierta
+  const abierta = (...ids) => () => ids.some((id) => articulaciones.get(id).angulo > ABIERTA);
+  const seVeCon = {};
+  for (const lado of ['izq', 'der']) {
+    const del = 'puerta-del-' + lado;
+    const tras = 'puerta-tras-' + lado;
+    seVeCon[del + '-int'] = abierta(del);
+    seVeCon[tras + '-int'] = abierta(tras);
+    seVeCon['marco-' + lado] = seVeCon['base-puertas-' + lado] = abierta(del, tras);
+  }
+  seVeCon['capo-int'] = seVeCon['vano-motor'] = abierta('capo');
+  if (d.tipo !== 'camioneta') seVeCon['baul-int'] = seVeCon['vano-baul'] = abierta('baul');
+  grupo.traverse((o) => {
+    const seVe = o.isMesh && seVeCon[o.userData.piezaId];
+    if (!seVe) return;
+    o.raycast = function (rayo, cruces) {
+      if (seVe()) THREE.Mesh.prototype.raycast.call(this, rayo, cruces);
+    };
+  });
+
   grupo.updateMatrixWorld(true);
   return { grupo, seleccionables, porId, articulaciones, disposicion: d };
 }

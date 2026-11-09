@@ -63,9 +63,19 @@ export function normalizarCarroceria(valor) {
 // razonables (en milímetros del catálogo o en metros), si no las típicas de
 // la carrocería. Un número fuera de rango (un "largo" de 43 m por un error
 // de tecleo) no deforma el carro: cae al valor típico.
-const RANGO = {
+//
+// Los topes dejan pasar todo carro del catálogo que las cuatro carrocerías
+// saben dibujar (la prueba es catalogo-en-pantalla.test.js). El ancho baja a
+// 1,39 desde el 9-nov-2026: la Super Carry y el Daihatsu Move miden 1.395 y
+// salían 40 cm más anchos. Siguen afuera, a propósito, seis líneas: las cinco
+// vans grandes (tres Sprinter, la Master y la Ducato, de 2,5 a 2,73 m de alto
+// y hasta 6,97 de largo) y el Twizy. Se probó dejarlas pasar: la SUV estirada
+// a 2,73 m sale con el capó en rampa y los espejos flotando como aletas, peor
+// que la SUV típica. Les hace falta una carrocería de van, y eso lo decide
+// Joan. El Twizy (2,34 m, un cuatriciclo) saldría con puertas de 16 cm.
+export const RANGO_PARA_DIBUJAR = {
   largo: [2.6, 6.5],
-  ancho: [1.4, 2.3],
+  ancho: [1.39, 2.3],
   // Desde 1,1 m para dibujar: con el tope en 1,2, un escaneo que mide 1,17 (el del
   // Moskvitch, que de verdad mide 1,40: la tubería del PC lo deja bajo) se dibujaba a la
   // altura típica, 28 cm de más, y las piezas caían corridas. El aviso de "fuera de lo
@@ -81,7 +91,7 @@ export function medidasParaDibujar(carroceria, medidas = {}) {
   for (const campo of Object.keys(tipicas)) {
     let valor = Number(medidas[campo]);
     if (valor > 100) valor = valor / 1000; // venía en milímetros
-    const [min, max] = RANGO[campo];
+    const [min, max] = RANGO_PARA_DIBUJAR[campo];
     salida[campo] = valor >= min && valor <= max ? valor : tipicas[campo];
   }
   // La distancia entre ejes nunca puede acercarse al largo total: un carro

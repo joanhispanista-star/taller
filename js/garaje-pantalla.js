@@ -1044,8 +1044,11 @@ ui.ficha.color.addEventListener('input', () => {
 });
 ui.ficha.linea.addEventListener('change', tomarLineaEscrita);
 ui.ficha.cancelar.addEventListener('click', () => ui.ficha.dialogo.close());
+// Por 'close' pasan Cancelar, la tecla Escape y el atrás del teléfono. La lista de líneas es la misma del formulario por
+// placa: si la ficha la dejó con una sola marca, ahí seguían saliendo solo las líneas de esa marca (revisión del 6-nov).
 ui.ficha.dialogo.addEventListener('close', () => {
   ficha = null;
+  llenarCatalogo([]);
   ui.ficha.foto.removeAttribute('src');
   if (urlFicha) URL.revokeObjectURL(urlFicha);
   urlFicha = '';
