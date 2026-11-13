@@ -9,6 +9,7 @@
 // Nada más: la pantalla, la lista del diálogo y las pruebas salen de esta tabla.
 import { buscarLinea, datosDeEntrada, entradaDe, familiaDe, marcaDelCatalogo, sinTildes } from './catalogo.js';
 import { conTope } from './conexion-bd.js';
+import { MODELOS_DEL_LOTE } from './modelos-lote.js';
 
 // Fuera de la precarga del service worker (sellar-version.mjs no mira modelos/): 4 MB por línea no se le bajan a
 // todos los teléfonos. La caché la maneja la página, y el nombre NO puede empezar por "taller-": el activate de
@@ -64,6 +65,9 @@ export const MODELOS = [
       ],
     },
   },
+  // Los hechos con la herramienta de carros en lote (fg-trabajo/lote): los escribe ella en js/modelos-lote.js. La Captiva va
+  // primero, a propósito: es la de la demostración (DEM006) y la que las pruebas toman como ejemplo.
+  ...MODELOS_DEL_LOTE,
 ];
 
 // Los modelos que alguien está haciendo de verdad, para la sección "Los que siguen" de la pestaña Vehículos:

@@ -103,7 +103,7 @@ test('la miniatura va de portada solo en un carro al que le toca el modelo', () 
   assert.equal(miniaturaDelCarro(crearCarro({ placa: 'JPX248', ...linea, sinModeloDeCatalogo: true })), '');
   // "Chevrolet Captiva" a secas puede ser la de 2007 a 2018: el modelo no se le pone sin preguntar, ni su foto tampoco.
   assert.equal(miniaturaDelCarro(crearCarro({ placa: 'JPX248', marca: 'Chevrolet Captiva' })), '');
-  assert.equal(miniaturaDelCarro(crearCarro({ placa: 'LOG123', ...datosDeEntrada(entradaDe('Renault', 'Logan II')) })), '');
+  assert.equal(miniaturaDelCarro(crearCarro({ placa: 'LOG123', ...datosDeEntrada(entradaDe('Renault', 'Symbol II')) })), '');
 });
 
 // ---------- El carro de muestra ----------
@@ -178,8 +178,8 @@ test('la demostración dice lo que hay y ofrece lo que falta: nada, a medias, en
   let oferta = ofertaDeLaDemo(await estadoDemo(almacen, HOY), { ahora: HOY });
   assert.equal(oferta.accion, 'cargar');
   assert.equal(oferta.boton, 'Cargar demostración');
-  // Dice cuántos salen en 3D de verdad: Joan pidió carros reales, y de los 6 solo la Captiva tiene modelo.
-  assert.equal(oferta.texto, 'Para ver la app con algo adentro puedes cargar 6 carros de demostración y 3 empleados, con piezas arregladas y en reparación: 1 en 3D de verdad (la Captiva) y 5 con la carrocería de referencia. Se quitan en bloque cuando quieras.');
+  // Dice cuántos salen en 3D de verdad: Joan pidió carros reales. Desde el 12-nov, la Captiva, el Logan (DEM002 y DEM007) y la Spark.
+  assert.equal(oferta.texto, 'Para ver la app con algo adentro puedes cargar 8 carros de demostración y 3 empleados, con piezas arregladas y en reparación: 4 en 3D de verdad (el Logan, la Captiva y la Spark) y 4 con la carrocería de referencia. Se quitan en bloque cuando quieras.');
   assert.equal('oculto' in oferta, false, 'se ofrece siempre, también en el Garaje con carros reales: decisión de Joan');
 
   // Solo DEM006 (de "Ver en 3D"), con un carro real: se puede cargar el resto o quitarla, y dice cómo se ven los que faltan.
@@ -189,14 +189,14 @@ test('la demostración dice lo que hay y ofrece lo que falta: nada, a medias, en
   assert.equal(oferta.boton, 'Cargar el resto');
   assert.equal(oferta.accion, 'cargar');
   assert.equal(oferta.quitarAparte, true);
-  assert.equal(oferta.texto, 'Hay 1 carro de demostración (el marcado «demo»). Puedes cargar los otros: 5 carros y 3 empleados (esos carros se ven con la carrocería de referencia, no en 3D de verdad). Lo real no se toca, ni al cargar ni al quitar.');
+  assert.equal(oferta.texto, 'Hay 1 carro de demostración (el marcado «demo»). Puedes cargar los otros: 7 carros y 3 empleados (de esos, 3 en 3D de verdad: el Logan y la Spark, y 4 con la carrocería de referencia). Lo real no se toca, ni al cargar ni al quitar.');
   assert.ok(!/Falta/.test(oferta.texto), '"falta" suena a que algo se dañó');
 
   await cargarDemo(almacen, HOY);
   oferta = ofertaDeLaDemo(await estadoDemo(almacen, HOY), { ahora: HOY });
   assert.equal(oferta.accion, 'quitar');
   assert.equal(oferta.quitarAparte, false);
-  assert.match(oferta.texto, /^Hay 6 carros y 3 empleados de demostración/);
+  assert.match(oferta.texto, /^Hay 8 carros y 3 empleados de demostración/);
   almacen.cerrar();
 });
 
@@ -210,12 +210,12 @@ test('quitar la demostración se lleva DEM006, sus escaneos y su borrador, y dej
   const local = { getItem: (k) => guardado.get(k) ?? null, setItem: (k, v) => guardado.set(k, v), removeItem: (k) => guardado.delete(k) };
   const borrados = [];
   const quitado = await quitarLaDemostracion(almacen, { local, abrirEscaneos: async () => ({ borrar: async (placa) => borrados.push(placa) }) });
-  assert.deepEqual(quitado, { carros: 6, empleados: 3 });
+  assert.deepEqual(quitado, { carros: 8, empleados: 3 });
   assert.deepEqual((await almacen.listar()).map((c) => c.placa), ['JPX248']);
   assert.deepEqual(await almacen.obtener('JPX248'), antes);
   assert.equal(guardado.has(CLAVE_GUARDADO), false, 'el visor sin placa la volvería a crear');
   await new Promise((listo) => setTimeout(listo, 10));
-  assert.deepEqual(borrados.sort(), ['DEM001', 'DEM002', 'DEM003', 'DEM004', 'DEM005', 'DEM006']);
+  assert.deepEqual(borrados.sort(), ['DEM001', 'DEM002', 'DEM003', 'DEM004', 'DEM005', 'DEM006', 'DEM007', 'DEM008']);
 
   // Con un carro real en el borrador, el borrador se queda.
   await cargarDemo(almacen, HOY);
@@ -370,7 +370,7 @@ test('"Cargar el resto" no pisa lo que se marcó en DEM006, ni vuelve a cargar l
   dem.piezas.techo = { estado: 'pendiente', desde: HOY.toISOString(), trabajo: 'pintura', pintor: '' };
   await almacen.guardar(dem, '2026-11-09T15:00:00.000Z');
   const antes = await almacen.obtener('DEM006');
-  assert.deepEqual(await cargarDemo(almacen, HOY), { carros: 5, empleados: 3 });
+  assert.deepEqual(await cargarDemo(almacen, HOY), { carros: 7, empleados: 3 });
   assert.deepEqual(await almacen.obtener('DEM006'), antes, 'el techo y su fecha se quedan');
   assert.deepEqual(await cargarDemo(almacen, HOY), { carros: 0, empleados: 0 });
   almacen.cerrar();
@@ -378,8 +378,9 @@ test('"Cargar el resto" no pisa lo que se marcó en DEM006, ni vuelve a cargar l
 
 test('cómo se ven los carros, dicho en palabras: cuántos en 3D de verdad y cuántos con la carrocería de referencia', () => {
   const demo = carrosDemo(HOY);
-  assert.equal(comoSeVen(demo), '1 en 3D de verdad (la Captiva) y 5 con la carrocería de referencia');
-  assert.equal(comoSeVen(demo.filter((c) => c.placa !== 'DEM006')), 'se ven con la carrocería de referencia, no en 3D de verdad');
+  assert.equal(comoSeVen(demo), '4 en 3D de verdad (el Logan, la Captiva y la Spark) y 4 con la carrocería de referencia');
+  assert.equal(comoSeVen(demo.filter((c) => !['DEM002', 'DEM006', 'DEM007', 'DEM008'].includes(c.placa))), 'se ven con la carrocería de referencia, no en 3D de verdad');
+  assert.equal(comoSeVen(demo.filter((c) => ['DEM006', 'DEM008'].includes(c.placa))), 'salen todos en 3D de verdad');
   assert.equal(comoSeVen(demo.filter((c) => c.placa === 'DEM006')), 'sale en 3D de verdad');
 });
 

@@ -17,9 +17,10 @@ SUV, camioneta de platón) y un catálogo de los carros que ruedan en Colombia.
 Y adelantada la del 26 (sin la nube): **Empleados** con la nómina de la
 semana (pintor por pieza, 90.000 por pieza terminada), **Historial** de carros
 entregados con lo cobrado, e **Indicadores** para el dueño, en
-`tablero.html`; con una demostración (desde el 9-nov, 6 carros y 3 empleados) que se carga
+`tablero.html`; con una demostración (desde el 12-nov, 8 carros y 3 empleados) que se carga
 y se quita en bloque. Y desde el 9 de noviembre, la pestaña **Vehículos**: los carros
-que la app tiene en 3D de verdad (hoy, la Captiva), con "Ver en 3D".
+que la app tiene en 3D de verdad (desde el 12-nov, la Captiva, el Logan II y la Spark GT; los dos últimos, hechos con la
+herramienta de carros en lote y sin publicar todavía), con "Ver en 3D".
 
 ## Lo que NO va a hacer esta app, y por qué
 
@@ -263,7 +264,8 @@ cómo quedó:
 JPX248, Chevrolet Captiva (nueva), y vio el carro de cajas: "sigue apareciendo así como de juguete, y yo
 quiero que tengamos los modelos de muchos de los carros de Colombia en una versión 3D, empieza con la
 Captiva LT 2020 color café". Ahora una línea del catálogo puede traer su modelo, y sale solo al abrir un
-carro de esa línea, sin subir ni escanear nada. Por ahora es una sola: Chevrolet Captiva (nueva).
+carro de esa línea, sin subir ni escanear nada. Por ahora es una sola: Chevrolet Captiva (nueva). (Desde el 12-nov son tres: ver
+«El 12 de noviembre, carros en lote».)
 
 - **Qué es un modelo de catálogo.** Un GLB con `extras.taller` (`origen: 'catalogo'`) en el nodo y `_PIEZA` por
   vértice no es un escaneo: la app no le mide nada ni le adivina las piezas (`js/escaneo-catalogo.js`). Trae las
@@ -330,7 +332,9 @@ carro de esa línea, sin subir ni escanear nada. Por ahora es una sola: Chevrole
   pregunta ("Es de 2019 en adelante: usar ese modelo"): al decir que sí, el carro queda con la línea del catálogo y lo escrito de
   más ("LT 2020") en la versión. El campo ahora sugiere el catálogo, y lo elegido de ahí se guarda como línea, con su carrocería.
   Un carro viejo con todo en la marca también saca el modelo, y sus piezas se llaman como las del modelo (no "Baúl").
-- **Para agregar otro modelo:** hacer el GLB con la tubería (un nodo, una malla, una primitiva, con `_PIEZA` y
+- **Para agregar otro modelo:** desde el 12-nov, con la herramienta de carros en lote (`fg-trabajo/lote`; su `LEEME.md` dice cómo):
+  ella hace el GLB, `js/modelos-lote.js` y los créditos; a mano quedan el carro de muestra en `js/demo.js` y la miniatura. Lo de
+  abajo es lo que eso hace por dentro. Hacer el GLB con la tubería (un nodo, una malla, una primitiva, con `_PIEZA` y
   `extras.taller`); ponerlo en `modelos/`, con otro nombre si es una versión nueva; y una entrada en `MODELOS`
   (`js/modelos-catalogo.js`): `marca` y `linea` tal como las guarda el catálogo, `nombre` (marca, línea, versión y
   modelo del `extras`, separados por espacios), `corto` ("la Captiva", para el letrero), `archivo`, `megas`,
@@ -407,6 +411,41 @@ se veía mal estaba en la vista con que abre: el capó y el parabrisas. `modelos
   - **El tono junto a la junta.** En 75 combinaciones de vista y color, la diferencia media bajó de 4,6 a 2,3, pero en 12 sigue peor que la primera versión: la línea de la foto de lado en los 5 colores (en rojo da lo mismo que la foto de verdad, 6,3 contra 6,5; en plateado y negro no hay con qué comparar), la de otra foto de frente en rojo y plateado, y las de tres cuartos en negro y blanco.
   - **A ojo, sin un número.** La cuchilla de la farola, de frente: parecida a la primera versión y no a la de la foto, con el lado de arriba un poco ondulado a 3x. El pliegue en negro casi no se lee (salto de 5 contra 3 de la primera); en blanco y rojo sigue marcado (27 y 24). Las puertas siguen menos hondas que la foto. De cerca, lo de adentro por el parabrisas va borroso y sin paralaje.
   - **Heredado, visto y sin tocar.** La joroba oscura y el trozo gris estirado detrás del espejo, el pilar A en negro con su línea punteada, las barras del techo que desde arriba parecen cinta, la raya fina a lo ancho del techo junto a la antena, la costura clara sobre el stop, el escalón de la banda en las esquinas de arriba del parabrisas, la luneta ondulada y el tercer vidrio con su parche. Fuera de capó, techo y vidrios, la forma sigue siendo el casco.
+
+**El 12 de noviembre, carros en lote: el Logan II y la Spark GT (sin publicar).** Joan pidió no esperar un día por cada carro,
+como con la Captiva. Primero un plan con la medición que decidió todo: si a la Captiva le quito las piezas puestas a mano y
+dejo que la app las ponga sola (`piezasDelEscaneo`, lo mismo que con un escaneo), acierta el 61 % de la lata y 12 de 26
+toques. Por eso la herramienta propone y una persona corrige las juntas sobre las fotos: cada pieza son 90.000 pesos. Joan
+eligió el camino A (herramienta chica, para los 5 carros del plan; lo masivo, si el viernes 4-dic alguien pagó).
+
+- **Dónde vive:** `C:\Users\joanh\fg-trabajo\lote\` (fuera del repo: fotos y Python no van a Pages), con su git local y su
+  `LEEME.md`. `bash lote.sh <id>`: ficha (medidas del catálogo de la app y la vista de cada foto, del título), máscaras
+  (ISNet), cámaras SIN puntos marcados (siluetas contra el carro de referencia de esa carrocería), forma (casco visual con la
+  caja del catálogo y el piso medido en las llantas), piezas (propuesta de la app + polígonos leídos a ojo en `marcas.json`),
+  textura y GLB con el mismo formato que la Captiva, y la revisión dentro de la app de verdad sin tocar el repo
+  (`ver-en-app.mjs`). Unos 6 minutos de PC y unos 45 de un agente en las juntas, por carro.
+- **Lo que entra a la app:** `modelos/renault-logan-ii-2020.glb` (4,45 MB) y `modelos/chevrolet-spark-gt-2014.glb` (3,66 MB);
+  `js/modelos-lote.js`, que **escribe la herramienta** (`integrar.mjs`) y `MODELOS` agrega al final (la Captiva sigue primera);
+  sus miniaturas en `vehiculos/`, sacadas de la app misma; y los créditos en los dos `CREDITOS.txt` y aquí abajo.
+- **Calidad, dicha sin adornos.** De tres cuartos, de lado y de cola se ven como el carro de las fotos. De frente y desde
+  arriba no: el techo y la cara de arriba del capó y del baúl, que las fotos solo ven de canto, van pintados del color de la
+  lata (como el capó de la Captiva v2, pero sin sus pliegues), y en las esquinas del capó del Logan quedan reflejos de farola
+  estirados. La Spark tiene solo dos fotos limpias (las otras seis de la NHTSA traen cinta y solo dieron la silueta): de
+  frente, la trompa es simétrica con una costura al centro, y junto al pilar derecho hay manchas oscuras. Ninguna de las dos
+  tiene un espejo de verdad: el de la Spark es una pieza pintada sobre la lata (las fotos no lo tallan) y el del Logan, un
+  bloque chico. Es la calidad de la primera Captiva, un poco por debajo, que es lo que el plan prometió.
+- **Lo medido:** con el dedo de la app, el centro de cada una de las 17 piezas marca su pieza en 16 de 17 en los dos (en el
+  Logan, el del bómper cae en la parrilla; en la Spark, el del techo cae fuera de él). La prueba de los 26 toques difíciles
+  es de la Captiva y no se pasó a estos dos. Nada ha corrido en un iPhone.
+- **Lo que cambió en la app para que entraran.** Cada modelo necesita su carro de muestra, el que crea solo "Ver en 3D": DEM007
+  (Logan) y DEM008 (Spark), como DEM006, sin nada terminado ni pintores. DEM002 ya era un Logan II, pero con trabajo terminado
+  por pintores de la demostración: creado solo, dejaba plata "sin pintor" en la nómina (lo que arregló la revisión del 9-nov).
+  Por eso `carroDeMuestra` toma el de la línea **sin nada terminado**. La demostración pasa de 6 a 8 carros, y su texto dice
+  "4 en 3D de verdad (el Logan, la Captiva y la Spark) y 4 con la carrocería de referencia"; el de "Cargar el resto" ya no
+  sale con un paréntesis dentro de otro ("de esos, 3 en 3D de verdad: el Logan y la Spark, y 4..."). Las pruebas que usaban el
+  Logan II como ejemplo de "una línea sin modelo" ahora usan el Symbol II.
+- **Pendiente para publicar:** que Joan lo vea y diga; `npm run sellar` otra vez si algo cambia; y el GLB viejo de la Captiva
+  (`chevrolet-captiva-2020.glb`) se puede borrar desde el 16-nov.
 
 **El 5 de noviembre, el iPhone de Joan.** Joan tomó la foto en su iPhone y "Abrir en 3D"
 dijo "No se pudo crear el carro: revisa que el teléfono tenga espacio libre", con espacio
@@ -922,7 +961,8 @@ el de vitrina.
 - **Demostración**: en el Garaje y en el tablero, "Cargar demostración" mete
   6 carros de marcas y colores distintos (Onix rojo, Logan blanco, CX-30
   gris, Hilux negra, Picanto azul y, desde el 9-nov, la Captiva café en 3D
-  de verdad, DEM006) con piezas arregladas, en reparación y
+  de verdad, DEM006; desde el 12-nov son 8: el Logan gris DEM007 y la Spark amarilla DEM008, en 3D de verdad, sin nada
+  terminado ni pintores, y el Logan blanco DEM002 también sale en 3D) con piezas arregladas, en reparación y
   entregadas, y 3 empleados, con fechas de las últimas dos semanas. Todo va
   marcado «demo» y "Quitar la demostración" se lleva solo eso. "Ver en 3D",
   en la pestaña Vehículos, carga solo DEM006; entonces se ofrece "Cargar el
@@ -1053,6 +1093,8 @@ Claude, la entrada `taller-pintura-celular` de `.claude/launch.json` arranca
 el servidor abierto a la red. El reconocedor de fotos sí necesita internet
 en el teléfono la primera vez (89 MB desde Hugging Face); lo demás no.
 
+Pruebas, el 12-nov, con el Logan II y la Spark GT del lote (sin publicar, sellado local 00743d316af3): las mismas 494, ajustadas a 8 carros de demostración y con el Symbol II como ejemplo de línea sin modelo; 493 pasan y 1 se salta, la de siempre. Las de cada modelo (peso y huella del archivo, las 17 piezas de afuera en metros, la línea en el catálogo, el crédito completo, la miniatura y su carro de muestra) corren ahora sobre los tres.
+
 Pruebas: 494 = las 462 del 9-nov (corridas con la segunda versión de la Captiva y los arreglos de desmarcar y del catálogo) + 20 de la pestaña Vehículos (13 en `vehiculos.test.js`, 1 en `garaje-portada.test.js`, 6 en `probar-carro.test.js`; `tablero.test.js` sigue con las suyas, al día con DEM006) + 12 de su revisión (7 más en `vehiculos.test.js`, 4 en `probar-carro.test.js`, 1 en `tablero.test.js`; `garaje-portada.test.js` mira además cómo sale cada fila). Corrida entera el 9-nov, ya sellada (versión 36520bec3993, 68 archivos) para publicar: 493 pasan y 1 se salta, la misma que venía saltada. En Node, sin navegador; el registro se prueba contra
 `fake-indexeddb`, una IndexedDB de mentira que se instala con `npm install`):
 
@@ -1120,6 +1162,7 @@ npm test
 | `js/piso-vitrina.js` | El piso de sala de exhibición: reflejo en una textura a media resolución, sombra de la huella real del carro y fundido al fondo, sin horizonte. |
 | `js/encuadre.js` | La distancia de cámara para que el carro quepa, exacta, con las 8 esquinas de su caja, y qué medidas usar para encuadrar un escaneo fuera de rango. |
 | `js/escaneo-catalogo.js` | Lo que es un carro de catálogo: del archivo al escaneo sin medir nada, la pintura por capa, la placa dibujada y cómo se dice en la pantalla. |
+| `js/modelos-lote.js` | Los modelos hechos con la herramienta de carros en lote (`MODELOS_DEL_LOTE`): lo escribe `fg-trabajo/lote/herramienta/integrar.mjs`, entero cada vez; no se edita a mano. `MODELOS` los agrega al final. |
 | `js/modelos-catalogo.js` | Las líneas que la app ya trae en 3D (`MODELOS`), de dónde se bajan (`bajarModelo`, con su caché propia), cómo se leen sin lienzos (`leerModeloGlb`), qué le toca a un carro y qué se le pregunta (`modeloQueLeToca`, `modeloParecido`), el color que se le ve (`colorQueSeVe`) y lo que se recuerda de este celular (`nivelDeCupo`). Sin Three.js ni DOM. |
 | `modelos/` | Los GLB de catálogo, uno por línea, y `CREDITOS.txt`, que viaja con ellos. Fuera de la precarga: se bajan la primera vez que se abre un carro de esa línea. |
 | `js/escaneos.js` | Los escaneos guardados, en una base de IndexedDB APARTE (`taller-escaneos`): pesan megas y así el Garaje abre sin leerlos, y no hubo que subir la versión de la base de los carros. |
@@ -1550,3 +1593,12 @@ archivo en `modelos/CREDITOS.txt`, porque el GLB se puede bajar suelto. No es un
 - [Chevrolet Captiva 2020 (Colombia) front view 5.png](https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_front_view_5.png)
 - [Chevrolet Captiva 2020 (Colombia) side view.png](https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_side_view.png)
 - [Chevrolet Captiva 2020 (Colombia) rear view.png](https://commons.wikimedia.org/wiki/File:Chevrolet_Captiva_2020_(Colombia)_rear_view.png)
+
+**Los modelos del Renault Logan II Intens 2020 y de la Chevrolet Spark GT 1LS 2014** (`modelos/renault-logan-ii-2020.glb` y
+`modelos/chevrolet-spark-gt-2014.glb`, hechos con la herramienta de carros en lote el 12-nov). El Logan, con cuatro fotos de
+**Autosdeprimera**, de Wikimedia Commons, con licencia [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). La Spark, con
+dos fotos de la **NHTSA** (National Highway Traffic Safety Administration, EE. UU.), de Wikimedia Commons, en dominio público
+([términos de la NHTSA](https://www.nhtsa.gov/about-nhtsa/terms-use)); otras seis fotos de la misma prueba solo dieron la
+silueta. Se modificaron: pegadas sobre una forma 3D sacada de sus siluetas; en el Logan, con la placa tapada. La lista de las
+fotos, con sus enlaces, va en `modelos/CREDITOS.txt`. No son modelos oficiales: Renault es marca de Renault s.a.s., Chevrolet es
+marca de General Motors, y ni las marcas ni los autores de las fotos tienen relación con esta app.

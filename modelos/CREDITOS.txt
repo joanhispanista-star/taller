@@ -28,3 +28,44 @@ chevrolet-captiva-2020.glb
   La primera versión del mismo modelo, con las mismas siete fotos y la misma licencia. Se queda una publicación más, para los teléfonos que todavía tienen la versión anterior de la app.
   Modificadas: recoloreadas y pegadas sobre una forma 3D. El archivo trae las fotos pasadas de rojo a café; en la app salen en el color que diga la ficha.
   No es un modelo oficial: Chevrolet es marca de General Motors, y ni la marca ni el autor de las fotos tienen relación con esta app.
+
+renault-logan-ii-2020.glb
+  Modelo de Renault Logan II Intens 2020, hecho para la app Taller de Pintura con la herramienta de carros en lote, con 4 fotos de Autosdeprimera, de Wikimedia Commons.
+  Licencia de las fotos: CC BY 3.0 - https://creativecommons.org/licenses/by/3.0/
+  Modificadas: pegadas sobre una forma 3D sacada de sus siluetas, con la placa tapada. La placa de las fotos se tapó de amarillo liso; la de adelante la dibuja la app con el número de cada carro. Lo que las fotos solo ven de canto (techo, la cara de arriba del capó y del baúl) va pintado del color de la lata, y el brillo que se mueve lo calcula la app.
+  No es un modelo oficial: Renault es marca de Renault s.a.s., y ni la marca ni el autor de las fotos tienen relación con esta app.
+
+  Las fotos:
+  - 2020 Renault Logan Intens (Colombia) rear view.png
+    https://commons.wikimedia.org/wiki/File:2020_Renault_Logan_Intens_(Colombia)_rear_view.png
+  - 2020 Renault Logan Intens (Colombia) side view.png
+    https://commons.wikimedia.org/wiki/File:2020_Renault_Logan_Intens_(Colombia)_side_view.png
+  - 2020 Renault Logan Intens (Colombia) front view 01.png
+    https://commons.wikimedia.org/wiki/File:2020_Renault_Logan_Intens_(Colombia)_front_view_01.png
+  - 2020 Renault Logan Intens (Colombia) front view 02.png
+    https://commons.wikimedia.org/wiki/File:2020_Renault_Logan_Intens_(Colombia)_front_view_02.png
+
+chevrolet-spark-gt-2014.glb
+  Modelo de Chevrolet Spark GT 1LS 2014, hecho para la app Taller de Pintura con la herramienta de carros en lote, con 2 fotos de NHTSA (National Highway Traffic Safety Administration, EE. UU.), de Wikimedia Commons.
+  Licencia de las fotos: Dominio público (obra del gobierno de EE. UU.) - https://www.nhtsa.gov/about-nhtsa/terms-use
+  Modificadas: pegadas sobre una forma 3D sacada de sus siluetas. Las fotos no traen placa, y este modelo no lleva el número del carro. Lo que las fotos solo ven de canto (techo, la cara de arriba del capó y del baúl) va pintado del color de la lata, y el brillo que se mueve lo calcula la app.
+  La forma también salió de las siluetas de otras 6 fotos de la misma prueba, que no se pegan en el modelo porque traen cinta, letreros y cables: solo dieron el contorno.
+  No es un modelo oficial: Chevrolet es marca de General Motors, y ni la marca ni el autor de las fotos tienen relación con esta app.
+
+  Las fotos:
+  - 2014 Chevrolet Spark 1LS -- NHTSA test 8465 - front.jpg
+    https://commons.wikimedia.org/wiki/File:2014_Chevrolet_Spark_1LS_--_NHTSA_test_8465_-_front.jpg
+  - 2014 Chevrolet Spark 1LS -- NHTSA test 8465 - rear.jpg
+    https://commons.wikimedia.org/wiki/File:2014_Chevrolet_Spark_1LS_--_NHTSA_test_8465_-_rear.jpg
+  - No. 003 Pre-Test Frontal View of Test Vehicle.JPG (solo la silueta)
+    https://nrd-static.nhtsa.dot.gov/photos/vehdb/v00000/v08400/v08465P003.jpg
+  - No. 005 - Pre-Test Left Front 3-4 View of Test Vehicle.JPG (solo la silueta)
+    https://nrd-static.nhtsa.dot.gov/photos/vehdb/v00000/v08400/v08465P005.jpg
+  - No. 007 - Pre-Test Left Side View of Test Vehicle.JPG (solo la silueta)
+    https://nrd-static.nhtsa.dot.gov/photos/vehdb/v00000/v08400/v08465P007.jpg
+  - No. 009 - Pre-Test Left Rear 3-4 View of Test Vehicle.JPG (solo la silueta)
+    https://nrd-static.nhtsa.dot.gov/photos/vehdb/v00000/v08400/v08465P009.jpg
+  - No. 011 - Pre-Test Rear View of Test Vehicle.JPG (solo la silueta)
+    https://nrd-static.nhtsa.dot.gov/photos/vehdb/v00000/v08400/v08465P011.jpg
+  - No. 013 - Pre-Test Right Side View of Test Vehicle.JPG (solo la silueta)
+    https://nrd-static.nhtsa.dot.gov/photos/vehdb/v00000/v08400/v08465P013.jpg

@@ -151,6 +151,38 @@ export function carrosDemo(ahora = new Date()) {
         'guardafango-del-der': { estado: 'pendiente', desde: f(2), trabajo: 'pintura', pintor: '' },
       },
     }),
+    // Los carros de muestra de los modelos hechos en lote (12-nov), por la misma razón que DEM006: "Ver en 3D" los crea solos,
+    // sin pintores y sin nada terminado. DEM002 ya era un Logan II, pero tiene piezas terminadas con pintores de la
+    // demostración: creado solo, dejaba plata "sin pintor" en la nómina (lo que corrigió la revisión del 9-nov). Sin color
+    // elegido: salen en el de sus fotos (gris y amarillo).
+    crearCarro({
+      placa: 'DEM007',
+      ...datosDeEntrada(entradaDe('Renault', 'Logan II')),
+      version: 'Intens 2020',
+      color: '',
+      cobro: 0,
+      demo: true,
+      creado: f(1),
+      actualizado: f(0, 10),
+      piezas: {
+        'bomper-del': { estado: 'en-proceso', desde: f(0, 10), trabajo: 'pintura', pintor: '' },
+        'guardafango-del-izq': { estado: 'pendiente', desde: f(1), trabajo: 'latoneria', pintor: '' },
+      },
+    }),
+    crearCarro({
+      placa: 'DEM008',
+      ...datosDeEntrada(entradaDe('Chevrolet', 'Spark GT')),
+      version: '2014',
+      color: '',
+      cobro: 0,
+      demo: true,
+      creado: f(1),
+      actualizado: f(0, 11),
+      piezas: {
+        'puerta-del-der': { estado: 'en-proceso', desde: f(0, 11), trabajo: 'pintura', pintor: '' },
+        'bomper-tras': { estado: 'pendiente', desde: f(1), trabajo: 'pintura', pintor: '' },
+      },
+    }),
   ];
 }
 
@@ -212,7 +244,8 @@ export function comoSeVen(carros) {
   const resto = carros.length - deVerdad.length;
   if (!resto) return deVerdad.length === 1 ? 'sale en 3D de verdad' : 'salen todos en 3D de verdad';
   if (!deVerdad.length) return (resto === 1 ? 'se ve' : 'se ven') + ' con la carrocería de referencia, no en 3D de verdad';
-  const nombres = [...new Set(deVerdad.map((c) => modeloQueLeToca(c).corto))].join(' y ');
+  const lista = [...new Set(deVerdad.map((c) => modeloQueLeToca(c).corto))];
+  const nombres = lista.length > 1 ? lista.slice(0, -1).join(', ') + ' y ' + lista[lista.length - 1] : lista[0];
   return deVerdad.length + ' en 3D de verdad (' + nombres + ') y ' + resto + ' con la carrocería de referencia';
 }
 
@@ -242,7 +275,11 @@ export function ofertaDeLaDemo(estado, { ahora = new Date() } = {}) {
   const otros = [estado.faltanCarros && plural(estado.faltanCarros, 'carro', 'carros'), estado.faltanEmpleados && plural(estado.faltanEmpleados, 'empleado', 'empleados')].filter(Boolean).join(' y ');
   // Los carros que faltan, para decir cómo se ven: los que ya están no se vuelven a cargar (cargarDemo).
   const faltan = demo.filter((c) => !(estado.placas || []).includes(c.placa));
-  const seVen = faltan.length && faltan.length === estado.faltanCarros ? ' (' + (faltan.length === 1 ? 'ese carro ' : 'esos carros ') + comoSeVen(faltan) + ')' : '';
+  // Con números ("3 en 3D de verdad...") va "de esos, ..."; con "se ven...", "esos carros se ven...". Y sin un paréntesis dentro de
+  // otro: desde el 12-nov lo que falta puede traer modelos, y salía "(esos carros 3 en 3D de verdad (el Logan y la Spark) y 4...)".
+  const como = comoSeVen(faltan);
+  const dicho = /^\d/.test(como) ? 'de esos, ' + como.replace(/ \(([^)]*)\) y /, ': $1, y ') : (faltan.length === 1 ? 'ese carro ' : 'esos carros ') + como;
+  const seVen = faltan.length && faltan.length === estado.faltanCarros ? ' (' + dicho + ')' : '';
   return {
     texto: hay + ' Puedes cargar ' + (estado.faltanCarros + estado.faltanEmpleados === 1 ? 'el otro' : 'los otros') + ': ' + otros + seVen + '. Lo real no se toca, ni al cargar ni al quitar.',
     accion: 'cargar',
@@ -280,8 +317,14 @@ export async function quitarLaDemostracion(almacen, { local = globalThis.localSt
 // El carro de demostración de la línea de este modelo (DEM006 para la
 // Captiva), o null. Se busca por la línea y no con una placa escrita en la
 // tabla MODELOS: así el carro y su modelo no se pueden desencontrar.
+//
+// De esa línea, el que no tiene nada terminado: "Ver en 3D" lo crea solo, sin los
+// empleados de la demostración, y una pieza terminada sin su pintor sale "sin
+// pintor" en la nómina. Desde el 12-nov importa: DEM002 es un Logan II con
+// trabajo hecho, y el de muestra del Logan es DEM007.
 export function carroDeMuestra(modelo, ahora = new Date()) {
-  return carrosDemo(ahora).find((c) => modeloDeLaLinea(c) === modelo) || null;
+  const sinTerminar = (c) => !Object.values(c.piezas || {}).some((p) => p.estado === 'terminada');
+  return carrosDemo(ahora).find((c) => modeloDeLaLinea(c) === modelo && sinTerminar(c)) || null;
 }
 
 // "Ver en 3D": deja en el registro el carro de muestra del modelo, y SOLO ese

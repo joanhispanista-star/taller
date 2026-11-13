@@ -442,7 +442,7 @@ test('el crédito dice autor, licencia y que se modificaron, y no el color de la
 
 test('la lista de lo que la app trae sale de la tabla', () => {
   // Y dice con cuál línea sale: quien escribía el nombre de la lista seguía viendo el carro de cajas.
-  assert.equal(textoDeLaLista(), 'La app tiene el modelo de: Chevrolet Captiva LT 2020 (en Datos del carro, línea «Chevrolet Captiva (nueva)»). Se baja la primera vez que se abre esa línea. Para las demás líneas se ve la carrocería de referencia hasta que se escanee ese carro.');
+  assert.equal(textoDeLaLista(), 'La app tiene el modelo de: Chevrolet Captiva LT 2020 (en Datos del carro, línea «Chevrolet Captiva (nueva)»), Renault Logan II Intens 2020 (en Datos del carro, línea «Renault Logan II»), Chevrolet Spark GT 1LS 2014 (en Datos del carro, línea «Chevrolet Spark GT»). Se baja la primera vez que se abre esa línea. Para las demás líneas se ve la carrocería de referencia hasta que se escanee ese carro.');
   assert.match(textoDeLaLista([{ nombre: 'Uno', marca: 'A', linea: 'B' }, { nombre: 'Dos', marca: 'C', linea: 'D' }]), /modelo de: Uno \(.*«A B»\), Dos \(.*«C D»\)\. /);
 });
 
@@ -1007,16 +1007,16 @@ test('la carrera: cambió de carro mientras bajaba', async (t) => {
   const p = montar(t, crearCarro({ ...LINEA, placa: 'CAR222' }), { red: puerta.red });
   await p.pantalla.cargar('CAR222');
   await hasta(() => p.pedir.pedidos.length === 1);
-  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Logan', placa: 'CAR333' }));
+  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Symbol', placa: 'CAR333' }));
   await p.pantalla.cargar('CAR333');
   assert.equal(p.letrero.hidden, true);
   puerta.abrir();
   await unMomento(150);
-  assert.equal(queSeVe(p), 'genérico', 'la Captiva de antes salió encima del Logan');
+  assert.equal(queSeVe(p), 'genérico', 'la Captiva de antes salió encima del Symbol');
 });
 
 test('la ficha le cambia la línea con la misma placa: de genérico al modelo, y de vuelta', async (t) => {
-  const carro = crearCarro({ marca: 'Renault', linea: 'Logan', placa: 'FIC123' });
+  const carro = crearCarro({ marca: 'Renault', linea: 'Symbol', placa: 'FIC123' });
   const p = montar(t, carro);
   await p.pantalla.cargar('FIC123');
   await unMomento();
@@ -1062,7 +1062,7 @@ test('sin señal y sin caché: se queda el genérico, lo dice una vez, y vuelve 
   p.dialogo.close();
 
   // Otro carro y de vuelta: se intenta otra vez, y sin señal no repite el aviso.
-  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Logan', placa: 'OTR111' }));
+  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Symbol', placa: 'OTR111' }));
   await p.pantalla.cargar('OTR111');
   p.ponerCarro(carro);
   await p.pantalla.cargar('SIN123');
@@ -1073,7 +1073,7 @@ test('sin señal y sin caché: se queda el genérico, lo dice una vez, y vuelve 
 
   // Con señal, sale.
   hayRed = true;
-  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Logan', placa: 'OTR111' }));
+  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Symbol', placa: 'OTR111' }));
   await p.pantalla.cargar('OTR111');
   p.ponerCarro(carro);
   await p.pantalla.cargar('SIN123');
@@ -1209,7 +1209,7 @@ test('el diálogo con el modelo puesto dice qué es, de quién son las fotos y q
 });
 
 test('la lista de lo que trae la app está en el diálogo siempre, también en un carro de otra línea', async (t) => {
-  const p = montar(t, crearCarro({ marca: 'Renault', linea: 'Logan', placa: 'LOG123' }));
+  const p = montar(t, crearCarro({ marca: 'Renault', linea: 'Symbol', placa: 'LOG123' }));
   await p.pantalla.cargar('LOG123');
   await p.pantalla.abrir();
   assert.equal(p.lista.textContent, textoDeLaLista());
@@ -1276,7 +1276,7 @@ test('«Usar la carrocería de referencia» se recuerda por carro, y el diálogo
   assert.equal(p.credito.hidden, true);
 
   // Reabrir el carro: sigue en la de referencia y no baja nada.
-  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Logan', placa: 'OTR222' }));
+  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Symbol', placa: 'OTR222' }));
   await p.pantalla.cargar('OTR222');
   const recargado = crearCarro(JSON.parse(serializarCarro(carro)));
   p.ponerCarro(recargado);
@@ -1399,7 +1399,7 @@ test('con el modelo en la caché el lienzo espera tapado: el de cajas no se ve',
   assert.ok(p.eventos.lastIndexOf('destapar') > p.eventos.indexOf('modelo'), 'el modelo sale tapado hasta estar: ' + p.eventos);
   assert.equal(p.eventos.slice(p.eventos.indexOf('tapar'), p.eventos.indexOf('modelo')).includes('destapar'), false, 'se destapó antes de tiempo: ' + p.eventos);
   // De otro carro a una Captiva, sin recargar: se tapa antes de armar el genérico de este carro.
-  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Logan II', placa: 'TAP112' }));
+  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Symbol II', placa: 'TAP112' }));
   await p.pantalla.cargar('TAP112');
   p.eventos.length = 0;
   p.ponerCarro(crearCarro({ ...LINEA, placa: 'TAP113' }));
@@ -1422,7 +1422,7 @@ test('si hay que ir a la red se destapa antes de pedirlo: el genérico sirve mie
 });
 
 test('un carro de otra línea no se tapa, y lo que falla destapa', async (t) => {
-  const p = montar(t, crearCarro({ marca: 'Renault', linea: 'Logan II', placa: 'TAP333' }));
+  const p = montar(t, crearCarro({ marca: 'Renault', linea: 'Symbol II', placa: 'TAP333' }));
   await p.pantalla.cargar('TAP333');
   assert.equal(p.eventos.includes('tapar'), false);
   // Lo que falla con el lienzo tapado: una caché con el archivo y la foto que no abre.
@@ -1434,7 +1434,7 @@ test('un carro de otra línea no se tapa, y lo que falla destapa', async (t) => 
   const r = montar(t, crearCarro({ ...LINEA, placa: 'TAP555' }), { cajas: { open: () => new Promise(() => {}) } });
   await r.pantalla.cargar('TAP555');
   assert.equal(r.eventos.at(-1), 'tapar');
-  r.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Logan II', placa: 'TAP666' }));
+  r.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Symbol II', placa: 'TAP666' }));
   await r.pantalla.cargar('TAP666');
   assert.equal(r.eventos.at(-1), 'destapar', 'quedó tapado: ' + r.eventos);
   // Otra Captiva, con su escaneo propio: no se trae nada, y tapado no se puede quedar.
@@ -1460,7 +1460,7 @@ test('con el registro caído su aviso no se pierde, diga lo que diga el modelo',
   await p.referencia.disparar('click');
   assert.equal(p.elemento('aviso').textContent, caido);
   // Tampoco al cambiar de carro: todos quedan como borrador.
-  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Logan II', placa: 'CAI222' }));
+  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Symbol II', placa: 'CAI222' }));
   await p.pantalla.cargar('CAI222');
   assert.equal(p.elemento('aviso').textContent, caido);
 });
@@ -1474,7 +1474,7 @@ test('con otra línea ya no dice que esta línea tiene modelo 3D, y al volver a 
   });
   await p.pantalla.cargar('AVI111');
   await hasta(() => /Esta línea tiene modelo 3D/.test(p.elemento('aviso').textContent), 'el aviso');
-  Object.assign(carro, { marca: 'Renault', linea: 'Logan II', carroceria: 'sedan' });
+  Object.assign(carro, { marca: 'Renault', linea: 'Symbol II', carroceria: 'sedan' });
   await p.pantalla.cargar('AVI111');
   assert.equal(p.elemento('aviso').textContent, '');
   // Si lo que está en pantalla ya es otra cosa que dijo el visor, no se le borra.
@@ -1488,7 +1488,7 @@ test('con otra línea ya no dice que esta línea tiene modelo 3D, y al volver a 
   await hasta(() => /Esta línea tiene modelo 3D/.test(q.elemento('aviso').textContent), 'el aviso');
   await hasta(() => q.pantalla.pedidoDeLinea === null, 'el intento');
   q.elemento('aviso').textContent = 'No se pudo guardar en el teléfono.';
-  Object.assign(otro, { marca: 'Renault', linea: 'Logan II', carroceria: 'sedan' });
+  Object.assign(otro, { marca: 'Renault', linea: 'Symbol II', carroceria: 'sedan' });
   await q.pantalla.cargar('AVI222');
   assert.equal(q.elemento('aviso').textContent, 'No se pudo guardar en el teléfono.');
 });
@@ -1571,7 +1571,7 @@ test('la foto completa no abre y la liviana sí: el modelo sale, se recuerda y s
   assert.match(p.avisos.at(-1), /no alcanzó con la foto completa del modelo de la Captiva: se ve con menos detalle/);
   // La próxima vez, directo.
   p.fotos.opciones.length = 0;
-  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Logan II', placa: 'LIV222' }));
+  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Symbol II', placa: 'LIV222' }));
   await p.pantalla.cargar('LIV222');
   p.ponerCarro(crearCarro({ ...LINEA, placa: 'LIV111' }));
   await p.pantalla.cargar('LIV111');
@@ -1655,7 +1655,7 @@ test('la GPU no da: un escalón menos y otra vez; al final el genérico, sin vol
   // Refrescar y abrir otra vez no lo vuelven a intentar: si fue la memoria, ese carro no abriría nunca.
   const abiertas = p.fotos.abiertas;
   await p.pantalla.cargar('GPU111');
-  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Logan II', placa: 'GPU222' }));
+  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Symbol II', placa: 'GPU222' }));
   await p.pantalla.cargar('GPU222');
   p.ponerCarro(crearCarro({ ...LINEA, placa: 'GPU111' }));
   await p.pantalla.cargar('GPU111');
@@ -1820,7 +1820,7 @@ test('volver a una Captiva mientras baja no gasta otra descarga', async (t) => {
   const p = montar(t, crearCarro({ ...LINEA, placa: 'VUE111' }), { red: puerta.red });
   await p.pantalla.cargar('VUE111');
   await hasta(() => p.pedir.pedidos.length === 1);
-  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Logan II', placa: 'VUE222' }));
+  p.ponerCarro(crearCarro({ marca: 'Renault', linea: 'Symbol II', placa: 'VUE222' }));
   await p.pantalla.cargar('VUE222');
   p.ponerCarro(crearCarro({ ...LINEA, placa: 'VUE111' }));
   await p.pantalla.cargar('VUE111');
@@ -1905,7 +1905,7 @@ test('una base que se demora no deja a la Captiva sin su modelo, y si aparece un
 });
 
 test('una lectura vieja de otra placa no deja la siguiente Captiva en genérico', async (t) => {
-  const p = montar(t, crearCarro({ marca: 'Renault', linea: 'Logan II', placa: 'VIE111' }), { topeDeLaLectura: 60000 });
+  const p = montar(t, crearCarro({ marca: 'Renault', linea: 'Symbol II', placa: 'VIE111' }), { topeDeLaLectura: 60000 });
   const soltar = lecturaLenta(t, 'VIE111');
   const vieja = p.pantalla.cargar('VIE111');
   await unMomento(30);
@@ -1918,7 +1918,7 @@ test('una lectura vieja de otra placa no deja la siguiente Captiva en genérico'
 });
 
 test('una lectura vieja tampoco frena a un carro sin placa', async (t) => {
-  const p = montar(t, crearCarro({ marca: 'Renault', linea: 'Logan II', placa: 'VIE333' }), { topeDeLaLectura: 60000 });
+  const p = montar(t, crearCarro({ marca: 'Renault', linea: 'Symbol II', placa: 'VIE333' }), { topeDeLaLectura: 60000 });
   lecturaLenta(t, 'VIE333');
   p.pantalla.cargar('VIE333');
   await unMomento(30);
@@ -1956,7 +1956,7 @@ test('por dentro espera su carro: el de cajas no sale en medio', async (t) => {
 
 test('un GLB de catálogo subido a mano: su crédito con enlaces, sin parecer escaneo, y no dice «de la misma línea» en otra línea', async (t) => {
   const subido = escaneoDeCatalogo(leerModeloGlb(copiaDeBytes()), ajustesDelEscaneo);
-  const p = montar(t, crearCarro({ marca: 'Renault', linea: 'Logan II', carroceria: 'sedan', placa: 'MAN456' }));
+  const p = montar(t, crearCarro({ marca: 'Renault', linea: 'Symbol II', carroceria: 'sedan', placa: 'MAN456' }));
   await (await abrirEscaneos()).guardar('MAN456', subido, { origen: 'archivo', archivo: 'captiva.glb' });
   await p.pantalla.cargar('MAN456');
   await p.pantalla.abrir();
@@ -1989,8 +1989,8 @@ test('el color que se le ve: el elegido; sin elegir, el del modelo que le toca; 
   assert.equal(colorQueSeVe({ ...captiva, color: '#1f4fa8' }), '#1f4fa8');
   // Con la carrocería de referencia se ve gris: plateado es verdad.
   assert.equal(colorQueSeVe({ ...captiva, color: '#cfd4da', sinModeloDeCatalogo: true }), '#cfd4da');
-  assert.equal(colorQueSeVe({ marca: 'Renault', linea: 'Logan II', color: '#cfd4da' }), '#cfd4da');
-  assert.equal(colorQueSeVe({ marca: 'Renault', linea: 'Logan II', color: '' }), '');
+  assert.equal(colorQueSeVe({ marca: 'Renault', linea: 'Symbol II', color: '#cfd4da' }), '#cfd4da');
+  assert.equal(colorQueSeVe({ marca: 'Renault', linea: 'Symbol II', color: '' }), '');
 });
 
 // ---------- El crédito que viaja con el archivo ----------

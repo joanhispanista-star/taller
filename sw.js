@@ -31,7 +31,7 @@
 // navegador seguiría mostrando el viejo y nadie entendería por qué.
 
 /* SELLO-INICIO: lo escribe `npm run sellar` (herramientas/sellar-version.mjs). No editar a mano. */
-const VERSION = '36520bec3993';
+const VERSION = '00743d316af3';
 const VERSION_MOTOR = 'a4950633eb87';
 const ARCHIVOS = [
   "./",
@@ -80,6 +80,7 @@ const ARCHIVOS = [
   "js/instalable.js",
   "js/logo.js",
   "js/modelos-catalogo.js",
+  "js/modelos-lote.js",
   "js/piezas.js",
   "js/piso-vitrina.js",
   "js/placa-foto.js",
@@ -101,7 +102,9 @@ const ARCHIVOS = [
   "js/visor.js",
   "manifest.webmanifest",
   "tablero.html",
-  "vehiculos/chevrolet-captiva-2020-v2.jpg"
+  "vehiculos/chevrolet-captiva-2020-v2.jpg",
+  "vehiculos/chevrolet-spark-gt-2014.jpg",
+  "vehiculos/renault-logan-ii-2020.jpg"
 ];
 /* SELLO-FIN */
 

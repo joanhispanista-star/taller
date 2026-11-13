@@ -106,7 +106,7 @@ test('la portada: la foto de verdad manda, después la miniatura del modelo, y s
   await almacen.guardar(crearCarro({ placa: 'FOT123', ...LINEA }));
   await almacen.guardarFoto({ placa: 'FOT123', pieza: PIEZA_CARRO, foto: new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' }) });
   // Otra línea: el cuadro de color, como siempre.
-  await almacen.guardar(crearCarro({ placa: 'LOG123', ...datosDeEntrada(entradaDe('Renault', 'Logan II')), color: '#f2f2f0' }));
+  await almacen.guardar(crearCarro({ placa: 'LOG123', ...datosDeEntrada(entradaDe('Renault', 'Symbol II')), color: '#f2f2f0' }));
   almacen.cerrar();
 
   // Como vienen en garaje.html.

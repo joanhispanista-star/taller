@@ -151,7 +151,7 @@ test('qué placa no se vería: la que no está, la vacía y la "Chevrolet Captiv
   // Pidió la carrocería de referencia para ese carro: fue a propósito.
   assert.equal(porQueNoSeVeria(crearCarro({ placa: 'JPX248', ...linea('Chevrolet', 'Captiva (nueva)'), sinModeloDeCatalogo: true })), '');
   // Un carro con sus datos y sin modelo es justo lo que el enlace sirve para probar: el carro nuevo.
-  assert.equal(porQueNoSeVeria(crearCarro({ placa: 'LOG123', ...linea('Renault', 'Logan II') })), '');
+  assert.equal(porQueNoSeVeria(crearCarro({ placa: 'LOG123', ...linea('Renault', 'Symbol II') })), '');
 });
 
 test('el destino lee el registro de este teléfono y no crea nada: JPX248 que no está va a Vehículos, con la línea va al visor', async () => {

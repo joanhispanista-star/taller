@@ -254,8 +254,9 @@ test('los indicadores juntan carros, piezas, cobrado, pagado y una serie por sem
 
 test('la demostración trae carros de marcas y colores distintos, entregados y en taller, y empleados con piezas', () => {
   const carros = carrosDemo(HOY);
-  // Seis desde el 9-nov: DEM006 es la Captiva de la pestaña Vehículos (sus pruebas, en vehiculos.test.js).
-  assert.equal(carros.length, 6);
+  // Seis desde el 9-nov: DEM006 es la Captiva de la pestaña Vehículos (sus pruebas, en vehiculos.test.js). Ocho desde el
+  // 12-nov: DEM007 y DEM008, los de muestra del Logan y la Spark hechos en lote.
+  assert.equal(carros.length, 8);
   assert.ok(carros.every((c) => c.demo));
   assert.equal(new Set(carros.map((c) => c.marca)).size, 5);
   assert.equal(new Set(carros.map((c) => c.color)).size, 6);
@@ -265,7 +266,7 @@ test('la demostración trae carros de marcas y colores distintos, entregados y e
   assert.ok(entregados.every((c) => c.cobro > 0));
   assert.ok(carros.some((c) => Object.values(c.piezas).some((p) => p.estado === 'en-proceso')));
   // Ninguna pieza inventada: crearCarro las habría descartado en silencio.
-  assert.deepEqual(carros.map((c) => Object.keys(c.piezas).length), [3, 5, 4, 3, 2, 3]);
+  assert.deepEqual(carros.map((c) => Object.keys(c.piezas).length), [3, 5, 4, 3, 2, 3, 2, 2]);
   const empleados = empleadosDemo(HOY);
   assert.equal(empleados.length, EMPLEADOS_DEMO.length);
   assert.ok(empleados.every((e) => e.demo && e.nombre));
@@ -283,7 +284,7 @@ test('el almacén guarda empleados, carga la demostración sin pisar lo real y l
   const real = crearCarro({ placa: 'DEM001', marca: 'Fiat' });
   await almacen.guardar(real);
   const cargado = await cargarDemo(almacen, HOY);
-  assert.equal(cargado.carros, 5); // DEM001 era real: no se pisa
+  assert.equal(cargado.carros, 7); // DEM001 era real: no se pisa
   assert.equal(cargado.empleados, 3);
   assert.equal((await almacen.obtener('DEM001')).marca, 'Fiat');
   const empleados = await almacen.listarEmpleados();
@@ -296,7 +297,7 @@ test('el almacén guarda empleados, carga la demostración sin pisar lo real y l
   await assert.rejects(() => almacen.guardarEmpleado({ nombre: '   ' }));
 
   const quitado = await almacen.quitarDemo();
-  assert.deepEqual(quitado, { carros: 5, empleados: 3 });
+  assert.deepEqual(quitado, { carros: 7, empleados: 3 });
   assert.equal((await almacen.listar()).length, 1);
   assert.deepEqual((await almacen.listarEmpleados()).map((e) => e.nombre), ['Marta Díaz']);
   almacen.cerrar();

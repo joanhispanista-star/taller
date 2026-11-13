@@ -7,3 +7,15 @@ chevrolet-captiva-2020-v2.jpg
   El modelo está hecho con siete fotos de Autosdeprimera, de Wikimedia Commons. Licencia de las fotos: CC BY 3.0 - https://creativecommons.org/licenses/by/3.0/
   Modificadas: recoloreadas y pegadas sobre una forma 3D; capó y techo pintados aparte, y un brillo calculado encima. La lista de las fotos, con sus enlaces, está en modelos/CREDITOS.txt.
   No es un modelo oficial: Chevrolet es marca de General Motors, y ni la marca ni el autor de las fotos tienen relación con esta app.
+
+renault-logan-ii-2020.jpg
+  Miniatura de la pestaña Vehículos y portada del Garaje: una captura de la app Taller de Pintura mostrando su modelo de Renault Logan II Intens 2020 (modelos/renault-logan-ii-2020.glb), con su carro de muestra de la demostración.
+  El modelo está hecho con fotos de Autosdeprimera, de Wikimedia Commons. Licencia de las fotos: CC BY 3.0 - https://creativecommons.org/licenses/by/3.0/
+  Modificadas: pegadas sobre una forma 3D sacada de sus siluetas, con la placa tapada. La lista de las fotos, con sus enlaces, está en modelos/CREDITOS.txt.
+  No es un modelo oficial: Renault es marca de Renault s.a.s., y ni la marca ni el autor de las fotos tienen relación con esta app.
+
+chevrolet-spark-gt-2014.jpg
+  Miniatura de la pestaña Vehículos y portada del Garaje: una captura de la app Taller de Pintura mostrando su modelo de Chevrolet Spark GT 1LS 2014 (modelos/chevrolet-spark-gt-2014.glb), con su carro de muestra de la demostración.
+  El modelo está hecho con fotos de NHTSA (National Highway Traffic Safety Administration, EE. UU.), de Wikimedia Commons. Licencia de las fotos: Dominio público (obra del gobierno de EE. UU.) - https://www.nhtsa.gov/about-nhtsa/terms-use
+  Modificadas: pegadas sobre una forma 3D sacada de sus siluetas. La lista de las fotos, con sus enlaces, está en modelos/CREDITOS.txt.
+  No es un modelo oficial: Chevrolet es marca de General Motors, y ni la marca ni el autor de las fotos tienen relación con esta app.
